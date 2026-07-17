@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Thresholds } from "../types";
   import { startMonitor, stopMonitor, getMonitorStatus } from "../api";
+  import { loadMonitorConfig, saveMonitorConfig } from "../monitorConfig";
 
   let intervalSec = $state(300);
   let thresholds = $state<Thresholds>({
@@ -16,6 +17,8 @@
     try {
       await startMonitor(intervalSec, thresholds);
       running = true;
+      // 持久化配置,下次启动自动恢复并自动开启后台轮询
+      await saveMonitorConfig({ enabled: true, intervalSec, thresholds });
       message = "监控已启动";
     } catch (e) {
       message = String(e);
@@ -27,6 +30,7 @@
     try {
       await stopMonitor();
       running = false;
+      await saveMonitorConfig({ enabled: false });
       message = "监控已停止";
     } catch (e) {
       message = String(e);
@@ -35,8 +39,13 @@
 
   async function loadStatus() {
     try {
+      const cfg = await loadMonitorConfig();
+      intervalSec = cfg.intervalSec;
+      thresholds = cfg.thresholds;
       const s = await getMonitorStatus();
       running = s.running;
+      // 运行中以真实间隔为准(可能在别处已修改)
+      if (s.running) intervalSec = s.interval_sec;
     } catch {
       /* ignore */
     }

@@ -43,21 +43,35 @@
 </article>
 
 <style>
-  .quota-card { min-height: 262px; display: flex; flex-direction: column; padding: 24px; background: linear-gradient(145deg, rgba(25,43,64,.86), rgba(16,30,47,.86)); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
-  .quota-card:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+  .quota-card {
+    min-height: 262px;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+  }
+  .quota-card:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow-md); }
   .card-head { display: flex; align-items: center; justify-content: space-between; }
-  h4 { font-size: 16px; letter-spacing: -.01em; }
+  h4 { font-size: 16px; letter-spacing: -.01em; color: var(--text); }
   .state { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; }
   .state i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
-  .ok .state, .ok .remaining { color: var(--green); } .warning .state, .warning .remaining { color: var(--yellow); } .danger .state, .danger .remaining { color: var(--red); }
+  .ok .state, .ok .remaining { color: var(--green); }
+  .warning .state, .warning .remaining { color: var(--yellow); }
+  .danger .state, .danger .remaining { color: var(--red); }
   .card-content { display: grid; grid-template-columns: 124px 1fr; align-items: center; gap: 20px; flex: 1; padding: 20px 0 18px; }
   .ring-wrap { position: relative; width: 120px; height: 120px; }
   svg { width: 100%; height: 100%; transform: rotate(-90deg); }
   circle { fill: none; stroke-width: 7; }
   .ring-track { stroke: var(--ring-track); }
   .ring-value { stroke: var(--accent); stroke-linecap: round; transition: stroke-dasharray .7s ease; }
-  .ok .ring-value { stroke: var(--green); } .warning .ring-value { stroke: var(--yellow); } .danger .ring-value { stroke: var(--red); }
-  .ring-wrap span { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text); font-size: 20px; font-weight: 750; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .ok .ring-value { stroke: var(--green); }
+  .warning .ring-value { stroke: var(--yellow); }
+  .danger .ring-value { stroke: var(--red); }
+  .ring-wrap span { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text); font-size: 20px; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
   .card-metrics { display: grid; gap: 16px; }
   dt { margin-bottom: 5px; color: var(--text-muted); font-size: 12px; font-weight: 500; }
   dd { color: var(--text); font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }

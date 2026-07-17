@@ -60,6 +60,8 @@ export async function createFloatWindow(
     title: "方舟配额",
     width: opts.width ?? size.width,
     height: opts.height ?? size.height,
+    minWidth: 200,
+    minHeight: 40,
     x: opts.x,
     y: opts.y,
     resizable: true,

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=344">
+<style>
+  html,body { margin:0; padding:0; }
+  /* === 以下为 FloatWidget.svelte <style> 原样复制 === */
+  .float { --panel:#060d18; --surface:#0b1727; --line:rgba(85,159,255,.23); --text:#f2f7ff; --muted:#98abc5; --dim:#58708f; --accent:#2e9cff; --warn:#ffc04f; --danger:#ff6a63; position:relative; display:flex; flex-direction:column; height:100vh; overflow:hidden; user-select:none; color:var(--text); background:radial-gradient(ellipse at 50% -20%, rgba(24,108,212,.25), transparent 56%), linear-gradient(145deg,#08111f 0%,#050b15 100%); border:1px solid rgba(69,155,255,.64); box-shadow:inset 0 0 0 1px rgba(100,183,255,.08), inset 0 0 36px rgba(24,126,255,.08); font-variant-numeric:tabular-nums; }
+  .float::before { position:absolute; inset:50px 0 auto; z-index:0; height:164px; background:linear-gradient(90deg, transparent 0 5%, rgba(46,156,255,.07) 5.3% 26%, transparent 26.3% 74%, rgba(46,156,255,.07) 74.3% 95%, transparent 95%), repeating-linear-gradient(90deg, transparent 0 23px, rgba(46,156,255,.1) 24px 25px, transparent 26px 49px); opacity:.7; pointer-events:none; content:""; mask-image:linear-gradient(to bottom,transparent,black 22%,black 62%,transparent); }
+  .dock-rails { display:grid; align-content:center; gap:10px; height:100%; padding:0; cursor:grab; background:linear-gradient(90deg,rgba(20,92,178,.15),transparent 50%,rgba(20,92,178,.1)); }
+  .dock-rails:active { cursor:grabbing; }
+  .dock-row { display:grid; grid-template-columns:44px 1fr 35px; align-items:center; gap:9px; color:var(--muted); font-size:11px; font-weight:650; letter-spacing:.03em; }
+  .dock-track { height:5px; overflow:hidden; border:1px solid rgba(79,153,233,.25); border-radius:999px; background:#0d1d30; box-shadow:inset 0 1px 2px rgba(0,0,0,.45); }
+  .dock-track i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#1c80f4,#58c0ff); box-shadow:0 0 9px rgba(46,156,255,.8); }
+  .dock-row b { color:#8ed2ff; font-size:12px; text-align:right; font-variant-numeric:tabular-nums; }
+  .dock-row.warning .dock-track i { background:var(--warn); box-shadow:0 0 9px rgba(255,192,79,.6); } .dock-row.warning b { color:var(--warn); }
+  .dock-row.danger .dock-track i { background:var(--danger); box-shadow:0 0 9px rgba(255,106,99,.6); } .dock-row.danger b { color:var(--danger); }
+  .float.top-docked { box-sizing:border-box; border-color:rgba(71,162,255,.78); box-shadow:inset 0 -1px 0 rgba(99,183,255,.34),0 5px 18px rgba(0,0,0,.3); }
+  .float.top-docked .dock-row { display:block; height:100%; }
+  .float.top-docked .dock-row > span,.float.top-docked .dock-row > b { display:none; }
+  .float.top-docked .dock-track { box-sizing:border-box; width:100%; height:100%; border-radius:0; }
+</style>
+</head>
+<body>
+  <!-- 吸附态：danger(92%) -->
+  <div class="float top-docked danger">
+    <section class="dock-rails" data-tauri-drag-region>
+      <div class="dock-row danger" data-tauri-drag-region>
+        <span data-tauri-drag-region>5 小时窗口</span>
+        <div class="dock-track" data-tauri-drag-region><i style="width:92%"></i></div>
+        <b data-tauri-drag-region>92%</b>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
