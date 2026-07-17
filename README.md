@@ -95,6 +95,62 @@ voac-status/
 | `fetch_usage_raw` | 拉取原始 JSON 响应(调试用) |
 | `start_monitor` / `stop_monitor` / `get_monitor_status` | 后台监控控制 |
 
+## CI/CD 与发布流程
+
+仓库内置两条 GitHub Actions 工作流,位于 `.github/workflows/`。
+
+### CI(`ci.yml`)
+
+在 `push`/`pull_request` 到 `main` 时运行,分两个并行 job:
+
+- **前端** - `npm ci` -> `npm run check`(svelte-check 类型检查)-> `npm run build`,产物作为 artifact 上传。
+- **Rust** - 安装 Linux Tauri 系统依赖 -> `cargo fmt --check` -> `cargo clippy -D warnings` -> `cargo build --release`。
+
+失败会阻断合并,保证主干始终可构建。
+
+### Release(`release.yml`)
+
+由 git tag `v*` 触发(也支持 `workflow_dispatch` 重跑某个 tag)。流程:
+
+1. **resolve-tag** - 从 tag 解析版本号与是否预发布(`-alpha`/`-beta`/`-rc`/`-dev` 视为预发布)。
+2. **build** - 4 平台矩阵并行构建:Linux(ubuntu-22.04)、Windows、macOS Intel、macOS ARM。
+   - 使用 `tauri-apps/tauri-action@v0` 编译并打包。
+   - 自动创建 GitHub Release(标题 `VOLC Status v<version>`),附带各平台安装包(`.msi`/`.dmg`/`.AppImage`/`.deb` 等)。
+   - 预发布版本会标记为 prerelease,不会作为最新正式版。
+
+### 发版操作
+
+版本号同时存在于三个文件:`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`。用脚本统一更新并打 tag:
+
+```bash
+# 显式版本
+npm run release:bump -- 1.2.0
+
+# 或基于当前版本号自动递增
+npm run release:bump -- patch   # 0.1.0 -> 0.1.1
+npm run release:bump -- minor   # 0.1.0 -> 0.2.0
+npm run release:bump -- major   # 0.1.0 -> 1.0.0
+
+# 预发布版本
+npm run release:bump -- 1.0.0-rc1
+```
+
+脚本会:更新三个文件的版本号 -> `git commit` -> 创建带注解的 tag `v<version>`。默认**不推送**。
+
+确认无误后,推送到远端触发 Release 工作流:
+
+```bash
+git push origin HEAD v1.2.0
+```
+
+或直接加 `--push` 一步到位:
+
+```bash
+npm run release:bump -- 1.2.0 --push
+```
+
+> 首次发布前,确认仓库 `Settings -> Actions -> General -> Workflow permissions` 已授予 **Read and write permissions**(`tauri-action` 需要创建 Release)。工作流已声明 `permissions: contents: write`,通常无需额外配置。
+
 ## 许可证
 
 本项目基于 [Apache License 2.0](./LICENSE) 开源。

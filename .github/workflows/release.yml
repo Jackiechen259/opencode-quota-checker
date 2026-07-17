@@ -1,0 +1,107 @@
+name: Release
+
+# Triggered by a version tag (v0.1.0, v1.2.3-rc1, ...). The tag is created by
+# `npm run release:bump -- <version>` (see scripts/bump-version.mjs), which keeps
+# package.json / tauri.conf.json / Cargo.toml in sync before tagging.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to rebuild (must already exist)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-tag:
+    name: Resolve release tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+    steps:
+      - id: resolve
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          # Strip a leading 'v' to get the bare version.
+          VERSION="${TAG#v}"
+          # Anything with -alpha / -beta / -rc / -dev is a prerelease.
+          if [[ "$VERSION" =~ -(alpha|beta|rc|dev)([._-]?[0-9]+)?$ ]]; then
+            PRE="true"
+          else
+            PRE="false"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.settings.platform }}
+    needs: resolve-tag
+    runs-on: ${{ matrix.settings.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - platform: linux
+            runner: ubuntu-22.04
+            args: ""
+          - platform: windows
+            runner: windows-latest
+            args: ""
+          - platform: macos-intel
+            runner: macos-13
+            args: "--target x86_64-apple-darwin"
+          - platform: macos-arm
+            runner: macos-latest
+            args: "--target aarch64-apple-darwin"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+
+      - name: Install Linux Tauri deps
+        if: matrix.settings.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.platform == 'macos-intel' && 'x86_64-apple-darwin' || (matrix.settings.platform == 'macos-arm' && 'aarch64-apple-darwin' || '') }}
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ needs.resolve-tag.outputs.tag }}
+          releaseName: "VOLC Status v${{ needs.resolve-tag.outputs.version }}"
+          # Auto-generated release notes from commits + PRs since the last release.
+          releaseDraft: false
+          prerelease: ${{ needs.resolve-tag.outputs.prerelease }}
+          args: ${{ matrix.settings.args }}
