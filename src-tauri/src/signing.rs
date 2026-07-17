@@ -56,7 +56,7 @@ pub fn sign_v4(
 
     let canonical_query = canonical_query(query);
 
-    let canonical_request = vec![
+    let canonical_request = [
         method.to_string(),
         path.to_string(),
         canonical_query,
@@ -68,7 +68,7 @@ pub fn sign_v4(
 
     let credential_scope = format!("{}/{}/{}/request", &format_date[..8], region, service);
 
-    let string_to_sign = vec![
+    let string_to_sign = [
         "HMAC-SHA256".to_string(),
         format_date.to_string(),
         credential_scope.clone(),
@@ -167,20 +167,14 @@ mod tests {
 
     #[test]
     fn test_canonical_query_basic() {
-        let query = vec![
-            ("Action", "GetAFPUsage"),
-            ("Version", "2024-01-01"),
-        ];
+        let query = vec![("Action", "GetAFPUsage"), ("Version", "2024-01-01")];
         let result = canonical_query(&query);
         assert_eq!(result, "Action=GetAFPUsage&Version=2024-01-01");
     }
 
     #[test]
     fn test_canonical_query_sorts_by_key() {
-        let query = vec![
-            ("Version", "2024-01-01"),
-            ("Action", "GetAFPUsage"),
-        ];
+        let query = vec![("Version", "2024-01-01"), ("Action", "GetAFPUsage")];
         let result = canonical_query(&query);
         assert_eq!(result, "Action=GetAFPUsage&Version=2024-01-01");
     }
@@ -196,16 +190,16 @@ mod tests {
     #[test]
     fn test_signing_key_derivation() {
         let key = get_signing_secret_key_v4("sk123", "20260711", "cn-beijing", "ark");
-        assert_eq!(hex::encode(key), "8d2c244d0a0fec86709100869e279cd76c6a33c61ac316b35f5a347667383e95");
+        assert_eq!(
+            hex::encode(key),
+            "8d2c244d0a0fec86709100869e279cd76c6a33c61ac316b35f5a347667383e95"
+        );
     }
 
     #[test]
     fn test_sign_v4_produces_valid_structure() {
         let body = b"{}";
-        let query = vec![
-            ("Action", "GetAFPUsage"),
-            ("Version", "2024-01-01"),
-        ];
+        let query = vec![("Action", "GetAFPUsage"), ("Version", "2024-01-01")];
         let result = sign_v4(
             "POST",
             "/",
@@ -221,7 +215,9 @@ mod tests {
         );
 
         assert!(result.authorization.starts_with("HMAC-SHA256 Credential="));
-        assert!(result.authorization.contains("SignedHeaders=content-type;host;x-content-sha256;x-date"));
+        assert!(result
+            .authorization
+            .contains("SignedHeaders=content-type;host;x-content-sha256;x-date"));
         assert!(result.authorization.contains("Signature="));
         assert_eq!(result.x_date, TEST_DATE);
         assert_eq!(
@@ -233,10 +229,7 @@ mod tests {
     #[test]
     fn test_sign_v4_authorization_credential_scope() {
         let body = b"{}";
-        let query = vec![
-            ("Action", "GetAFPUsage"),
-            ("Version", "2024-01-01"),
-        ];
+        let query = vec![("Action", "GetAFPUsage"), ("Version", "2024-01-01")];
         let result = sign_v4(
             "POST",
             "/",
@@ -250,7 +243,8 @@ mod tests {
             TEST_CONTENT_TYPE,
             TEST_DATE,
         );
-        let expected_credential = format!("{}/{}/{}/request", "20260511", TEST_REGION, TEST_SERVICE);
+        let expected_credential =
+            format!("{}/{}/{}/request", "20260511", TEST_REGION, TEST_SERVICE);
         assert!(
             result
                 .authorization
@@ -263,10 +257,7 @@ mod tests {
     #[test]
     fn test_sign_v4_deterministic() {
         let body = b"{}";
-        let query = vec![
-            ("Action", "GetAFPUsage"),
-            ("Version", "2024-01-01"),
-        ];
+        let query = vec![("Action", "GetAFPUsage"), ("Version", "2024-01-01")];
         let args = (
             "POST",
             "/",
@@ -280,8 +271,15 @@ mod tests {
             TEST_CONTENT_TYPE,
             TEST_DATE,
         );
-        let r1 = sign_v4(args.0, args.1, args.2, args.3, args.4, args.5, args.6, args.7, args.8, args.9, args.10);
-        let r2 = sign_v4(args.0, args.1, args.2, args.3, args.4, args.5, args.6, args.7, args.8, args.9, args.10);
-        assert_eq!(r1.authorization, r2.authorization, "signing must be deterministic for identical inputs");
+        let r1 = sign_v4(
+            args.0, args.1, args.2, args.3, args.4, args.5, args.6, args.7, args.8, args.9, args.10,
+        );
+        let r2 = sign_v4(
+            args.0, args.1, args.2, args.3, args.4, args.5, args.6, args.7, args.8, args.9, args.10,
+        );
+        assert_eq!(
+            r1.authorization, r2.authorization,
+            "signing must be deterministic for identical inputs"
+        );
     }
 }

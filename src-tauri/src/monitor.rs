@@ -30,23 +30,16 @@ pub struct MonitorStatus {
     pub interval_sec: u64,
 }
 
+#[derive(Clone, Default)]
 pub struct Monitor {
     handle: Arc<Mutex<Option<JoinHandle<()>>>>,
-}
-
-impl Clone for Monitor {
-    fn clone(&self) -> Self {
-        Self {
-            handle: Arc::clone(&self.handle),
-        }
-    }
+    /// 当前运行的轮询间隔,供 get_monitor_status 返回真实值
+    interval_sec: Arc<Mutex<u64>>,
 }
 
 impl Monitor {
     pub fn new() -> Self {
-        Self {
-            handle: Arc::new(Mutex::new(None)),
-        }
+        Self::default()
     }
 
     pub async fn start(
@@ -58,9 +51,11 @@ impl Monitor {
         thresholds: Thresholds,
     ) -> Result<(), String> {
         let mut guard = self.handle.lock().await;
-        if guard.is_some() {
-            let _ = guard.take();
+        // 终止旧轮询任务,避免重复拉取(自动启动与手动启动可能并发触发)
+        if let Some(h) = guard.take() {
+            h.abort();
         }
+        *self.interval_sec.lock().await = interval_sec;
 
         let handle = tokio::spawn(async move {
             run_loop(app, ak, sk, interval_sec, thresholds).await;
@@ -78,8 +73,17 @@ impl Monitor {
     }
 
     pub async fn is_running(&self) -> bool {
-        let guard = self.handle.lock().await;
-        guard.is_some()
+        self.handle.lock().await.is_some()
+    }
+
+    /// 返回真实运行状态与当前轮询间隔
+    pub async fn status(&self) -> MonitorStatus {
+        let running = self.handle.lock().await.is_some();
+        let interval_sec = *self.interval_sec.lock().await;
+        MonitorStatus {
+            running,
+            interval_sec,
+        }
     }
 }
 
@@ -90,8 +94,7 @@ async fn run_loop(
     interval_sec: u64,
     thresholds: Thresholds,
 ) {
-    let mut last_alerted: std::collections::HashMap<String, i64> =
-        std::collections::HashMap::new();
+    let mut last_alerted: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
     let interval = std::time::Duration::from_secs(interval_sec.max(30));
 
     loop {
@@ -151,8 +154,5 @@ fn check_and_notify(
 
 fn notify(app: &AppHandle, title: &str, body: &str) {
     use tauri_plugin_notification::NotificationExt;
-    let _ = app.notification().builder()
-        .title(title)
-        .body(body)
-        .show();
+    let _ = app.notification().builder().title(title).body(body).show();
 }

@@ -210,7 +210,11 @@ mod tests {
         let report = resp.into_report().unwrap();
         assert_eq!(report.plan_type, "Large");
         assert_eq!(report.windows.len(), 3);
-        let five = report.windows.iter().find(|w| w.key == "five_hour").unwrap();
+        let five = report
+            .windows
+            .iter()
+            .find(|w| w.key == "five_hour")
+            .unwrap();
         assert_eq!(five.label, "5 小时");
         assert!((five.percent - 25.0).abs() < 1e-6);
     }
@@ -231,7 +235,12 @@ mod tests {
 
     #[test]
     fn test_percent_clamped() {
-        let w = Window { quota: 100.0, used: 150.0, subscribe_time: 0, reset_time: 0 };
+        let w = Window {
+            quota: 100.0,
+            used: 150.0,
+            subscribe_time: 0,
+            reset_time: 0,
+        };
         assert!((w.percent() - 100.0).abs() < 1e-6);
         assert!((w.remaining() - 0.0).abs() < 1e-6);
     }

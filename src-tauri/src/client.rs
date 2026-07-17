@@ -21,7 +21,8 @@ pub async fn fetch_afp_usage(ak: &str, sk: &str) -> Result<String> {
     let body = b"{}";
     let query: [(&str, &str); 2] = [("Action", ACTION), ("Version", VERSION)];
 
-    let mut req = client.post(&url)
+    let mut req = client
+        .post(&url)
         .query(&query)
         .header("Host", HOST)
         .header("Content-Type", CONTENT_TYPE)
@@ -41,9 +42,10 @@ pub async fn fetch_afp_usage(ak: &str, sk: &str) -> Result<String> {
         CONTENT_TYPE,
         &format_date,
     );
-    req = req.header("X-Date", &signed.x_date)
-             .header("X-Content-Sha256", &signed.x_content_sha256)
-             .header("Authorization", &signed.authorization);
+    req = req
+        .header("X-Date", &signed.x_date)
+        .header("X-Content-Sha256", &signed.x_content_sha256)
+        .header("Authorization", &signed.authorization);
 
     let resp = req.send().await?;
 
@@ -51,7 +53,11 @@ pub async fn fetch_afp_usage(ak: &str, sk: &str) -> Result<String> {
     let text = resp.text().await?;
 
     if !status.is_success() {
-        return Err(anyhow!("HTTP {}: {}", status.as_u16(), truncate(&text, 500)));
+        return Err(anyhow!(
+            "HTTP {}: {}",
+            status.as_u16(),
+            truncate(&text, 500)
+        ));
     }
 
     Ok(text)
