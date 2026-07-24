@@ -22,4 +22,6 @@ urlencoding.workspace = true
 
 [dev-dependencies]
 pretty_assertions = "1"
+tokio.workspace = true
+wiremock = "0.6"
 

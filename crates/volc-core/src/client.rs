@@ -29,14 +29,19 @@ impl ArkClient {
 
     /// Creates a client with an alternate endpoint for integration tests.
     pub fn with_endpoint(endpoint: Url) -> Result<Self, VolcError> {
+        Self::with_endpoint_and_timeout(endpoint, TIMEOUT)
+    }
+
+    /// Creates a client with an alternate endpoint and timeout.
+    pub fn with_endpoint_and_timeout(endpoint: Url, timeout: Duration) -> Result<Self, VolcError> {
         if endpoint.host_str().is_none() {
             return Err(VolcError::Config(
                 "API endpoint must include a host".to_owned(),
             ));
         }
         let http = reqwest::Client::builder()
-            .connect_timeout(TIMEOUT)
-            .timeout(TIMEOUT)
+            .connect_timeout(timeout)
+            .timeout(timeout)
             .build()?;
         Ok(Self { http, endpoint })
     }

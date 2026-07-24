@@ -11,7 +11,7 @@ successful.
 - [x] Phase 1: Iced daemon and tray lifecycle spike
 - [x] Phase 2: Cargo workspace and core extraction
 - [x] Phase 3: Iced application skeleton
-- [ ] Phase 4: credentials and API
+- [x] Phase 4: credentials and API
 - [ ] Phase 5: main dashboard
 - [ ] Phase 6: settings, monitoring, and notifications
 - [ ] Phase 7: floating window
