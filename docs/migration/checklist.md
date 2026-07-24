@@ -10,7 +10,7 @@ successful.
 - [x] Phase 0: baseline captured
 - [x] Phase 1: Iced daemon and tray lifecycle spike
 - [x] Phase 2: Cargo workspace and core extraction
-- [ ] Phase 3: Iced application skeleton
+- [x] Phase 3: Iced application skeleton
 - [ ] Phase 4: credentials and API
 - [ ] Phase 5: main dashboard
 - [ ] Phase 6: settings, monitoring, and notifications
