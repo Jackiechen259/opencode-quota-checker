@@ -8,7 +8,7 @@ successful.
 ## Phase status
 
 - [x] Phase 0: baseline captured
-- [ ] Phase 1: Iced daemon and tray lifecycle spike
+- [x] Phase 1: Iced daemon and tray lifecycle spike
 - [ ] Phase 2: Cargo workspace and core extraction
 - [ ] Phase 3: Iced application skeleton
 - [ ] Phase 4: credentials and API
@@ -31,4 +31,3 @@ successful.
 - [ ] Windows notification and keyring manual test
 - [ ] macOS notification and keyring manual test
 - [ ] Ubuntu notification and keyring manual test
-

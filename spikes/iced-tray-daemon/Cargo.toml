@@ -1,0 +1,14 @@
+[package]
+name = "iced-tray-daemon-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+iced = { version = "0.14", features = ["tokio", "wgpu"] }
+tray-icon = "0.24"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
