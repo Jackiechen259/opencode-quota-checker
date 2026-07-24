@@ -5,13 +5,15 @@ use std::time::Duration;
 
 /// Builds passive subscriptions from the current state.
 pub fn subscription(app: &App) -> Subscription<Message> {
-    let close_requests = window::close_requests().map(Message::CloseRequested);
+    let mut subscriptions = vec![window::close_requests().map(Message::CloseRequested)];
     if app.tray_available() {
-        Subscription::batch([
-            close_requests,
-            time::every(Duration::from_millis(100)).map(|_| Message::PollTray),
-        ])
-    } else {
-        close_requests
+        subscriptions.push(time::every(Duration::from_millis(100)).map(|_| Message::PollTray));
     }
+    if app.has_report() {
+        subscriptions.push(
+            time::every(Duration::from_secs(1))
+                .map(|_| Message::Tick(chrono::Utc::now().timestamp_millis())),
+        );
+    }
+    Subscription::batch(subscriptions)
 }

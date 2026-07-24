@@ -72,4 +72,16 @@ pub struct UsageState {
     pub raw_loading: bool,
     /// Latest request error while retaining any previous report.
     pub error: Option<UiError>,
+    /// Current display clock used for reset countdowns.
+    pub now_ms: i64,
+}
+
+impl UsageState {
+    /// Creates empty usage state with a current display clock.
+    pub fn new() -> Self {
+        Self {
+            now_ms: chrono::Utc::now().timestamp_millis(),
+            ..Self::default()
+        }
+    }
 }

@@ -42,7 +42,7 @@ impl App {
                 credential_store: KeyringCredentialStore,
                 windows,
                 credentials,
-                usage: UsageState::default(),
+                usage: UsageState::new(),
                 tray,
                 tray_error,
             },
@@ -132,7 +132,7 @@ impl App {
                         self.credentials.access_key.clear();
                         self.credentials.secret_key.clear();
                         self.credentials.error = None;
-                        self.usage = UsageState::default();
+                        self.usage = UsageState::new();
                     }
                     Err(error) => self.credentials.error = Some(error),
                 }
@@ -168,6 +168,10 @@ impl App {
                     }
                     Err(error) => self.usage.error = Some(error),
                 }
+                Task::none()
+            }
+            Message::Tick(now_ms) => {
+                self.usage.now_ms = now_ms;
                 Task::none()
             }
             Message::Tray(TrayAction::Quit) | Message::Exit => iced::exit(),
@@ -212,6 +216,11 @@ impl App {
     /// Returns the one shared usage state.
     pub fn usage(&self) -> &UsageState {
         &self.usage
+    }
+
+    /// Reports whether countdown updates are currently useful.
+    pub fn has_report(&self) -> bool {
+        self.usage.report.is_some()
     }
 
     fn refresh(&mut self) -> Task<Message> {

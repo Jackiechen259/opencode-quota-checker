@@ -49,6 +49,8 @@ pub enum Message {
     LoadRaw,
     /// Raw response request completed.
     RawLoaded(Result<String, UiError>),
+    /// One-second display clock update, expressed in Unix milliseconds.
+    Tick(i64),
     /// Stop the daemon and process.
     Exit,
 }

@@ -5569,6 +5569,7 @@ dependencies = [
 name = "volc-desktop"
 version = "0.2.0"
 dependencies = [
+ "chrono",
  "iced",
  "tokio",
  "tracing",

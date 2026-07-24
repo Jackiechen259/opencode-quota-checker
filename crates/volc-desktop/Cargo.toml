@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Native Iced desktop application for VOLC Status"
 
 [dependencies]
+chrono.workspace = true
 iced.workspace = true
 tokio.workspace = true
 tracing.workspace = true
