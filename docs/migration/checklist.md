@@ -15,7 +15,7 @@ successful.
 - [x] Phase 5: main dashboard
 - [x] Phase 6: settings, monitoring, and notifications
 - [x] Phase 7: floating window
-- [ ] Phase 8: debug view and UX polish
+- [x] Phase 8: debug view and UX polish
 - [ ] Phase 9: packaging and CI/CD
 - [ ] Phase 10: remove the legacy web stack
 

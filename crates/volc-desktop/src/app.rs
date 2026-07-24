@@ -3,10 +3,12 @@ use crate::message::{Message, SensitiveInput, ThresholdField};
 use crate::platform::notification;
 use crate::platform::tray::{TrayAction, TrayService};
 use crate::state::{
-    CredentialState, FloatState, MonitorState, SettingsState, UiError, UsageState, WindowState,
+    CredentialState, FloatState, MonitorState, SettingsState, UiError, UiState, UsageState,
+    WindowState,
 };
-use crate::{subscription, view, window as app_window};
-use iced::{window, Element, Subscription, Task, Theme};
+use crate::{subscription, theme, view, window as app_window};
+use iced::keyboard::{key::Named, Key};
+use iced::{clipboard, keyboard, window, Element, Subscription, Task, Theme};
 use volc_core::{
     evaluate_alerts, ArkClient, CredentialStore, Credentials, KeyringCredentialStore, Thresholds,
     UsageReport, VolcError,
@@ -22,6 +24,7 @@ pub struct App {
     settings: SettingsState,
     monitor: MonitorState,
     floating: FloatState,
+    ui: UiState,
     config: AppConfig,
     config_loaded: bool,
     tray: Option<TrayService>,
@@ -56,6 +59,7 @@ impl App {
                 settings: SettingsState::default(),
                 monitor: MonitorState::default(),
                 floating: FloatState::default(),
+                ui: UiState::default(),
                 config: AppConfig::default(),
                 config_loaded: false,
                 tray,
@@ -102,6 +106,15 @@ impl App {
                 Task::none()
             }
             Message::WindowEvent(_, _) => Task::none(),
+            Message::Keyboard(keyboard::Event::KeyPressed {
+                key: Key::Named(Named::Escape),
+                ..
+            }) => {
+                self.ui.debug_open = false;
+                self.settings.open = false;
+                Task::none()
+            }
+            Message::Keyboard(_) => Task::none(),
             Message::PollTray => self
                 .tray
                 .as_ref()
@@ -172,6 +185,7 @@ impl App {
                 Task::none()
             }
             Message::OpenSettings => {
+                self.ui.debug_open = false;
                 self.settings.open = true;
                 self.settings.error = None;
                 self.settings.notice = None;
@@ -179,6 +193,21 @@ impl App {
             }
             Message::CloseSettings => {
                 self.settings.open = false;
+                Task::none()
+            }
+            Message::CloseOverlay => {
+                self.ui.debug_open = false;
+                Task::none()
+            }
+            Message::CopyRaw => {
+                let Some(raw) = self.usage.raw.clone() else {
+                    return Task::none();
+                };
+                self.ui.toast = Some("原始 JSON 已复制到剪贴板。".to_owned());
+                clipboard::write(raw)
+            }
+            Message::DismissToast => {
+                self.ui.toast = None;
                 Task::none()
             }
             Message::IntervalChanged(value) => {
@@ -327,6 +356,8 @@ impl App {
                 Task::none()
             }
             Message::LoadRaw if !self.usage.raw_loading && self.credentials.configured => {
+                self.settings.open = false;
+                self.ui.debug_open = true;
                 self.usage.raw_loading = true;
                 self.usage.error = None;
                 Task::perform(
@@ -375,7 +406,7 @@ impl App {
     }
 
     pub fn theme(&self, _id: window::Id) -> Option<Theme> {
-        Some(Theme::Dark)
+        Some(theme::application())
     }
 
     pub fn tray_available(&self) -> bool {
@@ -406,6 +437,10 @@ impl App {
         self.config_loaded
     }
 
+    pub fn ui(&self) -> &UiState {
+        &self.ui
+    }
+
     pub fn has_report(&self) -> bool {
         self.usage.report.is_some()
     }
@@ -417,6 +452,10 @@ impl App {
 
     pub fn float_position_dirty(&self) -> bool {
         self.floating.position_dirty
+    }
+
+    pub fn toast_visible(&self) -> bool {
+        self.ui.toast.is_some()
     }
 
     fn apply_config(&mut self, config: AppConfig) {

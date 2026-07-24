@@ -1,6 +1,7 @@
 mod components;
 mod credentials;
 mod dashboard;
+mod debug;
 mod float;
 mod format;
 mod settings;
@@ -31,7 +32,9 @@ pub fn main(app: &App) -> Element<'_, Message> {
     ]
     .spacing(12)
     .align_y(iced::Alignment::Center);
-    let body: Element<'_, Message> = if app.settings().open {
+    let body: Element<'_, Message> = if app.ui().debug_open {
+        debug::view(app.usage())
+    } else if app.settings().open {
         settings::view(app.settings(), app.config())
     } else if app.credentials().checking || !app.config_loaded() {
         text("正在检查系统钥匙串…").into()
@@ -40,7 +43,14 @@ pub fn main(app: &App) -> Element<'_, Message> {
     } else {
         dashboard::view(app.usage())
     };
-    let content = column![header, body].spacing(20).padding(28);
+    let mut content = column![header, body].spacing(20).padding(28);
+    if let Some(toast) = &app.ui().toast {
+        content = content.push(
+            container(text(toast))
+                .padding(10)
+                .style(container::rounded_box),
+        );
+    }
 
     container(scrollable(content))
         .width(Fill)

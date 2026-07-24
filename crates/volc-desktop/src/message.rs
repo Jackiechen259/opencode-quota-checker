@@ -1,7 +1,7 @@
 use crate::config::{AppConfig, FloatMode};
 use crate::platform::tray::TrayAction;
 use crate::state::UiError;
-use iced::{window, Size};
+use iced::{keyboard, window, Size};
 use std::fmt;
 use volc_core::UsageReport;
 
@@ -27,6 +27,7 @@ pub enum Message {
     FloatWindowOpened(window::Id),
     CloseRequested(window::Id),
     WindowEvent(window::Id, window::Event),
+    Keyboard(keyboard::Event),
     PollTray,
     Tray(TrayAction),
     HideMain,
@@ -40,6 +41,9 @@ pub enum Message {
     ConfigLoaded(Result<AppConfig, UiError>),
     OpenSettings,
     CloseSettings,
+    CloseOverlay,
+    CopyRaw,
+    DismissToast,
     IntervalChanged(String),
     ThresholdChanged(ThresholdField, String),
     StartMonitor,

@@ -2,8 +2,8 @@ use crate::message::Message;
 use crate::state::UsageState;
 use crate::view::components::quota_card::{self, QuotaHealth};
 use crate::view::format;
-use iced::widget::{button, column, container, responsive, row, scrollable, text, Column, Row};
-use iced::{Element, Fill, Font};
+use iced::widget::{button, column, container, responsive, row, text, Column, Row};
+use iced::{Element, Fill};
 use volc_core::UsageReport;
 
 /// Renders summaries, quota cards, request states, and the raw response.
@@ -58,11 +58,6 @@ pub fn view(state: &UsageState) -> Element<'_, Message> {
                 .spacing(6),
             )
             .padding(12),
-        );
-    }
-    if let Some(raw) = &state.raw {
-        content = content.push(text("原始 API JSON").size(20)).push(
-            scrollable(text(raw).font(Font::MONOSPACE).size(13)).height(iced::Length::Fixed(280.0)),
         );
     }
     content.into()

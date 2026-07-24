@@ -153,3 +153,12 @@ pub struct FloatState {
     /// Whether a move event is waiting for debounced persistence.
     pub position_dirty: bool,
 }
+
+/// Transient overlays and user feedback.
+#[derive(Default)]
+pub struct UiState {
+    /// Whether the raw-response overlay is visible.
+    pub debug_open: bool,
+    /// Short user feedback shown without blocking interaction.
+    pub toast: Option<String>,
+}
