@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/volc-core",
+  "crates/volc-desktop",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/Jackiechen259/volc_status"
+
+[workspace.dependencies]
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+directories = "6"
+hex = "0.4"
+hmac = "0.12"
+iced = { version = "0.14", features = ["tokio", "wgpu", "image", "svg", "advanced"] }
+keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
+notify-rust = "4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tray-icon = "0.24"
+url = "2"
+urlencoding = "2"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+

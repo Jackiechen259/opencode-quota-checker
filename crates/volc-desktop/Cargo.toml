@@ -1,0 +1,12 @@
+[package]
+name = "volc-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Native Iced desktop application for VOLC Status"
+
+[dependencies]
+volc-core = { path = "../volc-core" }
+
