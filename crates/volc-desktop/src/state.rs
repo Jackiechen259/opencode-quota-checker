@@ -161,4 +161,6 @@ pub struct UiState {
     pub debug_open: bool,
     /// Short user feedback shown without blocking interaction.
     pub toast: Option<String>,
+    /// Whether the delete-credential confirmation modal is open.
+    pub confirm_clear_credentials: bool,
 }

@@ -316,13 +316,23 @@ impl App {
                 }
             }
             Message::ClearCredentials if !self.credentials.mutating => {
+                self.ui.confirm_clear_credentials = true;
+                Task::none()
+            }
+            Message::ClearCredentials => Task::none(),
+            Message::ConfirmClearCredentials if !self.credentials.mutating => {
                 self.credentials.mutating = true;
                 self.credentials.error = None;
                 Task::perform(clear_credentials(), Message::CredentialsCleared)
             }
-            Message::ClearCredentials => Task::none(),
+            Message::ConfirmClearCredentials => Task::none(),
+            Message::CancelClearCredentials => {
+                self.ui.confirm_clear_credentials = false;
+                Task::none()
+            }
             Message::CredentialsCleared(result) => {
                 self.credentials.mutating = false;
+                self.ui.confirm_clear_credentials = false;
                 match result {
                     Ok(()) => {
                         self.credentials.configured = false;
@@ -452,6 +462,10 @@ impl App {
 
     pub fn float_position_dirty(&self) -> bool {
         self.floating.position_dirty
+    }
+
+    pub fn confirm_clear_credentials(&self) -> bool {
+        self.ui.confirm_clear_credentials
     }
 
     pub fn toast_visible(&self) -> bool {
