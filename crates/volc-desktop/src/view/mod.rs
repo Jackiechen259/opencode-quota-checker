@@ -2,6 +2,7 @@ mod components;
 mod credentials;
 mod dashboard;
 mod format;
+mod settings;
 
 use crate::message::Message;
 use crate::App;
@@ -22,12 +23,15 @@ pub fn main(app: &App) -> Element<'_, Message> {
         .spacing(4)
         .width(Fill),
         text(tray_status).size(13),
+        button("设置").on_press(Message::OpenSettings),
         button("隐藏").on_press(Message::HideMain),
         button("退出").on_press(Message::Exit),
     ]
     .spacing(12)
     .align_y(iced::Alignment::Center);
-    let body: Element<'_, Message> = if app.credentials().checking {
+    let body: Element<'_, Message> = if app.settings().open {
+        settings::view(app.settings(), app.config())
+    } else if app.credentials().checking || !app.config_loaded() {
         text("正在检查系统钥匙串…").into()
     } else if !app.credentials().configured {
         credentials::view(app.credentials())

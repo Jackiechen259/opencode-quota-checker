@@ -1,4 +1,5 @@
 mod app;
+mod config;
 mod message;
 mod platform;
 mod state;

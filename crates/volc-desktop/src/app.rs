@@ -1,10 +1,15 @@
-use crate::message::{Message, SensitiveInput};
+use crate::config::{AppConfig, CloseBehavior, ConfigStore};
+use crate::message::{Message, SensitiveInput, ThresholdField};
+use crate::platform::notification;
 use crate::platform::tray::{TrayAction, TrayService};
-use crate::state::{CredentialState, UiError, UsageState, WindowState};
+use crate::state::{
+    CredentialState, MonitorState, SettingsState, UiError, UsageState, WindowState,
+};
 use crate::{subscription, view, window as app_window};
 use iced::{window, Element, Subscription, Task, Theme};
 use volc_core::{
-    ArkClient, CredentialStore, Credentials, KeyringCredentialStore, UsageReport, VolcError,
+    evaluate_alerts, ArkClient, CredentialStore, Credentials, KeyringCredentialStore, Thresholds,
+    UsageReport, VolcError,
 };
 
 /// The single state container shared by every application window.
@@ -14,12 +19,16 @@ pub struct App {
     windows: WindowState,
     credentials: CredentialState,
     usage: UsageState,
+    settings: SettingsState,
+    monitor: MonitorState,
+    config: AppConfig,
+    config_loaded: bool,
     tray: Option<TrayService>,
     tray_error: Option<String>,
 }
 
 impl App {
-    /// Initializes platform services, checks credentials, and opens the main window.
+    /// Initializes platform services, loads config, checks credentials, and opens the main window.
     pub fn boot() -> (Self, Task<Message>) {
         let (tray, tray_error) = match TrayService::new() {
             Ok(tray) => (Some(tray), None),
@@ -43,12 +52,17 @@ impl App {
                 windows,
                 credentials,
                 usage: UsageState::new(),
+                settings: SettingsState::default(),
+                monitor: MonitorState::default(),
+                config: AppConfig::default(),
+                config_loaded: false,
                 tray,
                 tray_error,
             },
             Task::batch([
                 open.map(Message::MainWindowOpened),
                 Task::perform(check_credentials(), Message::CredentialsChecked),
+                Task::perform(load_config(), Message::ConfigLoaded),
             ]),
         )
     }
@@ -60,7 +74,13 @@ impl App {
                 self.windows.set_main(id);
                 Task::none()
             }
-            Message::CloseRequested(id) if self.windows.main() == Some(id) => self.hide_main(),
+            Message::CloseRequested(id) if self.windows.main() == Some(id) => {
+                if self.tray.is_none() || self.config.close_behavior == CloseBehavior::Exit {
+                    iced::exit()
+                } else {
+                    self.hide_main()
+                }
+            }
             Message::CloseRequested(_) => Task::none(),
             Message::PollTray => self
                 .tray
@@ -69,6 +89,85 @@ impl App {
                 .map_or_else(Task::none, |action| self.update(Message::Tray(action))),
             Message::Tray(TrayAction::ShowMain) => self.show_main(),
             Message::Tray(TrayAction::HideMain) | Message::HideMain => self.hide_main(),
+            Message::ConfigLoaded(result) => {
+                self.config_loaded = true;
+                match result {
+                    Ok(config) => {
+                        self.apply_config(config);
+                        if self.credentials.configured && self.config.monitor_enabled {
+                            return self.refresh();
+                        }
+                    }
+                    Err(error) => self.settings.error = Some(error),
+                }
+                Task::none()
+            }
+            Message::OpenSettings => {
+                self.settings.open = true;
+                self.settings.error = None;
+                self.settings.notice = None;
+                Task::none()
+            }
+            Message::CloseSettings => {
+                self.settings.open = false;
+                Task::none()
+            }
+            Message::IntervalChanged(value) => {
+                self.settings.interval = value;
+                Task::none()
+            }
+            Message::ThresholdChanged(field, value) => {
+                match field {
+                    ThresholdField::FiveHour => self.settings.five_hour = value,
+                    ThresholdField::Weekly => self.settings.weekly = value,
+                    ThresholdField::Monthly => self.settings.monthly = value,
+                }
+                Task::none()
+            }
+            Message::StartMonitor if !self.settings.saving => {
+                let config = match self.config_from_settings(true) {
+                    Ok(config) => config,
+                    Err(error) => {
+                        self.settings.error = Some(error);
+                        return Task::none();
+                    }
+                };
+                self.settings.saving = true;
+                self.settings.error = None;
+                Task::perform(save_config(config), Message::ConfigSaved)
+            }
+            Message::StopMonitor if !self.settings.saving => {
+                let mut config = self.config.clone();
+                config.monitor_enabled = false;
+                self.settings.saving = true;
+                self.settings.error = None;
+                Task::perform(save_config(config), Message::ConfigSaved)
+            }
+            Message::StartMonitor | Message::StopMonitor => Task::none(),
+            Message::ConfigSaved(result) => {
+                self.settings.saving = false;
+                match result {
+                    Ok(config) => {
+                        let enabled = config.monitor_enabled;
+                        self.apply_config(config);
+                        self.settings.notice = Some(if enabled {
+                            "监控配置已保存并启动。".to_owned()
+                        } else {
+                            "监控已停止。".to_owned()
+                        });
+                        if enabled {
+                            return self.refresh();
+                        }
+                    }
+                    Err(error) => self.settings.error = Some(error),
+                }
+                Task::none()
+            }
+            Message::MonitorTick => self.refresh(),
+            Message::NotificationsDelivered(result) => {
+                self.monitor.notification_error = result.err();
+                Task::none()
+            }
             Message::CredentialsChecked(result) => {
                 self.credentials.checking = false;
                 match result {
@@ -133,6 +232,12 @@ impl App {
                         self.credentials.secret_key.clear();
                         self.credentials.error = None;
                         self.usage = UsageState::new();
+                        self.monitor = MonitorState::default();
+                        self.config.monitor_enabled = false;
+                        return Task::perform(
+                            save_config(self.config.clone()),
+                            Message::ConfigSaved,
+                        );
                     }
                     Err(error) => self.credentials.error = Some(error),
                 }
@@ -143,8 +248,10 @@ impl App {
                 self.usage.loading = false;
                 match result {
                     Ok(report) => {
+                        let notification_task = self.alert_task(&report);
                         self.usage.report = Some(report);
                         self.usage.error = None;
+                        return notification_task;
                     }
                     Err(error) => self.usage.error = Some(error),
                 }
@@ -178,49 +285,81 @@ impl App {
         }
     }
 
-    /// Renders the requested window from shared state.
     pub fn view(&self, _id: window::Id) -> Element<'_, Message> {
         view::main(self)
     }
 
-    /// Returns the title for a native window.
     pub fn title(&self, _id: window::Id) -> String {
         "VOLC Status".to_owned()
     }
 
-    /// Returns passive runtime subscriptions.
     pub fn subscription(&self) -> Subscription<Message> {
         subscription::subscription(self)
     }
 
-    /// Selects the built-in dark theme.
     pub fn theme(&self, _id: window::Id) -> Option<Theme> {
         Some(Theme::Dark)
     }
 
-    /// Reports whether the native tray is usable.
     pub fn tray_available(&self) -> bool {
         self.tray.is_some()
     }
 
-    /// Returns a bounded, non-sensitive tray initialization error.
     pub fn tray_error(&self) -> Option<&str> {
         self.tray_error.as_deref()
     }
 
-    /// Returns credential UI state.
     pub fn credentials(&self) -> &CredentialState {
         &self.credentials
     }
 
-    /// Returns the one shared usage state.
     pub fn usage(&self) -> &UsageState {
         &self.usage
     }
 
-    /// Reports whether countdown updates are currently useful.
+    pub fn settings(&self) -> &SettingsState {
+        &self.settings
+    }
+
+    pub fn config(&self) -> &AppConfig {
+        &self.config
+    }
+
+    pub fn config_loaded(&self) -> bool {
+        self.config_loaded
+    }
+
     pub fn has_report(&self) -> bool {
         self.usage.report.is_some()
+    }
+
+    pub fn monitor_interval(&self) -> Option<u64> {
+        (self.config_loaded && self.credentials.configured && self.config.monitor_enabled)
+            .then_some(self.config.monitor_interval_secs)
+    }
+
+    fn apply_config(&mut self, config: AppConfig) {
+        self.settings.interval = config.monitor_interval_secs.to_string();
+        self.settings.five_hour = config.thresholds.five_hour.to_string();
+        self.settings.weekly = config.thresholds.weekly.to_string();
+        self.settings.monthly = config.thresholds.monthly.to_string();
+        self.config = config;
+    }
+
+    fn config_from_settings(&self, enabled: bool) -> Result<AppConfig, UiError> {
+        let interval = parse_u64(&self.settings.interval, "轮询间隔")?;
+        let thresholds = Thresholds {
+            five_hour: parse_f64(&self.settings.five_hour, "5 小时阈值")?,
+            weekly: parse_f64(&self.settings.weekly, "近一周阈值")?,
+            monthly: parse_f64(&self.settings.monthly, "近一月阈值")?,
+        };
+        let config = AppConfig {
+            monitor_enabled: enabled,
+            monitor_interval_secs: interval,
+            thresholds,
+            ..self.config.clone()
+        };
+        config.validate().map_err(UiError::from)
     }
 
     fn refresh(&mut self) -> Task<Message> {
@@ -233,6 +372,23 @@ impl App {
             fetch_usage(self.client.clone(), self.credential_store),
             Message::UsageLoaded,
         )
+    }
+
+    fn alert_task(&mut self, report: &UsageReport) -> Task<Message> {
+        if !self.config.monitor_enabled {
+            return Task::none();
+        }
+        let evaluation =
+            evaluate_alerts(report, &self.config.thresholds, &self.monitor.last_alerted);
+        self.monitor.last_alerted = evaluation.next_alerted;
+        if evaluation.decisions.is_empty() {
+            Task::none()
+        } else {
+            Task::perform(
+                async move { notification::deliver(evaluation.decisions) },
+                Message::NotificationsDelivered,
+            )
+        }
     }
 
     fn show_main(&mut self) -> Task<Message> {
@@ -255,6 +411,33 @@ impl App {
             iced::exit()
         }
     }
+}
+
+fn parse_u64(value: &str, label: &str) -> Result<u64, UiError> {
+    value.trim().parse::<u64>().map_err(|_| UiError {
+        user: format!("{label}必须是整数。"),
+        detail: format!("invalid integer for {label}"),
+    })
+}
+
+fn parse_f64(value: &str, label: &str) -> Result<f64, UiError> {
+    value.trim().parse::<f64>().map_err(|_| UiError {
+        user: format!("{label}必须是数字。"),
+        detail: format!("invalid number for {label}"),
+    })
+}
+
+async fn load_config() -> Result<AppConfig, UiError> {
+    ConfigStore::discover()
+        .and_then(|store| store.load_or_migrate())
+        .map_err(UiError::from)
+}
+
+async fn save_config(config: AppConfig) -> Result<AppConfig, UiError> {
+    ConfigStore::discover()
+        .and_then(|store| store.save(&config))
+        .map_err(UiError::from)?;
+    Ok(config)
 }
 
 async fn check_credentials() -> Result<bool, UiError> {
@@ -293,4 +476,21 @@ async fn fetch_raw(client: ArkClient, store: KeyringCredentialStore) -> Result<S
         .fetch_usage_raw(&credentials)
         .await
         .map_err(UiError::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_validation_accepts_boundaries() {
+        assert_eq!(parse_u64("30", "interval").expect("valid integer"), 30);
+        assert_eq!(parse_f64("100", "threshold").expect("valid number"), 100.0);
+    }
+
+    #[test]
+    fn settings_validation_rejects_text() {
+        assert!(parse_u64("later", "interval").is_err());
+        assert!(parse_f64("high", "threshold").is_err());
+    }
 }

@@ -1,4 +1,5 @@
 use iced::window;
+use std::collections::HashMap;
 use volc_core::{UsageReport, VolcError};
 
 /// IDs of all windows owned by the application state machine.
@@ -84,4 +85,48 @@ impl UsageState {
             ..Self::default()
         }
     }
+}
+
+/// Editable settings overlay state.
+pub struct SettingsState {
+    /// Whether the settings overlay is visible.
+    pub open: bool,
+    /// Polling interval input.
+    pub interval: String,
+    /// Five-hour threshold input.
+    pub five_hour: String,
+    /// Weekly threshold input.
+    pub weekly: String,
+    /// Monthly threshold input.
+    pub monthly: String,
+    /// Whether a config write is in progress.
+    pub saving: bool,
+    /// Latest validation or write error.
+    pub error: Option<UiError>,
+    /// Latest successful operation message.
+    pub notice: Option<String>,
+}
+
+impl Default for SettingsState {
+    fn default() -> Self {
+        Self {
+            open: false,
+            interval: "300".to_owned(),
+            five_hour: "80".to_owned(),
+            weekly: "85".to_owned(),
+            monthly: "85".to_owned(),
+            saving: false,
+            error: None,
+            notice: None,
+        }
+    }
+}
+
+/// Monitoring notification and deduplication state.
+#[derive(Default)]
+pub struct MonitorState {
+    /// Last alerted subscription cycle per quota window.
+    pub last_alerted: HashMap<String, i64>,
+    /// Latest notification delivery error.
+    pub notification_error: Option<UiError>,
 }

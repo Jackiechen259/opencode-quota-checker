@@ -15,5 +15,9 @@ pub fn subscription(app: &App) -> Subscription<Message> {
                 .map(|_| Message::Tick(chrono::Utc::now().timestamp_millis())),
         );
     }
+    if let Some(interval) = app.monitor_interval() {
+        subscriptions
+            .push(time::every(Duration::from_secs(interval)).map(|_| Message::MonitorTick));
+    }
     Subscription::batch(subscriptions)
 }
