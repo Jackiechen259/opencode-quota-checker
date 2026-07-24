@@ -1,4 +1,4 @@
-use crate::config::model::AppConfig;
+use crate::config::model::{AppConfig, FloatMode};
 use directories::BaseDirs;
 use serde_json::Value;
 use std::fs::{self, File, OpenOptions};
@@ -138,6 +138,16 @@ fn legacy_to_config(value: &Value) -> Result<AppConfig, VolcError> {
     if let Some(thresholds) = value.get("monitor_thresholds") {
         config.thresholds = serde_json::from_value::<Thresholds>(thresholds.clone())
             .map_err(|error| VolcError::Config(format!("invalid legacy thresholds: {error}")))?;
+    }
+    if let Some(float_open) = value.get("float_open").and_then(Value::as_bool) {
+        config.float_open = float_open;
+    }
+    if value
+        .get("float_compact")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        config.float_mode = FloatMode::Compact;
     }
     config.validate()
 }

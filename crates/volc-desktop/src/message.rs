@@ -1,11 +1,10 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, FloatMode};
 use crate::platform::tray::TrayAction;
 use crate::state::UiError;
-use iced::window;
+use iced::{window, Size};
 use std::fmt;
 use volc_core::UsageReport;
 
-/// Input text whose debug representation must never expose its value.
 #[derive(Clone)]
 pub struct SensitiveInput(pub String);
 
@@ -15,25 +14,29 @@ impl fmt::Debug for SensitiveInput {
     }
 }
 
-/// Threshold field edited in the settings overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThresholdField {
-    /// Five-hour quota.
     FiveHour,
-    /// Weekly quota.
     Weekly,
-    /// Monthly quota.
     Monthly,
 }
 
-/// Every external event and asynchronous result entering the application.
 #[derive(Debug, Clone)]
 pub enum Message {
     MainWindowOpened(window::Id),
+    FloatWindowOpened(window::Id),
     CloseRequested(window::Id),
+    WindowEvent(window::Id, window::Event),
     PollTray,
     Tray(TrayAction),
     HideMain,
+    ToggleFloat,
+    CloseFloat,
+    FloatModeChanged(FloatMode),
+    DragFloat,
+    FloatMonitorSize(window::Id, Option<Size>),
+    PersistFloatPosition,
+    ConfigPersisted(Result<AppConfig, UiError>),
     ConfigLoaded(Result<AppConfig, UiError>),
     OpenSettings,
     CloseSettings,

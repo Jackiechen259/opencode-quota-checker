@@ -1,6 +1,7 @@
 mod components;
 mod credentials;
 mod dashboard;
+mod float;
 mod format;
 mod settings;
 
@@ -24,6 +25,7 @@ pub fn main(app: &App) -> Element<'_, Message> {
         .width(Fill),
         text(tray_status).size(13),
         button("设置").on_press(Message::OpenSettings),
+        button("悬浮窗").on_press(Message::ToggleFloat),
         button("隐藏").on_press(Message::HideMain),
         button("退出").on_press(Message::Exit),
     ]
@@ -44,4 +46,9 @@ pub fn main(app: &App) -> Element<'_, Message> {
         .width(Fill)
         .height(Fill)
         .into()
+}
+
+/// Renders the independent floating window from shared state.
+pub fn floating(app: &App) -> Element<'_, Message> {
+    float::view(app.usage(), app.config().float_mode)
 }

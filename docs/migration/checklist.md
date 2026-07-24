@@ -14,7 +14,7 @@ successful.
 - [x] Phase 4: credentials and API
 - [x] Phase 5: main dashboard
 - [x] Phase 6: settings, monitoring, and notifications
-- [ ] Phase 7: floating window
+- [x] Phase 7: floating window
 - [ ] Phase 8: debug view and UX polish
 - [ ] Phase 9: packaging and CI/CD
 - [ ] Phase 10: remove the legacy web stack

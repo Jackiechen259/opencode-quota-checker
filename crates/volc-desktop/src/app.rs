@@ -1,9 +1,9 @@
-use crate::config::{AppConfig, CloseBehavior, ConfigStore};
+use crate::config::{AppConfig, CloseBehavior, ConfigStore, FloatMode, FloatPosition};
 use crate::message::{Message, SensitiveInput, ThresholdField};
 use crate::platform::notification;
 use crate::platform::tray::{TrayAction, TrayService};
 use crate::state::{
-    CredentialState, MonitorState, SettingsState, UiError, UsageState, WindowState,
+    CredentialState, FloatState, MonitorState, SettingsState, UiError, UsageState, WindowState,
 };
 use crate::{subscription, view, window as app_window};
 use iced::{window, Element, Subscription, Task, Theme};
@@ -21,6 +21,7 @@ pub struct App {
     usage: UsageState,
     settings: SettingsState,
     monitor: MonitorState,
+    floating: FloatState,
     config: AppConfig,
     config_loaded: bool,
     tray: Option<TrayService>,
@@ -54,6 +55,7 @@ impl App {
                 usage: UsageState::new(),
                 settings: SettingsState::default(),
                 monitor: MonitorState::default(),
+                floating: FloatState::default(),
                 config: AppConfig::default(),
                 config_loaded: false,
                 tray,
@@ -74,6 +76,10 @@ impl App {
                 self.windows.set_main(id);
                 Task::none()
             }
+            Message::FloatWindowOpened(id) => {
+                self.windows.set_floating(id);
+                window::monitor_size(id).map(move |size| Message::FloatMonitorSize(id, size))
+            }
             Message::CloseRequested(id) if self.windows.main() == Some(id) => {
                 if self.tray.is_none() || self.config.close_behavior == CloseBehavior::Exit {
                     iced::exit()
@@ -81,7 +87,21 @@ impl App {
                     self.hide_main()
                 }
             }
+            Message::CloseRequested(id) if self.windows.floating() == Some(id) => {
+                self.close_float()
+            }
             Message::CloseRequested(_) => Task::none(),
+            Message::WindowEvent(id, window::Event::Moved(point))
+                if self.windows.floating() == Some(id) =>
+            {
+                self.config.float_position = Some(FloatPosition {
+                    x: point.x.round() as i32,
+                    y: point.y.round() as i32,
+                });
+                self.floating.position_dirty = true;
+                Task::none()
+            }
+            Message::WindowEvent(_, _) => Task::none(),
             Message::PollTray => self
                 .tray
                 .as_ref()
@@ -89,14 +109,63 @@ impl App {
                 .map_or_else(Task::none, |action| self.update(Message::Tray(action))),
             Message::Tray(TrayAction::ShowMain) => self.show_main(),
             Message::Tray(TrayAction::HideMain) | Message::HideMain => self.hide_main(),
+            Message::Tray(TrayAction::ToggleFloat) | Message::ToggleFloat => {
+                if self.windows.floating().is_some() {
+                    self.close_float()
+                } else {
+                    self.open_float()
+                }
+            }
+            Message::CloseFloat => self.close_float(),
+            Message::FloatModeChanged(mode) => self.change_float_mode(mode),
+            Message::DragFloat => self
+                .windows
+                .floating()
+                .map_or_else(Task::none, window::drag),
+            Message::FloatMonitorSize(id, Some(monitor)) if self.windows.floating() == Some(id) => {
+                let Some(position) = self.config.float_position else {
+                    return Task::none();
+                };
+                let point = app_window::float_window::clamp_position(
+                    iced::Point::new(position.x as f32, position.y as f32),
+                    monitor,
+                    self.config.float_mode.size(),
+                );
+                self.config.float_position = Some(FloatPosition {
+                    x: point.x.round() as i32,
+                    y: point.y.round() as i32,
+                });
+                Task::batch([window::move_to(id, point), self.persist_config_silently()])
+            }
+            Message::FloatMonitorSize(_, _) => Task::none(),
+            Message::PersistFloatPosition if self.floating.position_dirty => {
+                self.floating.position_dirty = false;
+                self.persist_config_silently()
+            }
+            Message::PersistFloatPosition => Task::none(),
+            Message::ConfigPersisted(result) => {
+                if let Ok(config) = result {
+                    self.config = config;
+                }
+                Task::none()
+            }
             Message::ConfigLoaded(result) => {
                 self.config_loaded = true;
                 match result {
                     Ok(config) => {
                         self.apply_config(config);
-                        if self.credentials.configured && self.config.monitor_enabled {
-                            return self.refresh();
-                        }
+                        let float_task = if self.config.float_open {
+                            self.open_float()
+                        } else {
+                            Task::none()
+                        };
+                        let refresh_task =
+                            if self.credentials.configured && self.config.monitor_enabled {
+                                self.refresh()
+                            } else {
+                                Task::none()
+                            };
+                        return Task::batch([float_task, refresh_task]);
                     }
                     Err(error) => self.settings.error = Some(error),
                 }
@@ -285,12 +354,20 @@ impl App {
         }
     }
 
-    pub fn view(&self, _id: window::Id) -> Element<'_, Message> {
-        view::main(self)
+    pub fn view(&self, id: window::Id) -> Element<'_, Message> {
+        if self.windows.floating() == Some(id) {
+            view::floating(self)
+        } else {
+            view::main(self)
+        }
     }
 
-    pub fn title(&self, _id: window::Id) -> String {
-        "VOLC Status".to_owned()
+    pub fn title(&self, id: window::Id) -> String {
+        if self.windows.floating() == Some(id) {
+            "VOLC Status · 悬浮窗".to_owned()
+        } else {
+            "VOLC Status".to_owned()
+        }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -336,6 +413,10 @@ impl App {
     pub fn monitor_interval(&self) -> Option<u64> {
         (self.config_loaded && self.credentials.configured && self.config.monitor_enabled)
             .then_some(self.config.monitor_interval_secs)
+    }
+
+    pub fn float_position_dirty(&self) -> bool {
+        self.floating.position_dirty
     }
 
     fn apply_config(&mut self, config: AppConfig) {
@@ -389,6 +470,47 @@ impl App {
                 Message::NotificationsDelivered,
             )
         }
+    }
+
+    fn open_float(&mut self) -> Task<Message> {
+        if let Some(id) = self.windows.floating() {
+            return window::gain_focus(id);
+        }
+        self.config.float_open = true;
+        if let Some(tray) = &self.tray {
+            tray.set_float_open(true);
+        }
+        let (id, open) =
+            app_window::float_window::open(self.config.float_mode, self.config.float_position);
+        self.windows.set_floating(id);
+        Task::batch([
+            open.map(Message::FloatWindowOpened),
+            self.persist_config_silently(),
+        ])
+    }
+
+    fn close_float(&mut self) -> Task<Message> {
+        let Some(id) = self.windows.take_floating() else {
+            return Task::none();
+        };
+        self.config.float_open = false;
+        if let Some(tray) = &self.tray {
+            tray.set_float_open(false);
+        }
+        Task::batch([window::close(id), self.persist_config_silently()])
+    }
+
+    fn change_float_mode(&mut self, mode: FloatMode) -> Task<Message> {
+        self.config.float_mode = mode;
+        let resize = self
+            .windows
+            .floating()
+            .map_or_else(Task::none, |id| window::resize(id, mode.size()));
+        Task::batch([resize, self.persist_config_silently()])
+    }
+
+    fn persist_config_silently(&self) -> Task<Message> {
+        Task::perform(save_config(self.config.clone()), Message::ConfigPersisted)
     }
 
     fn show_main(&mut self) -> Task<Message> {

@@ -15,6 +15,39 @@ pub enum CloseBehavior {
     Exit,
 }
 
+/// Floating-window presentation mode.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FloatMode {
+    /// All quota windows and controls.
+    #[default]
+    Full,
+    /// Highest-risk quota summary.
+    Compact,
+    /// Single-line docked status.
+    Docked,
+}
+
+impl FloatMode {
+    /// Returns the native inner size for the mode.
+    pub fn size(self) -> iced::Size {
+        match self {
+            Self::Full => iced::Size::new(344.0, 404.0),
+            Self::Compact => iced::Size::new(344.0, 128.0),
+            Self::Docked => iced::Size::new(344.0, 52.0),
+        }
+    }
+}
+
+/// Persisted logical screen position of the floating window.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FloatPosition {
+    /// Logical horizontal coordinate.
+    pub x: i32,
+    /// Logical vertical coordinate.
+    pub y: i32,
+}
+
 /// Persisted, non-sensitive application configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -31,6 +64,12 @@ pub struct AppConfig {
     pub close_behavior: CloseBehavior,
     /// Whether a legacy settings file has been imported.
     pub legacy_migration_complete: bool,
+    /// Whether the floating window should be restored on launch.
+    pub float_open: bool,
+    /// Floating-window layout mode.
+    pub float_mode: FloatMode,
+    /// Last known logical floating-window position.
+    pub float_position: Option<FloatPosition>,
 }
 
 impl Default for AppConfig {
@@ -42,6 +81,9 @@ impl Default for AppConfig {
             thresholds: Thresholds::default(),
             close_behavior: CloseBehavior::MinimizeToTray,
             legacy_migration_complete: false,
+            float_open: false,
+            float_mode: FloatMode::Full,
+            float_position: None,
         }
     }
 }

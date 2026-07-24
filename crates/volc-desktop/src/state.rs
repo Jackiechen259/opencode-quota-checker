@@ -6,6 +6,7 @@ use volc_core::{UsageReport, VolcError};
 #[derive(Debug, Default)]
 pub struct WindowState {
     main: Option<window::Id>,
+    floating: Option<window::Id>,
 }
 
 impl WindowState {
@@ -22,6 +23,21 @@ impl WindowState {
     /// Removes and returns the main-window ID.
     pub fn take_main(&mut self) -> Option<window::Id> {
         self.main.take()
+    }
+
+    /// Returns the current floating-window ID.
+    pub fn floating(&self) -> Option<window::Id> {
+        self.floating
+    }
+
+    /// Records the only floating-window instance.
+    pub fn set_floating(&mut self, id: window::Id) {
+        self.floating = Some(id);
+    }
+
+    /// Removes and returns the floating-window ID.
+    pub fn take_floating(&mut self) -> Option<window::Id> {
+        self.floating.take()
     }
 }
 
@@ -129,4 +145,11 @@ pub struct MonitorState {
     pub last_alerted: HashMap<String, i64>,
     /// Latest notification delivery error.
     pub notification_error: Option<UiError>,
+}
+
+/// Transient floating-window persistence state.
+#[derive(Default)]
+pub struct FloatState {
+    /// Whether a move event is waiting for debounced persistence.
+    pub position_dirty: bool,
 }
