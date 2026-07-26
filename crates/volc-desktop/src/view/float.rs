@@ -10,6 +10,15 @@ use volc_core::WindowReport;
 
 /// Renders the floating window from the shared usage state.
 pub fn view(state: &UsageState, mode: FloatMode) -> Element<'_, Message> {
+    if mode == FloatMode::Docked {
+        return container(docked(state))
+            .width(Fill)
+            .height(Fill)
+            .padding([5, 6])
+            .style(move |_| theme::float_card())
+            .into();
+    }
+
     let drag_bar = mouse_area(
         container(
             text("VOLC Status · 拖动区域")
@@ -23,7 +32,7 @@ pub fn view(state: &UsageState, mode: FloatMode) -> Element<'_, Message> {
     let body: Element<'_, Message> = match mode {
         FloatMode::Full => full(state),
         FloatMode::Compact => compact(state),
-        FloatMode::Docked => docked(state),
+        FloatMode::Docked => unreachable!("docked mode is rendered without a separate drag bar"),
     };
     container(column![drag_bar, body].spacing(6))
         .width(Fill)
@@ -37,10 +46,6 @@ fn full(state: &UsageState) -> Element<'_, Message> {
     let controls = row![
         button("精简")
             .on_press(Message::FloatModeChanged(FloatMode::Compact))
-            .style(theme::soft_button)
-            .padding([6, 12]),
-        button("吸附")
-            .on_press(Message::FloatModeChanged(FloatMode::Docked))
             .style(theme::soft_button)
             .padding([6, 12]),
         button("刷新")
@@ -126,27 +131,60 @@ fn compact(state: &UsageState) -> Element<'_, Message> {
 }
 
 fn docked(state: &UsageState) -> Element<'_, Message> {
-    let (status, color) = highest(state).map_or_else(
-        || ("● 等待数据".to_owned(), theme::palette::TEXT_MUTED),
-        |window| {
-            (
-                format!("● {} {:.1}%", window.label, window.percent),
-                QuotaHealth::from_percent(window.percent).color(),
+    let status: Element<'_, Message> = highest(state).map_or_else(
+        || {
+            container(
+                text("● 等待用量数据")
+                    .size(12)
+                    .color(theme::palette::TEXT_MUTED),
             )
+            .width(Fill)
+            .into()
+        },
+        |window| {
+            let health = QuotaHealth::from_percent(window.percent);
+            let bar_color = health.color();
+            container(
+                column![
+                    row![
+                        text(format!("● {}", window.label))
+                            .size(12)
+                            .color(health.color()),
+                        text(format!("{:.1}%", window.percent))
+                            .size(14)
+                            .color(health.color()),
+                        text(format!("余 {:.1}", window.remaining))
+                            .size(10)
+                            .color(theme::palette::TEXT_MUTED),
+                    ]
+                    .spacing(6)
+                    .align_y(iced::Alignment::Center),
+                    progress_bar(0.0..=100.0, window.percent as f32)
+                        .girth(4)
+                        .style(move |_| theme::progress_style(bar_color)),
+                ]
+                .spacing(3),
+            )
+            .width(Fill)
+            .into()
         },
     );
+    let drag_content = mouse_area(status)
+        .on_press(Message::DragFloat)
+        .interaction(iced::mouse::Interaction::Grab);
+
     row![
-        text(status).width(Fill).color(color),
+        drag_content,
         button("展开")
             .on_press(Message::FloatModeChanged(FloatMode::Full))
             .style(theme::soft_button)
-            .padding([4, 10]),
+            .padding([3, 7]),
         button("×")
             .on_press(Message::CloseFloat)
             .style(theme::soft_button)
-            .padding([4, 10]),
+            .padding([3, 7]),
     ]
-    .spacing(6)
+    .spacing(4)
     .align_y(iced::Alignment::Center)
     .into()
 }

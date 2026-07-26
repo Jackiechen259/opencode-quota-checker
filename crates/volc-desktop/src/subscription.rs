@@ -13,7 +13,12 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     if app.tray_available() {
         subscriptions.push(time::every(Duration::from_millis(100)).map(|_| Message::PollTray));
     }
-    if app.has_report() {
+    if app.usage().loading {
+        subscriptions.push(
+            time::every(Duration::from_millis(80))
+                .map(|_| Message::Tick(chrono::Utc::now().timestamp_millis())),
+        );
+    } else if app.has_report() {
         subscriptions.push(
             time::every(Duration::from_secs(1))
                 .map(|_| Message::Tick(chrono::Utc::now().timestamp_millis())),

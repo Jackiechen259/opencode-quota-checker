@@ -4,7 +4,9 @@ pub mod credentials;
 pub mod dashboard;
 pub mod debug;
 pub mod float;
+pub mod footer;
 pub mod format;
+pub mod overview;
 pub mod settings;
 
 use crate::message::Message;
@@ -20,7 +22,14 @@ pub fn main(app: &App) -> Element<'_, Message> {
         app.usage().now_ms,
         app.usage().loading,
         app.tray_error(),
+        app.ui().header_focus,
     );
+
+    let dashboard_open = !app.ui().debug_open
+        && !app.settings().open
+        && !app.credentials().checking
+        && app.config_loaded()
+        && app.credentials().configured;
 
     let body: Element<'_, Message> = if app.ui().debug_open {
         debug::view(app.usage())
@@ -34,19 +43,47 @@ pub fn main(app: &App) -> Element<'_, Message> {
         dashboard::view(app.usage())
     };
 
-    let mut content = column![header, body].spacing(0);
-    if let Some(toast) = &app.ui().toast {
-        content = content.push(
-            container(text(toast).color(theme::palette::TEXT_PRIMARY))
-                .padding([10, 14])
-                .style(move |_| theme::toast()),
-        );
-    }
+    let body: Element<'_, Message> = if dashboard_open {
+        scrollable(body).width(Fill).height(Fill).into()
+    } else {
+        container(body).width(Fill).height(Fill).into()
+    };
 
-    let mut layers = stack![container(scrollable(content))
+    let content: Element<'_, Message> = if dashboard_open {
+        column![
+            header,
+            body,
+            footer::view(
+                app.usage().report.as_ref(),
+                app.usage().now_ms,
+                app.usage().loading
+            )
+        ]
+        .spacing(0)
+        .into()
+    } else {
+        column![header, body].spacing(0).into()
+    };
+
+    let mut layers = stack![container(content)
         .width(Fill)
         .height(Fill)
         .style(move |_| theme::page_background())];
+
+    if let Some(toast) = &app.ui().toast {
+        layers = layers.push(
+            container(
+                container(text(toast).color(theme::palette::TEXT_PRIMARY))
+                    .padding([10, 14])
+                    .style(move |_| theme::toast()),
+            )
+            .width(Fill)
+            .height(Fill)
+            .padding(theme::spacing::PAGE_PADDING)
+            .align_x(iced::alignment::Horizontal::Right)
+            .align_y(iced::alignment::Vertical::Bottom),
+        );
+    }
 
     if let Some(dialog) = confirm_dialog::view(app.confirm_clear_credentials()) {
         layers = layers.push(dialog);
@@ -70,5 +107,5 @@ fn checking_state() -> Element<'static, Message> {
 
 /// Renders the independent floating window from shared state.
 pub fn floating(app: &App) -> Element<'_, Message> {
-    float::view(app.usage(), app.config().float_mode)
+    float::view(app.usage(), app.float_mode())
 }

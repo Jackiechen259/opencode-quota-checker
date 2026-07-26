@@ -3,6 +3,12 @@ use iced::theme::Palette;
 use iced::widget::{button, container, progress_bar};
 use iced::{Background, Border, Color, Shadow, Theme, Vector};
 
+pub mod colors;
+pub mod spacing;
+pub mod typography;
+
+pub use colors as palette;
+
 /// Builds the modern, bright "VOLC Status" theme with a white base tone.
 pub fn application() -> Theme {
     Theme::custom(
@@ -18,51 +24,12 @@ pub fn application() -> Theme {
     )
 }
 
-/// Centralized design tokens. No component may hardcode colors.
-#[allow(dead_code)]
-pub mod palette {
-    use iced::Color;
-
-    pub const BACKGROUND: Color = Color::from_rgb8(244, 247, 251);
-    pub const SURFACE: Color = Color::WHITE;
-    pub const SURFACE_HOVER: Color = Color::from_rgb8(248, 250, 252);
-
-    pub const TEXT_PRIMARY: Color = Color::from_rgb8(15, 23, 42);
-    pub const TEXT_SECONDARY: Color = Color::from_rgb8(71, 85, 105);
-    pub const TEXT_MUTED: Color = Color::from_rgb8(148, 163, 184);
-
-    pub const BORDER: Color = Color::from_rgb8(226, 232, 240);
-    pub const DIVIDER: Color = Color::from_rgb8(232, 237, 243);
-
-    pub const PRIMARY: Color = Color::from_rgb8(59, 130, 246);
-    pub const PRIMARY_HOVER: Color = Color::from_rgb8(37, 99, 235);
-
-    pub const SUCCESS: Color = Color::from_rgb8(16, 185, 129);
-    pub const WARNING: Color = Color::from_rgb8(245, 158, 11);
-    pub const DANGER: Color = Color::from_rgb8(239, 68, 68);
-
-    /// Progress-bar / ring background track.
-    pub const TRACK: Color = Color::from_rgb8(228, 234, 242);
-}
-
-#[allow(dead_code)]
-pub mod spacing {
-    pub const XS: u16 = 4;
-    pub const SM: u16 = 8;
-    pub const MD: u16 = 12;
-    pub const BASE: u16 = 16;
-    pub const LG: u16 = 20;
-    pub const XL: u16 = 24;
-    pub const XXL: u16 = 32;
-    pub const HUGE: u16 = 40;
-}
-
 /// Radius scale (small label 8, button 10, card 16, large card 18).
 pub mod radius {
     pub const LABEL: f32 = 8.0;
     pub const BUTTON: f32 = 10.0;
-    pub const CARD: f32 = 16.0;
-    pub const LARGE_CARD: f32 = 18.0;
+    pub const CARD: f32 = 14.0;
+    pub const LARGE_CARD: f32 = 14.0;
     pub const PILL: f32 = 999.0;
 }
 
@@ -82,21 +49,6 @@ pub fn card() -> container::Style {
             color: palette::BORDER,
             width: 1.0,
             radius: radius::CARD.into(),
-        },
-        shadow: CARD_SHADOW,
-        snap: false,
-    }
-}
-
-/// Large overview card.
-pub fn large_card() -> container::Style {
-    container::Style {
-        background: Some(Background::Color(palette::SURFACE)),
-        text_color: Some(palette::TEXT_PRIMARY),
-        border: Border {
-            color: palette::BORDER,
-            width: 1.0,
-            radius: radius::LARGE_CARD.into(),
         },
         shadow: CARD_SHADOW,
         snap: false,
@@ -265,22 +217,56 @@ pub fn icon_button(_theme: &Theme, status: button::Status) -> button::Style {
     let base = button::Style {
         background: Some(Background::Color(Color::TRANSPARENT)),
         text_color: palette::TEXT_SECONDARY,
-        border: border::rounded(radius::BUTTON),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 1.0,
+            radius: radius::BUTTON.into(),
+        },
         shadow: Shadow::default(),
         snap: false,
     };
     match status {
-        button::Status::Hovered | button::Status::Pressed => button::Style {
-            background: Some(Background::Color(palette::SURFACE_HOVER)),
+        button::Status::Hovered => button::Style {
+            background: Some(Background::Color(palette::PRIMARY_LIGHT)),
             text_color: palette::TEXT_PRIMARY,
+            border: Border {
+                color: Color::from_rgba8(59, 130, 246, 0.28),
+                ..base.border
+            },
+            ..base
+        },
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(palette::PRIMARY_PRESSED)),
+            text_color: palette::PRIMARY_HOVER,
+            border: Border {
+                color: palette::PRIMARY,
+                ..base.border
+            },
             ..base
         },
         button::Status::Disabled => button::Style {
             text_color: palette::TEXT_MUTED,
+            background: Some(Background::Color(Color::TRANSPARENT)),
             ..base
         },
         _ => base,
     }
+}
+
+pub fn icon_button_with_focus(
+    theme: &Theme,
+    status: button::Status,
+    focused: bool,
+) -> button::Style {
+    let mut style = icon_button(theme, status);
+    if focused {
+        style.border = Border {
+            color: palette::PRIMARY,
+            width: 2.0,
+            radius: radius::BUTTON.into(),
+        };
+    }
+    style
 }
 
 /// Soft secondary button (e.g. text nav actions).

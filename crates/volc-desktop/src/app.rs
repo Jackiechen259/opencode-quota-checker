@@ -1,5 +1,5 @@
 use crate::config::{AppConfig, CloseBehavior, ConfigStore, FloatMode, FloatPosition};
-use crate::message::{Message, SensitiveInput, ThresholdField};
+use crate::message::{HeaderAction, Message, SensitiveInput, ThresholdField};
 use crate::platform::notification;
 use crate::platform::tray::{TrayAction, TrayService};
 use crate::state::{
@@ -103,9 +103,48 @@ impl App {
                     y: point.y.round() as i32,
                 });
                 self.floating.position_dirty = true;
-                Task::none()
+                let top_docked =
+                    app_window::float_window::is_top_docked(self.floating.top_docked, point.y, 0.0);
+                if top_docked == self.floating.top_docked {
+                    Task::none()
+                } else {
+                    self.floating.top_docked = top_docked;
+                    let mode = self.float_mode();
+                    let snap = top_docked.then(|| {
+                        let snapped = iced::Point::new(point.x, 0.0);
+                        self.config.float_position = Some(FloatPosition {
+                            x: snapped.x.round() as i32,
+                            y: snapped.y.round() as i32,
+                        });
+                        window::move_to(id, snapped)
+                    });
+                    Task::batch(
+                        [Some(window::resize(id, mode.size())), snap]
+                            .into_iter()
+                            .flatten(),
+                    )
+                }
             }
             Message::WindowEvent(_, _) => Task::none(),
+            Message::HeaderPressed(action) => {
+                self.ui.header_focus = Some(action);
+                self.update(action.message())
+            }
+            Message::Keyboard(keyboard::Event::KeyPressed {
+                key: Key::Named(Named::Tab),
+                modifiers,
+                ..
+            }) if self.dashboard_open() => {
+                self.ui.header_focus =
+                    Some(next_header_focus(self.ui.header_focus, modifiers.shift()));
+                Task::none()
+            }
+            Message::Keyboard(keyboard::Event::KeyPressed {
+                key: Key::Named(Named::Enter),
+                ..
+            }) if self.dashboard_open() && self.ui.header_focus.is_some() => self.update(
+                Message::HeaderPressed(self.ui.header_focus.expect("focus checked above")),
+            ),
             Message::Keyboard(keyboard::Event::KeyPressed {
                 key: Key::Named(Named::Escape),
                 ..
@@ -142,7 +181,7 @@ impl App {
                 let point = app_window::float_window::clamp_position(
                     iced::Point::new(position.x as f32, position.y as f32),
                     monitor,
-                    self.config.float_mode.size(),
+                    self.float_mode().size(),
                 );
                 self.config.float_position = Some(FloatPosition {
                     x: point.x.round() as i32,
@@ -443,6 +482,14 @@ impl App {
         &self.config
     }
 
+    pub fn float_mode(&self) -> FloatMode {
+        if self.floating.top_docked {
+            FloatMode::Docked
+        } else {
+            self.config.float_mode
+        }
+    }
+
     pub fn config_loaded(&self) -> bool {
         self.config_loaded
     }
@@ -472,7 +519,19 @@ impl App {
         self.ui.toast.is_some()
     }
 
+    fn dashboard_open(&self) -> bool {
+        !self.ui.debug_open
+            && !self.settings.open
+            && !self.credentials.checking
+            && self.config_loaded
+            && self.credentials.configured
+    }
+
     fn apply_config(&mut self, config: AppConfig) {
+        let mut config = config;
+        if config.float_mode == FloatMode::Docked {
+            config.float_mode = FloatMode::Compact;
+        }
         self.settings.interval = config.monitor_interval_secs.to_string();
         self.settings.five_hour = config.thresholds.five_hour.to_string();
         self.settings.weekly = config.thresholds.weekly.to_string();
@@ -533,8 +592,11 @@ impl App {
         if let Some(tray) = &self.tray {
             tray.set_float_open(true);
         }
+        self.floating.top_docked = self.config.float_position.is_some_and(|position| {
+            app_window::float_window::is_top_docked(false, position.y as f32, 0.0)
+        });
         let (id, open) =
-            app_window::float_window::open(self.config.float_mode, self.config.float_position);
+            app_window::float_window::open(self.float_mode(), self.config.float_position);
         self.windows.set_floating(id);
         Task::batch([
             open.map(Message::FloatWindowOpened),
@@ -554,11 +616,15 @@ impl App {
     }
 
     fn change_float_mode(&mut self, mode: FloatMode) -> Task<Message> {
-        self.config.float_mode = mode;
+        self.floating.top_docked = mode == FloatMode::Docked;
+        if mode != FloatMode::Docked {
+            self.config.float_mode = mode;
+        }
+        let effective_mode = self.float_mode();
         let resize = self
             .windows
             .floating()
-            .map_or_else(Task::none, |id| window::resize(id, mode.size()));
+            .map_or_else(Task::none, |id| window::resize(id, effective_mode.size()));
         Task::batch([resize, self.persist_config_silently()])
     }
 
@@ -586,6 +652,19 @@ impl App {
             iced::exit()
         }
     }
+}
+
+fn next_header_focus(current: Option<HeaderAction>, reverse: bool) -> HeaderAction {
+    let actions = HeaderAction::ALL;
+    let current_index =
+        current.and_then(|action| actions.iter().position(|candidate| *candidate == action));
+    let next_index = match (current_index, reverse) {
+        (Some(0), true) | (None, true) => actions.len() - 1,
+        (Some(index), true) => index - 1,
+        (Some(index), false) => (index + 1) % actions.len(),
+        (None, false) => 0,
+    };
+    actions[next_index]
 }
 
 fn parse_u64(value: &str, label: &str) -> Result<u64, UiError> {

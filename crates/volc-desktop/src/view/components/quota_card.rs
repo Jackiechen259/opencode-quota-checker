@@ -1,24 +1,21 @@
 use crate::message::Message;
 use crate::theme;
+use crate::view::components::card;
 use crate::view::components::quota_ring::QuotaRing;
+use crate::view::components::status_badge::{self, Tone};
 use crate::view::format;
 use iced::widget::{canvas, column, container, row, rule, text};
-use iced::{Color, Element, Fill};
+use iced::{Color, Element, Fill, Font, Length};
 use volc_core::WindowReport;
 
-/// Semantic quota health independent of widget construction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuotaHealth {
-    /// Below 70% usage.
     Healthy,
-    /// At least 70% but below 90%.
     Warning,
-    /// At least 90% usage.
     Critical,
 }
 
 impl QuotaHealth {
-    /// Derives health from a bounded usage percentage.
     pub fn from_percent(percent: f64) -> Self {
         if percent >= 90.0 {
             Self::Critical
@@ -29,16 +26,31 @@ impl QuotaHealth {
         }
     }
 
-    fn label(self) -> &'static str {
+    fn badge_label(self) -> &'static str {
         match self {
             Self::Healthy => "健康",
             Self::Warning => "接近阈值",
-            Self::Critical => "需要关注",
+            Self::Critical => "危险",
         }
     }
 
-    /// Accent color tuned for a light surface.
-    pub fn color(self) -> Color {
+    fn badge_tone(self) -> Tone {
+        match self {
+            Self::Healthy => Tone::Success,
+            Self::Warning => Tone::Warning,
+            Self::Critical => Tone::Danger,
+        }
+    }
+
+    pub fn progress_color(self) -> Color {
+        match self {
+            Self::Healthy => theme::palette::PRIMARY,
+            Self::Warning => theme::palette::WARNING,
+            Self::Critical => theme::palette::DANGER,
+        }
+    }
+
+    pub fn status_color(self) -> Color {
         match self {
             Self::Healthy => theme::palette::SUCCESS,
             Self::Warning => theme::palette::WARNING,
@@ -46,95 +58,137 @@ impl QuotaHealth {
         }
     }
 
-    fn dot_text(self) -> &'static str {
+    pub fn color(self) -> Color {
+        self.status_color()
+    }
+
+    fn status_label(self) -> &'static str {
         match self {
             Self::Healthy => "正常",
-            Self::Warning => "告警",
+            Self::Warning => "警告",
             Self::Critical => "危险",
         }
     }
 }
 
-/// Layout hint for a quota card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CardLayout {
-    /// `[ring] [info]` side by side.
-    Wide,
-    /// `[ring]` over `[info]`.
-    Narrow,
+    Horizontal,
+    Stacked,
 }
 
-/// Renders one display-ready quota window.
-pub fn view(window: WindowReport, now_ms: i64, layout: CardLayout) -> Element<'static, Message> {
+impl CardLayout {
+    pub fn height(self) -> f32 {
+        match self {
+            Self::Horizontal => 240.0,
+            Self::Stacked => 342.0,
+        }
+    }
+}
+
+pub fn view(
+    window: WindowReport,
+    now_ms: i64,
+    layout: CardLayout,
+    width: f32,
+) -> Element<'static, Message> {
     let health = QuotaHealth::from_percent(window.percent);
     let reset_seconds = window.reset_time.saturating_sub(now_ms) / 1_000;
 
     let header = row![
-        status_dot(health),
+        status(health),
         text(window.label)
-            .size(18)
-            .color(theme::palette::TEXT_PRIMARY),
-        text(health.label()).size(12).color(health.color()),
+            .size(theme::typography::CARD_TITLE)
+            .color(theme::palette::TEXT_PRIMARY)
+            .width(Fill),
+        status_badge::view(health.badge_label(), health.badge_tone()),
     ]
-    .spacing(8)
+    .spacing(theme::spacing::SM)
     .align_y(iced::Alignment::Center);
 
-    let ring = canvas(QuotaRing::new(window.percent as f32, health))
-        .width(iced::Length::Fixed(132.0))
-        .height(iced::Length::Fixed(132.0));
+    let ring = container(
+        canvas(QuotaRing::new(window.percent as f32, health))
+            .width(Length::Fixed(112.0))
+            .height(Length::Fixed(112.0)),
+    )
+    .width(Length::Shrink)
+    .align_x(iced::alignment::Horizontal::Center);
 
-    let info = column![
-        row![
-            metric("已用", format!("{:.1}", window.used)),
-            metric("总额", format!("{:.1}", window.quota)),
-            metric("剩余", format!("{:.1}", window.remaining)),
-        ]
-        .spacing(16),
-        rule::horizontal(1),
-        text(format!("下次重置：{}", format::countdown(reset_seconds)))
-            .size(13)
-            .color(theme::palette::TEXT_SECONDARY),
+    let metrics = row![
+        metric("已用", format::number(window.used)),
+        metric("总额", format::number(window.quota)),
+        metric("剩余", format::number(window.remaining)),
     ]
-    .spacing(12);
+    .spacing(theme::spacing::MD)
+    .width(Fill);
 
-    let body: Element<'_, Message> = match layout {
-        CardLayout::Wide => row![ring, info]
-            .spacing(20)
+    let body: Element<'static, Message> = match layout {
+        CardLayout::Horizontal => row![ring, metrics]
+            .spacing(theme::spacing::XL)
             .align_y(iced::Alignment::Center)
+            .width(Fill)
             .into(),
-        CardLayout::Narrow => column![ring, info]
-            .spacing(16)
+        CardLayout::Stacked => column![ring, metrics]
+            .spacing(theme::spacing::BASE)
             .align_x(iced::Alignment::Center)
+            .width(Fill)
             .into(),
     };
 
-    container(column![header, body].spacing(16))
-        .width(Fill)
-        .padding(24)
-        .style(move |_| theme::card())
-        .into()
+    let reset = row![
+        text("下次重置")
+            .size(theme::typography::LABEL)
+            .color(theme::palette::TEXT_MUTED)
+            .width(Fill),
+        text(format::countdown(reset_seconds))
+            .size(theme::typography::BODY)
+            .color(theme::palette::TEXT_PRIMARY),
+    ]
+    .align_y(iced::Alignment::Center);
+
+    card::sized(
+        column![header, body, rule::horizontal(1).style(rule_style), reset]
+            .spacing(theme::spacing::MD),
+        width,
+        layout.height(),
+    )
+    .into()
 }
 
-/// A small colored dot with a status word.
-fn status_dot(health: QuotaHealth) -> Element<'static, Message> {
+fn status(health: QuotaHealth) -> Element<'static, Message> {
     row![
-        text("●").size(12).color(health.color()),
-        text(health.dot_text())
-            .size(12)
+        text("●").size(10).color(health.status_color()),
+        text(health.status_label())
+            .size(theme::typography::LABEL)
             .color(theme::palette::TEXT_SECONDARY),
     ]
-    .spacing(4)
+    .spacing(5)
     .align_y(iced::Alignment::Center)
     .into()
 }
 
 fn metric(label: &'static str, value: String) -> Element<'static, Message> {
     column![
-        text(label).size(12).color(theme::palette::TEXT_MUTED),
-        text(value).size(20).color(theme::palette::TEXT_PRIMARY),
+        text(label)
+            .size(theme::typography::LABEL)
+            .color(theme::palette::TEXT_MUTED),
+        text(value)
+            .font(Font::MONOSPACE)
+            .size(theme::typography::METRIC_VALUE)
+            .color(theme::palette::TEXT_PRIMARY),
     ]
-    .spacing(4)
+    .spacing(theme::spacing::XS)
+    .width(Fill)
     .into()
+}
+
+fn rule_style(_theme: &iced::Theme) -> rule::Style {
+    rule::Style {
+        color: theme::palette::DIVIDER,
+        radius: 0.0.into(),
+        fill_mode: rule::FillMode::Full,
+        snap: false,
+    }
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ use iced::widget::canvas::{self, Cache, Frame, Geometry, Path, Stroke};
 use iced::{Color, Font, Point, Rectangle, Renderer, Theme};
 use std::f32::consts::FRAC_PI_2;
 
+use crate::theme;
 use crate::view::components::quota_card::QuotaHealth;
 use crate::view::components::TEXT_FONT;
 
@@ -30,14 +31,14 @@ impl QuotaRing {
         let label = format!("{}%", percent.round() as i32);
         let mut spec = RingSpec {
             percent,
-            color: health.color(),
+            color: health.progress_color(),
             label,
-            text_color: Color::from_rgb8(15, 23, 42),
+            text_color: theme::palette::TEXT_PRIMARY,
         };
         if !percent.is_finite() || percent < 0.0 {
             spec.percent = 0.0;
             spec.label = "-".to_owned();
-            spec.color = Color::from_rgb8(148, 163, 184);
+            spec.color = theme::palette::TEXT_MUTED;
         }
         Self {
             spec,
@@ -67,7 +68,7 @@ impl<Message> canvas::Program<Message> for QuotaRing {
 fn draw_ring(frame: &mut Frame, spec: &RingSpec) {
     let center = frame.center();
     let size = frame.width().min(frame.height());
-    let stroke_width = (size * 0.085).clamp(8.0, 12.0);
+    let stroke_width = 10.0;
     let radius = (size - stroke_width) / 2.0 - 1.0;
 
     // Background track.
@@ -75,7 +76,7 @@ fn draw_ring(frame: &mut Frame, spec: &RingSpec) {
     frame.stroke(
         &track,
         Stroke::default()
-            .with_color(Color::from_rgb8(228, 234, 242))
+            .with_color(theme::palette::TRACK)
             .with_width(stroke_width),
     );
 
@@ -111,12 +112,11 @@ fn draw_ring(frame: &mut Frame, spec: &RingSpec) {
     }
 
     // Center percent label.
-    let font_size = (size * 0.22).clamp(20.0, 32.0);
     frame.fill_text(canvas::Text {
         content: spec.label.clone(),
         position: center,
         color: spec.text_color,
-        size: iced::Pixels(font_size),
+        size: iced::Pixels(theme::typography::RING_VALUE),
         font: Font::with_name(TEXT_FONT),
         align_x: iced::alignment::Horizontal::Center.into(),
         align_y: iced::alignment::Vertical::Center,

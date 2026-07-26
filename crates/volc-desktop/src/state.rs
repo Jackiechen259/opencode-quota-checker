@@ -1,3 +1,4 @@
+use crate::message::HeaderAction;
 use iced::window;
 use std::collections::HashMap;
 use volc_core::{UsageReport, VolcError};
@@ -152,6 +153,8 @@ pub struct MonitorState {
 pub struct FloatState {
     /// Whether a move event is waiting for debounced persistence.
     pub position_dirty: bool,
+    /// Whether the floating window is temporarily snapped to the monitor top.
+    pub top_docked: bool,
 }
 
 /// Transient overlays and user feedback.
@@ -163,4 +166,6 @@ pub struct UiState {
     pub toast: Option<String>,
     /// Whether the delete-credential confirmation modal is open.
     pub confirm_clear_credentials: bool,
+    /// Keyboard focus used by the compact header action group.
+    pub header_focus: Option<HeaderAction>,
 }
