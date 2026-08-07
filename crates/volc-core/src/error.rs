@@ -15,6 +15,22 @@ pub enum VolcError {
     #[error("request failed: {0}")]
     Request(#[from] reqwest::Error),
 
+    /// The provider rejected the supplied authentication.
+    #[error("authentication failed")]
+    AuthenticationFailed,
+
+    /// The requested workspace does not exist or is not accessible.
+    #[error("workspace not found")]
+    WorkspaceNotFound,
+
+    /// The provider rate-limited the request.
+    #[error("request rate limited")]
+    RateLimited,
+
+    /// The provider response could not be parsed by any known strategy.
+    #[error("cannot parse provider response: {0}")]
+    Parse(String),
+
     /// The server returned a non-success status.
     #[error("HTTP {status}: {body}")]
     Http {
@@ -62,6 +78,12 @@ impl VolcError {
             Self::CredentialsInvalid(_) => "访问凭证无效，请重新输入。".to_owned(),
             Self::Request(error) if error.is_timeout() => "请求超时，请稍后重试。".to_owned(),
             Self::Request(_) => "网络请求失败，请检查网络连接。".to_owned(),
+            Self::AuthenticationFailed => {
+                "认证已失效，请重新登录 OpenCode Go 并更新 Auth Cookie。".to_owned()
+            }
+            Self::WorkspaceNotFound => "未找到该工作区，请检查 Workspace ID。".to_owned(),
+            Self::RateLimited => "请求过于频繁，请稍后重试。".to_owned(),
+            Self::Parse(_) => "OpenCode Go 页面结构已变化，无法解析配额数据。".to_owned(),
             Self::Http { status, .. } => format!("服务请求失败（HTTP {}）。", status.as_u16()),
             Self::Api { code, message } => format!("方舟接口错误 [{code}]：{message}"),
             Self::Response(_) | Self::ResponseValue(_) => "接口响应格式无法识别。".to_owned(),

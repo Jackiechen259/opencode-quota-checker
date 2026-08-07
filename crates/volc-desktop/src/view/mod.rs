@@ -23,22 +23,23 @@ pub fn main(app: &App) -> Element<'_, Message> {
         app.usage().loading,
         app.tray_error(),
         app.ui().header_focus,
+        app.config().provider == volc_core::Provider::VolcArkV,
     );
 
     let dashboard_open = !app.ui().debug_open
         && !app.settings().open
         && !app.credentials().checking
         && app.config_loaded()
-        && app.credentials().configured;
+        && app.provider_configured();
 
     let body: Element<'_, Message> = if app.ui().debug_open {
         debug::view(app.usage())
     } else if app.settings().open {
-        settings::view(app.settings(), app.config())
+        settings::view(app.settings(), app.config(), app.credentials())
     } else if app.credentials().checking || !app.config_loaded() {
         checking_state()
-    } else if !app.credentials().configured {
-        credentials::view(app.credentials())
+    } else if !app.provider_configured() {
+        credentials::view(app.credentials(), app.config().provider)
     } else {
         dashboard::view(app.usage())
     };

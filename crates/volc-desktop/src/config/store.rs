@@ -155,6 +155,7 @@ fn legacy_to_config(value: &Value) -> Result<AppConfig, VolcError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use volc_core::Provider;
 
     #[test]
     fn saves_and_loads_without_sensitive_fields() {
@@ -197,5 +198,33 @@ mod tests {
             ..AppConfig::default()
         };
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn missing_provider_field_defaults_to_volc_ark() {
+        let value = serde_json::json!({ "monitor_interval_secs": 60 });
+        let config: AppConfig =
+            serde_json::from_value(value).expect("missing provider field defaults");
+        assert_eq!(config.provider, Provider::VolcArkV);
+        assert!(config.opencode_workspace_id.is_none());
+    }
+
+    #[test]
+    fn opencode_provider_round_trips_in_plaintext_config() {
+        let config = AppConfig {
+            provider: Provider::OpenCodeGo,
+            opencode_workspace_id: Some("workspace-test-123".to_owned()),
+            ..AppConfig::default()
+        };
+        let encoded = serde_json::to_string(&config).expect("config serializes");
+        assert!(encoded.contains("\"provider\":\"opencode_go\""));
+        assert!(!encoded.contains("auth_cookie"));
+
+        let decoded: AppConfig = serde_json::from_str(&encoded).expect("config decodes");
+        assert_eq!(decoded.provider, Provider::OpenCodeGo);
+        assert_eq!(
+            decoded.opencode_workspace_id.as_deref(),
+            Some("workspace-test-123")
+        );
     }
 }

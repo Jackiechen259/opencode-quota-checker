@@ -11,6 +11,19 @@ use iced::widget::{column, container, row, text, Column, Row};
 use iced::{Color, Element, Fill, FillPortion, Font, Length};
 use volc_core::UsageReport;
 
+/// Badge text for the report provider, including the Ark plan type when known.
+fn provider_badge(report: &UsageReport) -> String {
+    if report.plan_type.trim().is_empty() {
+        report.provider.name().to_owned()
+    } else {
+        format!(
+            "{} · {}",
+            report.provider.name(),
+            report.plan_type.to_uppercase()
+        )
+    }
+}
+
 pub fn view(
     report: UsageReport,
     now_ms: i64,
@@ -18,7 +31,7 @@ pub fn view(
     window_width: f32,
 ) -> Element<'static, Message> {
     let trailing = row![
-        status_badge::view(report.plan_type.to_uppercase(), Tone::Primary),
+        status_badge::view(provider_badge(&report), Tone::Primary),
         text("·")
             .size(theme::typography::LABEL)
             .color(theme::palette::TEXT_MUTED),

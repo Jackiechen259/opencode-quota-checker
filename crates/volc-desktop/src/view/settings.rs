@@ -1,12 +1,134 @@
 use crate::config::AppConfig;
-use crate::message::{Message, ThresholdField};
-use crate::state::SettingsState;
+use crate::message::{Message, SensitiveInput, ThresholdField};
+use crate::state::{CredentialState, SettingsState};
 use crate::theme;
 use iced::widget::{button, column, container, row, text, text_input};
 use iced::{Element, Fill};
+use volc_core::Provider;
 
-/// Renders monitor configuration and start/stop controls.
-pub fn view<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a, Message> {
+/// Renders data-source selection, monitor configuration and start/stop controls.
+pub fn view<'a>(
+    state: &'a SettingsState,
+    config: &AppConfig,
+    credentials: &'a CredentialState,
+) -> Element<'a, Message> {
+    let mut content =
+        column![header(config.provider), provider_selector(config.provider),].spacing(16);
+
+    if config.provider == Provider::OpenCodeGo {
+        content = content.push(opencode_section(credentials));
+    }
+
+    content = content.push(monitor_section(state, config));
+
+    if let Some(error) = &state.error {
+        content = content.push(notice_box(error.user.as_str(), true));
+    }
+    if let Some(notice) = &state.notice {
+        content = content.push(notice_box(notice.as_str(), false));
+    }
+    content.into()
+}
+
+fn header(provider: Provider) -> Element<'static, Message> {
+    row![
+        text("设置").size(24).color(theme::palette::TEXT_PRIMARY),
+        text(match provider {
+            Provider::VolcArkV => "数据源：Volc ArK",
+            Provider::OpenCodeGo => "数据源：OpenCode Go",
+        })
+        .size(13)
+        .color(theme::palette::TEXT_MUTED),
+        row![].width(Fill),
+        button("关闭")
+            .on_press(Message::CloseSettings)
+            .style(theme::soft_button)
+            .padding([8, 16]),
+    ]
+    .spacing(16)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+fn provider_selector(active: Provider) -> Element<'static, Message> {
+    let ark = provider_button("Volc ArK", Provider::VolcArkV, active);
+    let opencode = provider_button("OpenCode Go", Provider::OpenCodeGo, active);
+    container(row![ark, opencode].spacing(10))
+        .width(Fill)
+        .padding(18)
+        .style(move |_| theme::panel())
+        .into()
+}
+
+fn provider_button(
+    label: &str,
+    provider: Provider,
+    active: Provider,
+) -> iced::widget::Button<'_, Message> {
+    if provider == active {
+        button(label)
+            .on_press(Message::ProviderChanged(provider))
+            .style(button::primary)
+            .padding([10, 20])
+    } else {
+        button(label)
+            .on_press(Message::ProviderChanged(provider))
+            .style(theme::soft_button)
+            .padding([10, 20])
+    }
+}
+
+/// Editable OpenCode Go data source (workspace ID + auth cookie).
+fn opencode_section<'a>(state: &'a CredentialState) -> Element<'a, Message> {
+    let workspace = field(
+        "Workspace ID",
+        &state.opencode_workspace,
+        Message::OpenCodeWorkspaceChanged,
+    );
+    let cookie = column![
+        text("Auth Cookie")
+            .size(12)
+            .color(theme::palette::TEXT_MUTED),
+        text_input("", &state.opencode_cookie)
+            .on_input(|value| Message::OpenCodeCookieChanged(SensitiveInput(value)))
+            .secure(true)
+            .padding(10),
+        text("请将 Auth Cookie 视为密码保管；它仅保存在系统钥匙串，随请求发送到 opencode.ai。")
+            .size(11)
+            .color(theme::palette::WARNING),
+    ]
+    .spacing(5);
+
+    let can_save = !state.mutating
+        && !state.opencode_workspace.trim().is_empty()
+        && !state.opencode_cookie.trim().is_empty();
+    let save = if can_save {
+        button("保存 OpenCode 配置")
+            .on_press(Message::SaveOpenCodeCredentials)
+            .style(button::primary)
+            .padding([10, 20])
+    } else {
+        button("保存 OpenCode 配置").padding([10, 20])
+    };
+
+    container(
+        column![
+            text("OpenCode Go 数据源")
+                .size(16)
+                .color(theme::palette::TEXT_PRIMARY),
+            workspace,
+            cookie,
+            save,
+        ]
+        .spacing(14),
+    )
+    .width(Fill)
+    .padding(18)
+    .style(move |_| theme::panel())
+    .into()
+}
+
+fn monitor_section<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a, Message> {
     let fields = column![
         field(
             "轮询间隔（30–3600 秒）",
@@ -45,18 +167,7 @@ pub fn view<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a, Mes
         "状态：监控已停止"
     };
 
-    let mut content = column![
-        row![
-            text("监控设置")
-                .size(24)
-                .color(theme::palette::TEXT_PRIMARY),
-            button("关闭")
-                .on_press(Message::CloseSettings)
-                .style(theme::soft_button)
-                .padding([8, 16]),
-        ]
-        .spacing(16)
-        .align_y(iced::Alignment::Center),
+    column![
         text(status_label)
             .size(13)
             .color(theme::palette::TEXT_MUTED),
@@ -70,15 +181,8 @@ pub fn view<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a, Mes
             .style(button::danger)
             .padding([10, 20]),
     ]
-    .spacing(16);
-
-    if let Some(error) = &state.error {
-        content = content.push(notice_box(error.user.as_str(), true));
-    }
-    if let Some(notice) = &state.notice {
-        content = content.push(notice_box(notice.as_str(), false));
-    }
-    content.into()
+    .spacing(16)
+    .into()
 }
 
 fn field<'a>(

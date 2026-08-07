@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use volc_core::{Thresholds, VolcError};
+use volc_core::{Provider, Thresholds, VolcError};
 
 /// Current configuration schema version.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -57,12 +57,16 @@ pub struct FloatPosition {
 pub struct AppConfig {
     /// Configuration schema version.
     pub schema_version: u32,
+    /// Active quota data source.
+    pub provider: Provider,
     /// Whether subscription-based monitoring is enabled.
     pub monitor_enabled: bool,
     /// Polling interval in seconds.
     pub monitor_interval_secs: u64,
     /// Per-window notification thresholds.
     pub thresholds: Thresholds,
+    /// OpenCode Go workspace identifier (non-sensitive).
+    pub opencode_workspace_id: Option<String>,
     /// Main window close behavior.
     pub close_behavior: CloseBehavior,
     /// Whether a legacy settings file has been imported.
@@ -79,9 +83,11 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
+            provider: Provider::default(),
             monitor_enabled: true,
             monitor_interval_secs: 300,
             thresholds: Thresholds::default(),
+            opencode_workspace_id: None,
             close_behavior: CloseBehavior::MinimizeToTray,
             legacy_migration_complete: false,
             float_open: false,
