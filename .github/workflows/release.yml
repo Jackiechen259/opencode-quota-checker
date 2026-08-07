@@ -1,8 +1,5 @@
 name: Release
 
-# Triggered by a version tag (v0.1.0, v1.2.3-rc1, ...). The tag is created by
-# `npm run release:bump -- <version>` (see scripts/bump-version.mjs), which keeps
-# package.json / tauri.conf.json / Cargo.toml in sync before tagging.
 on:
   push:
     tags:
@@ -10,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to rebuild (must already exist)"
+        description: Existing v-prefixed tag to rebuild
         required: true
         type: string
 
@@ -18,90 +15,136 @@ permissions:
   contents: write
 
 jobs:
-  resolve-tag:
-    name: Resolve release tag
-    runs-on: ubuntu-latest
+  resolve:
+    name: Validate release version
+    runs-on: ubuntu-22.04
     outputs:
-      tag: ${{ steps.resolve.outputs.tag }}
-      version: ${{ steps.resolve.outputs.version }}
-      prerelease: ${{ steps.resolve.outputs.prerelease }}
+      tag: ${{ steps.tag.outputs.value }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
     steps:
-      - id: resolve
+      - id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [ -n "${{ inputs.tag }}" ]; then
-            TAG="${{ inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
+          tag="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $tag" >&2
+            exit 1
           fi
-          # Strip a leading 'v' to get the bare version.
-          VERSION="${TAG#v}"
-          # Anything with -alpha / -beta / -rc / -dev is a prerelease.
-          if [[ "$VERSION" =~ -(alpha|beta|rc|dev)([._-]?[0-9]+)?$ ]]; then
-            PRE="true"
+          echo "value=$tag" >> "$GITHUB_OUTPUT"
+          if [[ "$tag" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
-            PRE="false"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
 
-  build:
-    name: Build ${{ matrix.settings.platform }}
-    needs: resolve-tag
-    runs-on: ${{ matrix.settings.runner }}
+  package:
+    name: Package ${{ matrix.name }}
+    needs: resolve
     strategy:
       fail-fast: false
       matrix:
-        settings:
-          - platform: linux
-            runner: ubuntu-22.04
-            args: ""
-          - platform: windows
-            runner: windows-latest
-            args: ""
-          - platform: macos-intel
-            runner: macos-13
-            args: "--target x86_64-apple-darwin"
-          - platform: macos-arm
-            runner: macos-latest
-            args: "--target aarch64-apple-darwin"
+        include:
+          - name: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            formats: nsis
+            artifact: windows-x86_64
+          - name: Linux x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            formats: deb,appimage
+            artifact: linux-x86_64
+          - name: macOS Intel
+            os: macos-13
+            target: x86_64-apple-darwin
+            formats: dmg
+            artifact: macos-x86_64
+          - name: macOS Apple Silicon
+            os: macos-14
+            target: aarch64-apple-darwin
+            formats: dmg
+            artifact: macos-aarch64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve-tag.outputs.tag }}
+          ref: ${{ needs.resolve.outputs.tag }}
 
-      - name: Install Linux Tauri deps
-        if: matrix.settings.platform == 'linux'
+      - name: Install Linux native and packaging dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y \
+            build-essential \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            libnotify-bin \
+            libsecret-1-dev \
+            libxdo-dev \
+            pkg-config \
+            squashfs-tools
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Setup Rust
+      - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.settings.platform == 'macos-intel' && 'x86_64-apple-darwin' || (matrix.settings.platform == 'macos-arm' && 'aarch64-apple-darwin' || '') }}
+          targets: ${{ matrix.target }}
 
-      - name: Cargo cache
+      - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          key: release-${{ matrix.target }}
 
-      - name: Install frontend dependencies
-        run: npm ci
+      - name: Validate tag and package versions
+        run: cargo xtask verify-version ${{ needs.resolve.outputs.tag }}
 
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --locked
+
+      - name: Build release binary
+        run: cargo build -p volc-desktop --release --locked --target ${{ matrix.target }}
+
+      - name: Stage target binary for packager
+        shell: bash
+        run: |
+          mkdir -p target/release
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cp "target/${{ matrix.target }}/release/volc-desktop.exe" target/release/
+          else
+            cp "target/${{ matrix.target }}/release/volc-desktop" target/release/
+          fi
+
+      - name: Create native package
+        run: cargo packager --release --config crates/volc-desktop/packager.json --formats ${{ matrix.formats }}
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ needs.resolve-tag.outputs.tag }}
-          releaseName: "VOLC Status v${{ needs.resolve-tag.outputs.version }}"
-          # Auto-generated release notes from commits + PRs since the last release.
-          releaseDraft: false
-          prerelease: ${{ needs.resolve-tag.outputs.prerelease }}
-          args: ${{ matrix.settings.args }}
+          name: ${{ matrix.artifact }}
+          path: target/packages/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [resolve, package]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        working-directory: release-assets
+        run: find . -maxdepth 1 -type f -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve.outputs.tag }}
+          name: VOLC Status ${{ needs.resolve.outputs.tag }}
+          prerelease: ${{ needs.resolve.outputs.prerelease }}
+          generate_release_notes: true
+          files: release-assets/*

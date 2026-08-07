@@ -1,158 +1,114 @@
 # VOLC Status
 
-> 火山方舟 Agent Plan AFP 配额监控控制台
+火山方舟 Agent Plan AFP 配额的纯 Rust 原生桌面监控工具。
 
-一个基于 Tauri 2 + Svelte 5 的桌面应用,用于实时监控火山方舟(Volcano Ark)Agent Plan 的 AFP 配额使用情况,支持后台轮询、阈值告警与桌面通知。
+[![CI](https://github.com/Jackiechen259/volc_status/actions/workflows/ci.yml/badge.svg)](https://github.com/Jackiechen259/volc_status/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-![license](https://img.shields.io/badge/license-Apache--2.0-blue)
-![tauri](https://img.shields.io/badge/Tauri-2-orange)
-![svelte](https://img.shields.io/badge/Svelte-5-ff3e00)
+## 功能
 
-## 功能特性
-
-- **安全凭据管理** - Access Key / Secret Key 通过系统钥匙串(keyring)加密存储,不以明文落盘。
-- **配额卡片** - 直观展示 5 小时 / 近一周 / 近一月三个窗口的配额、已用量、剩余量、使用百分比与重置倒计时。
-- **悬浮窗** - 可置顶的小型悬浮组件,在桌面随时查看关键配额。
-- **后台监控与告警** - 可配置轮询间隔与各窗口告警阈值,达到阈值时通过桌面通知提醒。
-- **原始响应调试** - 透传 `GetAFPUsage` 的原始 JSON,方便排查接口问题。
-- **火山引擎签名** - 内置 HMAC-SHA256 V4 签名实现,直接调用方舟 OpenAPI。
+- 展示 5 小时、近一周、近一月配额、用量、剩余量与重置时间
+- 原生系统托盘，关闭主窗口后可继续后台监控
+- Full、Compact、Docked 三种置顶悬浮窗
+- 可配置轮询间隔和每个时间窗口的告警阈值
+- 原生桌面通知及同一告警周期去重
+- 原始 API 响应调试浮层和一键复制
+- AK/SK 仅保存到系统钥匙串，配置文件不包含敏感字段
 
 ## 技术栈
 
-| 层 | 技术 |
+| 层 | 实现 |
 |---|---|
-| 桌面框架 | Tauri 2 |
-| 前端 | Svelte 5 + TypeScript + Vite |
-| 后端 | Rust(edition 2021) |
-| 凭据存储 | `keyring`(系统原生钥匙串) |
-| HTTP | `reqwest`(rustls-tls) |
-| 签名 | `sha2` / `hmac`(火山引擎签名 V4) |
+| 桌面与 UI | Iced 0.14 daemon |
+| 托盘 | `tray-icon` |
+| HTTP | `reqwest` + rustls |
+| 凭据 | `keyring` 系统原生后端 |
+| 通知 | Windows WinRT / macOS Notification Center / Linux `notify-send` |
+| 异步运行时 | Tokio |
+| 打包 | `cargo-packager` |
 
-## 快速开始
+项目运行和构建不需要 Node.js 或浏览器运行时。
 
-### 环境要求
+## 开发
 
-- [Node.js](https://nodejs.org/) ≥ 18
-- [Rust](https://www.rust-lang.org/tools/install) ≥ 1.77.2
-- Tauri 2 的系统依赖,参见 [Tauri 官方文档](https://v2.tauri.app/start/prerequisites/)
-
-### 安装与开发
+需要最新 stable Rust。Windows 和 macOS 使用系统原生工具链；Ubuntu
+22.04+ 还需要：
 
 ```bash
-# 安装前端依赖
-npm install
-
-# 以开发模式启动(同时拉起 Tauri + Vite)
-npm run tauri:dev
+sudo apt-get install build-essential pkg-config libgtk-3-dev \
+  libayatana-appindicator3-dev libxdo-dev libsecret-1-dev libnotify-bin
 ```
 
-### 构建生产包
+运行应用与质量检查：
 
 ```bash
-npm run tauri:build
+cargo run -p volc-desktop
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace
+cargo build --workspace --release
 ```
 
-产物输出在 `src-tauri/target/release/bundle/`。
+Linux 桌面需支持 AppIndicator；部分 GNOME 环境需要启用对应扩展。X11
+和 Wayland 的托盘、通知与无边框窗口行为应在发版前分别烟测。
 
-## 使用说明
+## 使用
 
-1. 首次启动后,在设置面板中填入火山方舟的 Access Key 与 Secret Key(可通过控制台「API 访问密钥」获取)。
-2. 凭据将保存到系统钥匙串,下次启动自动加载。
-3. 主界面查看各窗口配额卡片;可开启悬浮窗常驻桌面。
-4. 在设置中配置轮询间隔与告警阈值,开启后台监控后,达到阈值将收到桌面通知。
+1. 启动后在凭据页面输入火山引擎 Access Key 和 Secret Key。
+2. 点击保存；凭据写入系统钥匙串。
+3. 刷新配额，按需打开后台监控、告警和悬浮窗。
+4. 调试时可打开原始响应浮层；其中可能包含服务端元数据，分享前请检查。
 
-> 注意:凭据仅存储于本机系统钥匙串,不会上传至任何服务器。
+常规设置写入系统标准配置目录下的
+`volc-status/config.json`。写入采用同目录临时文件与原子替换；AK/SK
+不会写入该文件。
 
-## 项目结构
+## 目录
 
-```
-voac-status/
-├── src/                          # Svelte 前端
-│   ├── App.svelte
-│   ├── lib/
-│   │   ├── api.ts                # Tauri 命令调用封装
-│   │   ├── floatWindow.ts         # 悬浮窗逻辑
-│   │   ├── types.ts
-│   │   └── components/            # QuotaCard / FloatWidget / SettingsPanel ...
-├── src-tauri/                     # Rust 后端
-│   └── src/
-│       ├── main.rs / lib.rs       # 应用入口
-│       ├── client.rs              # 方舟 OpenAPI 调用
-│       ├── signing.rs             # 火山引擎签名实现
-│       ├── credential.rs          # 凭据存取(keyring)
-│       ├── monitor.rs             # 后台监控 / 阈值告警
-│       ├── commands.rs            # 暴露给前端的 Tauri 命令
-│       └── models.rs              # 响应模型与数据转换
-└── package.json
+```text
+.
+├── assets/icons/             # 安装包图标
+├── crates/
+│   ├── volc-core/            # API、签名、模型、凭据和告警规则
+│   └── volc-desktop/         # Iced 应用、视图、窗口、托盘和配置
+├── docs/                     # 架构、构建、发布及迁移记录
+├── spikes/iced-tray-daemon/  # Phase 1 生命周期验证原型
+└── xtask/                    # Rust 版本发布工具
 ```
 
-### 暴露的 Tauri 命令
+`volc-core` 不依赖桌面 UI，可独立测试。应用状态只在 Iced update
+路径中修改；主窗口与悬浮窗共享同一份配额状态。
 
-| 命令 | 说明 |
-|---|---|
-| `set_credentials` / `has_credentials` / `clear_credentials` | 凭据的增删查 |
-| `fetch_usage` | 拉取并解析后的配额报告 |
-| `fetch_usage_raw` | 拉取原始 JSON 响应(调试用) |
-| `start_monitor` / `stop_monitor` / `get_monitor_status` | 后台监控控制 |
+## 打包与发布
 
-## CI/CD 与发布流程
-
-仓库内置两条 GitHub Actions 工作流,位于 `.github/workflows/`。
-
-### CI(`ci.yml`)
-
-在 `push`/`pull_request` 到 `main` 时运行,分两个并行 job:
-
-- **前端** - `npm ci` -> `npm run check`(svelte-check 类型检查)-> `npm run build`,产物作为 artifact 上传。
-- **Rust** - 安装 Linux Tauri 系统依赖 -> `cargo fmt --check` -> `cargo clippy -D warnings` -> `cargo build --release`。
-
-失败会阻断合并,保证主干始终可构建。
-
-### Release(`release.yml`)
-
-由 git tag `v*` 触发(也支持 `workflow_dispatch` 重跑某个 tag)。流程:
-
-1. **resolve-tag** - 从 tag 解析版本号与是否预发布(`-alpha`/`-beta`/`-rc`/`-dev` 视为预发布)。
-2. **build** - 4 平台矩阵并行构建:Linux(ubuntu-22.04)、Windows、macOS Intel、macOS ARM。
-   - 使用 `tauri-apps/tauri-action@v0` 编译并打包。
-   - 自动创建 GitHub Release(标题 `VOLC Status v<version>`),附带各平台安装包(`.msi`/`.dmg`/`.AppImage`/`.deb` 等)。
-   - 预发布版本会标记为 prerelease,不会作为最新正式版。
-
-### 发版操作
-
-版本号同时存在于三个文件:`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`。用脚本统一更新并打 tag:
+本机打包前安装：
 
 ```bash
-# 显式版本
-npm run release:bump -- 1.2.0
-
-# 或基于当前版本号自动递增
-npm run release:bump -- patch   # 0.1.0 -> 0.1.1
-npm run release:bump -- minor   # 0.1.0 -> 0.2.0
-npm run release:bump -- major   # 0.1.0 -> 1.0.0
-
-# 预发布版本
-npm run release:bump -- 1.0.0-rc1
+cargo install cargo-packager --locked
+cargo packager --release --config crates/volc-desktop/packager.json
 ```
 
-脚本会:更新三个文件的版本号 -> `git commit` -> 创建带注解的 tag `v<version>`。默认**不推送**。
-
-确认无误后,推送到远端触发 Release 工作流:
+发布版本由根 `Cargo.toml` 的 `[workspace.package].version` 管理：
 
 ```bash
-git push origin HEAD v1.2.0
+cargo xtask release patch
+cargo xtask release minor
+cargo xtask release 1.0.0-rc.1
+cargo xtask release 1.0.0 --push
 ```
 
-或直接加 `--push` 一步到位:
+`v*` tag 触发 Windows x64、Linux x64、macOS Intel 和 macOS Apple
+Silicon 打包，并发布 SHA-256 校验和。详细步骤见
+[发布说明](docs/release.md)，构建环境见[构建说明](docs/building.md)。
 
-```bash
-npm run release:bump -- 1.2.0 --push
-```
+## 安全
 
-> 首次发布前,确认仓库 `Settings -> Actions -> General -> Workflow permissions` 已授予 **Read and write permissions**(`tauri-action` 需要创建 Release)。工作流已声明 `permissions: contents: write`,通常无需额外配置。
+- 不在日志、配置、测试 fixture 或错误信息中输出 AK/SK。
+- HTTP 请求使用 rustls TLS，并设置有限超时及响应体错误截断。
+- 发布包当前未配置平台代码签名；正式分发前应配置 Windows 与 macOS
+  签名凭据。
 
 ## 许可证
 
-本项目基于 [Apache License 2.0](./LICENSE) 开源。
-
-Copyright 2026 Jackie Chen
+本项目基于 [Apache License 2.0](LICENSE) 开源。第三方依赖说明见
+[license notices](docs/license-notices.md)。
