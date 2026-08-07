@@ -82,7 +82,15 @@ impl App {
             }
             Message::FloatWindowOpened(id) => {
                 self.windows.set_floating(id);
-                window::monitor_size(id).map(move |size| Message::FloatMonitorSize(id, size))
+                #[cfg(target_os = "windows")]
+                {
+                    app_window::float_window::restore_position(id, self.config.float_position)
+                        .map(move |geometry| Message::FloatWindowGeometry(id, geometry))
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    window::monitor_size(id).map(move |size| Message::FloatMonitorSize(id, size))
+                }
             }
             Message::CloseRequested(id) if self.windows.main() == Some(id) => {
                 if self.tray.is_none() || self.config.close_behavior == CloseBehavior::Exit {
@@ -95,6 +103,14 @@ impl App {
                 self.close_float()
             }
             Message::CloseRequested(_) => Task::none(),
+            #[cfg(target_os = "windows")]
+            Message::WindowEvent(id, window::Event::Moved(_))
+                if self.windows.floating() == Some(id) =>
+            {
+                app_window::float_window::geometry(id)
+                    .map(move |geometry| Message::FloatWindowGeometry(id, geometry))
+            }
+            #[cfg(not(target_os = "windows"))]
             Message::WindowEvent(id, window::Event::Moved(point))
                 if self.windows.floating() == Some(id) =>
             {
@@ -174,6 +190,35 @@ impl App {
                 .windows
                 .floating()
                 .map_or_else(Task::none, window::drag),
+            #[cfg(target_os = "windows")]
+            Message::FloatWindowGeometry(id, Some(geometry))
+                if self.windows.floating() == Some(id) =>
+            {
+                self.config.float_position = Some(FloatPosition {
+                    x: geometry.position.x.round() as i32,
+                    y: geometry.position.y.round() as i32,
+                });
+                self.floating.position_dirty = true;
+                let top_docked = app_window::float_window::is_top_docked_at_scale(
+                    self.floating.top_docked,
+                    geometry.position.y,
+                    geometry.monitor_top,
+                    geometry.scale_factor,
+                );
+                if top_docked == self.floating.top_docked {
+                    Task::none()
+                } else {
+                    self.floating.top_docked = top_docked;
+                    let mut tasks = vec![window::resize(id, self.float_mode().size())];
+                    if top_docked {
+                        tasks.push(app_window::float_window::snap_to_monitor_top(id).discard());
+                    }
+                    Task::batch(tasks)
+                }
+            }
+            #[cfg(target_os = "windows")]
+            Message::FloatWindowGeometry(_, _) => Task::none(),
+            #[cfg(not(target_os = "windows"))]
             Message::FloatMonitorSize(id, Some(monitor)) if self.windows.floating() == Some(id) => {
                 let Some(position) = self.config.float_position else {
                     return Task::none();
@@ -189,6 +234,7 @@ impl App {
                 });
                 Task::batch([window::move_to(id, point), self.persist_config_silently()])
             }
+            #[cfg(not(target_os = "windows"))]
             Message::FloatMonitorSize(_, _) => Task::none(),
             Message::PersistFloatPosition if self.floating.position_dirty => {
                 self.floating.position_dirty = false;

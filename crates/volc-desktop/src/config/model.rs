@@ -32,19 +32,22 @@ impl FloatMode {
     /// Returns the native inner size for the mode.
     pub fn size(self) -> iced::Size {
         match self {
-            Self::Full => iced::Size::new(344.0, 404.0),
-            Self::Compact => iced::Size::new(344.0, 128.0),
-            Self::Docked => iced::Size::new(344.0, 52.0),
+            Self::Full => iced::Size::new(360.0, 420.0),
+            Self::Compact => iced::Size::new(360.0, 148.0),
+            Self::Docked => iced::Size::new(360.0, 56.0),
         }
     }
 }
 
-/// Persisted logical screen position of the floating window.
+/// Persisted screen position of the floating window.
+///
+/// Windows uses physical virtual-desktop pixels so the position remains stable
+/// across monitors with different DPI. Other platforms use Iced logical pixels.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FloatPosition {
-    /// Logical horizontal coordinate.
+    /// Platform-native horizontal coordinate.
     pub x: i32,
-    /// Logical vertical coordinate.
+    /// Platform-native vertical coordinate.
     pub y: i32,
 }
 
@@ -68,7 +71,7 @@ pub struct AppConfig {
     pub float_open: bool,
     /// Floating-window layout mode.
     pub float_mode: FloatMode,
-    /// Last known logical floating-window position.
+    /// Last known floating-window position.
     pub float_position: Option<FloatPosition>,
 }
 

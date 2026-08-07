@@ -102,16 +102,62 @@ pub fn float_card() -> container::Style {
         background: Some(Background::Color(palette::SURFACE)),
         text_color: Some(palette::TEXT_PRIMARY),
         border: Border {
-            color: palette::BORDER,
-            width: 1.0,
-            radius: radius::CARD.into(),
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 16.0.into(),
         },
         shadow: Shadow {
-            color: Color::from_rgba8(15, 23, 42, 0.12),
-            offset: Vector::new(0.0, 4.0),
-            blur_radius: 16.0,
+            color: Color::from_rgba8(15, 23, 42, 0.18),
+            offset: Vector::new(0.0, 3.0),
+            blur_radius: 12.0,
         },
         snap: false,
+    }
+}
+
+/// Compact brand mark used in the floating-window title area.
+pub fn float_logo() -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::PRIMARY)),
+        text_color: Some(palette::SURFACE),
+        border: Border {
+            radius: 9.0.into(),
+            ..Border::default()
+        },
+        shadow: Shadow {
+            color: Color::from_rgba8(59, 130, 246, 0.22),
+            offset: Vector::new(0.0, 2.0),
+            blur_radius: 5.0,
+        },
+        snap: false,
+    }
+}
+
+/// Blue metadata badge for the active AFP plan.
+pub fn float_plan_badge() -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::PRIMARY_LIGHT)),
+        text_color: Some(palette::PRIMARY),
+        border: Border {
+            color: palette::PRIMARY_BORDER,
+            width: 1.0,
+            radius: radius::PILL.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Inset quota row with a subtle health-colored border.
+pub fn float_quota_panel(accent: Color) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::SURFACE_HOVER)),
+        text_color: Some(palette::TEXT_PRIMARY),
+        border: Border {
+            color: Color { a: 0.22, ..accent },
+            width: 1.0,
+            radius: 11.0.into(),
+        },
+        ..container::Style::default()
     }
 }
 

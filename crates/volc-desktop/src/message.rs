@@ -1,7 +1,9 @@
 use crate::config::{AppConfig, FloatMode};
 use crate::platform::tray::TrayAction;
 use crate::state::UiError;
-use iced::{keyboard, window, Size};
+#[cfg(not(target_os = "windows"))]
+use iced::Size;
+use iced::{keyboard, window};
 use std::fmt;
 use volc_core::UsageReport;
 
@@ -68,6 +70,12 @@ pub enum Message {
     CloseFloat,
     FloatModeChanged(FloatMode),
     DragFloat,
+    #[cfg(target_os = "windows")]
+    FloatWindowGeometry(
+        window::Id,
+        Option<crate::window::float_window::WindowGeometry>,
+    ),
+    #[cfg(not(target_os = "windows"))]
     FloatMonitorSize(window::Id, Option<Size>),
     PersistFloatPosition,
     ConfigPersisted(Result<AppConfig, UiError>),

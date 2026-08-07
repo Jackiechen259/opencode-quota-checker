@@ -1,6 +1,7 @@
+use crate::platform::icon;
 use std::sync::mpsc::{self, Receiver};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+use tray_icon::{TrayIcon, TrayIconBuilder};
 
 /// Semantic application actions exposed by the tray menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,12 +65,10 @@ impl TrayService {
             }
         }));
 
-        let icon = Icon::from_rgba([0x2f, 0x80, 0xed, 0xff].repeat(16 * 16), 16, 16)
-            .map_err(|error| error.to_string())?;
         let tray_icon = TrayIconBuilder::new()
             .with_tooltip("VOLC Status")
             .with_menu(Box::new(menu))
-            .with_icon(icon)
+            .with_icon(icon::tray()?)
             .build()
             .map_err(|error| error.to_string())?;
 

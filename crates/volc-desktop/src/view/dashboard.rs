@@ -68,7 +68,7 @@ fn quota_grid(
     let available_width = (window_width - theme::spacing::PAGE_PADDING * 2.0).max(240.0);
     let gaps = theme::spacing::CARD_GAP * (columns.saturating_sub(1) as f32);
     let card_width = (available_width - gaps) / columns as f32;
-    let layout = if (columns == 1 && card_width >= 560.0) || card_width >= 410.0 {
+    let layout = if (columns == 1 && card_width >= 560.0) || card_width >= 480.0 {
         CardLayout::Horizontal
     } else {
         CardLayout::Stacked

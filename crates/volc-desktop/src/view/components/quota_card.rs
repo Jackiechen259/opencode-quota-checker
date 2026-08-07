@@ -114,10 +114,15 @@ pub fn view(
     .width(Length::Shrink)
     .align_x(iced::alignment::Horizontal::Center);
 
+    let metric_size = if width < 520.0 {
+        16.0
+    } else {
+        theme::typography::METRIC_VALUE
+    };
     let metrics = row![
-        metric("已用", format::number(window.used)),
-        metric("总额", format::number(window.quota)),
-        metric("剩余", format::number(window.remaining)),
+        metric("已用", format::number(window.used), metric_size),
+        metric("总额", format::number(window.quota), metric_size),
+        metric("剩余", format::number(window.remaining), metric_size),
     ]
     .spacing(theme::spacing::MD)
     .width(Fill);
@@ -167,14 +172,14 @@ fn status(health: QuotaHealth) -> Element<'static, Message> {
     .into()
 }
 
-fn metric(label: &'static str, value: String) -> Element<'static, Message> {
+fn metric(label: &'static str, value: String, value_size: f32) -> Element<'static, Message> {
     column![
         text(label)
             .size(theme::typography::LABEL)
             .color(theme::palette::TEXT_MUTED),
         text(value)
             .font(Font::MONOSPACE)
-            .size(theme::typography::METRIC_VALUE)
+            .size(value_size)
             .color(theme::palette::TEXT_PRIMARY),
     ]
     .spacing(theme::spacing::XS)
