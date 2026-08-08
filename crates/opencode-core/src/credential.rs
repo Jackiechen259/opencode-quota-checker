@@ -1,167 +1,54 @@
-use crate::VolcError;
-use std::fmt;
+//! Keyring-backed storage for the OpenCode Go `auth` cookie.
+//!
+//! The cookie is a session secret: it is never persisted to the plaintext
+//! configuration file and is never printed in logs or diagnostics. The keyring
+//! namespace is isolated from the VOLC Status application so both applications
+//! can be installed at the same time.
 
-const SERVICE: &str = "volc-status";
-const ACCOUNT: &str = "volcengine-ak-sk";
-const OPENCODE_SERVICE: &str = "volc-status";
-const OPENCODE_ACCOUNT: &str = "opencode-go-auth";
-const SEPARATOR: char = '\0';
+use crate::OpenCodeError;
 
-/// A validated Access Key / Secret Key pair.
-///
-/// Its `Debug` implementation deliberately redacts both values.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Credentials {
-    access_key: String,
-    secret_key: String,
-}
-
-impl Credentials {
-    /// Creates a credential pair after trimming surrounding whitespace.
-    pub fn new(
-        access_key: impl Into<String>,
-        secret_key: impl Into<String>,
-    ) -> Result<Self, VolcError> {
-        let access_key = access_key.into().trim().to_owned();
-        let secret_key = secret_key.into().trim().to_owned();
-
-        if access_key.is_empty() || secret_key.is_empty() {
-            return Err(VolcError::CredentialsInvalid(
-                "access key and secret key must both be non-empty".to_owned(),
-            ));
-        }
-        if access_key.contains(SEPARATOR) || secret_key.contains(SEPARATOR) {
-            return Err(VolcError::CredentialsInvalid(
-                "credentials contain an unsupported null character".to_owned(),
-            ));
-        }
-
-        Ok(Self {
-            access_key,
-            secret_key,
-        })
-    }
-
-    pub(crate) fn access_key(&self) -> &str {
-        &self.access_key
-    }
-
-    pub(crate) fn secret_key(&self) -> &str {
-        &self.secret_key
-    }
-
-    fn encode(&self) -> String {
-        format!("{}{}{}", self.access_key, SEPARATOR, self.secret_key)
-    }
-
-    fn decode(value: &str) -> Result<Self, VolcError> {
-        let (access_key, secret_key) = value.split_once(SEPARATOR).ok_or_else(|| {
-            VolcError::CredentialsInvalid("stored credential has an invalid format".to_owned())
-        })?;
-        Self::new(access_key, secret_key)
-    }
-}
-
-impl fmt::Debug for Credentials {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("Credentials")
-            .field("access_key", &"[REDACTED]")
-            .field("secret_key", &"[REDACTED]")
-            .finish()
-    }
-}
-
-/// Persistence interface for platform credential stores.
-pub trait CredentialStore {
-    /// Saves a credential pair.
-    fn save(&self, credentials: &Credentials) -> Result<(), VolcError>;
-    /// Loads the saved credential pair.
-    fn load(&self) -> Result<Credentials, VolcError>;
-    /// Removes the saved credential pair. Missing entries are accepted.
-    fn clear(&self) -> Result<(), VolcError>;
-
-    /// Reports whether a valid credential pair is available.
-    fn has(&self) -> bool {
-        self.load().is_ok()
-    }
-}
-
-/// System-keyring implementation using the legacy service and account names.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct KeyringCredentialStore;
-
-impl KeyringCredentialStore {
-    fn entry() -> Result<keyring::Entry, VolcError> {
-        keyring::Entry::new(SERVICE, ACCOUNT).map_err(VolcError::Keyring)
-    }
-}
-
-impl CredentialStore for KeyringCredentialStore {
-    fn save(&self, credentials: &Credentials) -> Result<(), VolcError> {
-        Self::entry()?
-            .set_password(&credentials.encode())
-            .map_err(VolcError::Keyring)
-    }
-
-    fn load(&self) -> Result<Credentials, VolcError> {
-        match Self::entry()?.get_password() {
-            Ok(value) => Credentials::decode(&value),
-            Err(keyring::Error::NoEntry) => Err(VolcError::CredentialsMissing),
-            Err(error) => Err(VolcError::Keyring(error)),
-        }
-    }
-
-    fn clear(&self) -> Result<(), VolcError> {
-        match Self::entry()?.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(error) => Err(VolcError::Keyring(error)),
-        }
-    }
-}
+const SERVICE: &str = "opencode-quota-checker";
+const ACCOUNT: &str = "opencode-auth";
 
 /// Keyring entry for the OpenCode Go `auth` cookie.
-///
-/// The cookie is treated as a secret: it is never persisted to the plaintext
-/// configuration file and is never printed in logs or diagnostics.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OpenCodeAuthStore;
 
 impl OpenCodeAuthStore {
-    fn entry() -> Result<keyring::Entry, VolcError> {
-        keyring::Entry::new(OPENCODE_SERVICE, OPENCODE_ACCOUNT).map_err(VolcError::Keyring)
+    fn entry() -> Result<keyring::Entry, OpenCodeError> {
+        keyring::Entry::new(SERVICE, ACCOUNT).map_err(OpenCodeError::Keyring)
     }
 
     /// Saves a raw `auth` cookie value after trimming surrounding whitespace.
-    pub fn save(&self, cookie: &str) -> Result<(), VolcError> {
+    pub fn save(&self, cookie: &str) -> Result<(), OpenCodeError> {
         let cookie = cookie.trim();
         if cookie.is_empty() {
-            return Err(VolcError::CredentialsInvalid(
+            return Err(OpenCodeError::CredentialsInvalid(
                 "auth cookie must not be empty".to_owned(),
             ));
         }
         Self::entry()?
             .set_password(cookie)
-            .map_err(VolcError::Keyring)
+            .map_err(OpenCodeError::Keyring)
     }
 
     /// Loads the stored `auth` cookie value.
-    pub fn load(&self) -> Result<String, VolcError> {
+    pub fn load(&self) -> Result<String, OpenCodeError> {
         match Self::entry()?.get_password() {
-            Ok(value) if value.trim().is_empty() => Err(VolcError::CredentialsInvalid(
+            Ok(value) if value.trim().is_empty() => Err(OpenCodeError::CredentialsInvalid(
                 "stored auth cookie is empty".to_owned(),
             )),
             Ok(value) => Ok(value),
-            Err(keyring::Error::NoEntry) => Err(VolcError::CredentialsMissing),
-            Err(error) => Err(VolcError::Keyring(error)),
+            Err(keyring::Error::NoEntry) => Err(OpenCodeError::CredentialsMissing),
+            Err(error) => Err(OpenCodeError::Keyring(error)),
         }
     }
 
     /// Removes the stored cookie. Missing entries are accepted.
-    pub fn clear(&self) -> Result<(), VolcError> {
+    pub fn clear(&self) -> Result<(), OpenCodeError> {
         match Self::entry()?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(error) => Err(VolcError::Keyring(error)),
+            Err(error) => Err(OpenCodeError::Keyring(error)),
         }
     }
 
@@ -176,26 +63,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn credentials_trim_and_round_trip() {
-        let credentials = Credentials::new("  test-ak ", " test-sk  ").expect("valid test input");
-        assert_eq!(
-            Credentials::decode(&credentials.encode()).expect("encoded credentials decode"),
-            credentials
-        );
-    }
-
-    #[test]
-    fn credentials_reject_empty_values() {
-        assert!(Credentials::new("", "secret").is_err());
-        assert!(Credentials::new("access", "   ").is_err());
-    }
-
-    #[test]
-    fn debug_redacts_both_credentials() {
-        let credentials = Credentials::new("test-ak", "test-sk").expect("valid test input");
-        let debug = format!("{credentials:?}");
-        assert!(!debug.contains("test-ak"));
-        assert!(!debug.contains("test-sk"));
-        assert!(debug.contains("[REDACTED]"));
+    fn keyring_namespace_is_isolated_from_volc_status() {
+        assert_eq!(SERVICE, "opencode-quota-checker");
+        assert_eq!(ACCOUNT, "opencode-auth");
     }
 }

@@ -1,4 +1,4 @@
-use crate::{UsageReport, VolcError};
+use crate::{OpenCodeError, UsageReport};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -25,14 +25,14 @@ impl Default for Thresholds {
 
 impl Thresholds {
     /// Validates that every threshold is finite and between 0 and 100.
-    pub fn validate(self) -> Result<Self, VolcError> {
+    pub fn validate(self) -> Result<Self, OpenCodeError> {
         for (name, value) in [
             ("five_hour", self.five_hour),
             ("weekly", self.weekly),
             ("monthly", self.monthly),
         ] {
             if !value.is_finite() || !(0.0..=100.0).contains(&value) {
-                return Err(VolcError::Config(format!(
+                return Err(OpenCodeError::Config(format!(
                     "{name} threshold must be between 0 and 100"
                 )));
             }
@@ -114,7 +114,6 @@ mod tests {
 
     fn report(percent: f64, cycle: i64) -> UsageReport {
         UsageReport {
-            provider: crate::Provider::VolcArkV,
             plan_type: "Large".to_owned(),
             windows: vec![WindowReport {
                 key: "five_hour".to_owned(),

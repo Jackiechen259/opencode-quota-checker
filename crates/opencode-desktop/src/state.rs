@@ -1,7 +1,7 @@
 use crate::message::HeaderAction;
 use iced::window;
+use opencode_core::{OpenCodeError, UsageReport};
 use std::collections::HashMap;
-use opencode_core::{UsageReport, VolcError};
 /// IDs of all windows owned by the application state machine.
 #[derive(Debug, Default)]
 pub struct WindowState {
@@ -50,8 +50,8 @@ pub struct UiError {
     pub detail: String,
 }
 
-impl From<VolcError> for UiError {
-    fn from(error: VolcError) -> Self {
+impl From<OpenCodeError> for UiError {
+    fn from(error: OpenCodeError) -> Self {
         Self {
             user: error.user_message(),
             detail: error.to_string(),
@@ -59,28 +59,13 @@ impl From<VolcError> for UiError {
     }
 }
 
-/// Per-provider credential availability reported by the boot keyring check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProviderAvailability {
-    /// Whether a valid Volcano Ark AK/SK pair is stored.
-    pub ark: bool,
-    /// Whether an OpenCode Go auth cookie is stored.
-    pub opencode: bool,
-}
-
 /// Credential-form and keyring state.
 #[derive(Default)]
 pub struct CredentialState {
     /// Whether the initial keyring check is running.
     pub checking: bool,
-    /// Whether a valid Volcano Ark credential is available.
-    pub ark: bool,
     /// Whether an OpenCode Go auth cookie is available.
     pub opencode: bool,
-    /// Access Key form value.
-    pub access_key: String,
-    /// Secret Key form value.
-    pub secret_key: String,
     /// OpenCode Go Workspace ID form value.
     pub opencode_workspace: String,
     /// OpenCode Go auth cookie form value.

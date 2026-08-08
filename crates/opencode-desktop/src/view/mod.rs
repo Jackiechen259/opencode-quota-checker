@@ -23,14 +23,14 @@ pub fn main(app: &App) -> Element<'_, Message> {
         app.usage().loading,
         app.tray_error(),
         app.ui().header_focus,
-        app.config().provider == opencode_core::Provider::VolcArkV,
+        true,
     );
 
     let dashboard_open = !app.ui().debug_open
         && !app.settings().open
         && !app.credentials().checking
         && app.config_loaded()
-        && app.provider_configured();
+        && app.configured();
 
     let body: Element<'_, Message> = if app.ui().debug_open {
         debug::view(app.usage())
@@ -38,8 +38,8 @@ pub fn main(app: &App) -> Element<'_, Message> {
         settings::view(app.settings(), app.config(), app.credentials())
     } else if app.credentials().checking || !app.config_loaded() {
         checking_state()
-    } else if !app.provider_configured() {
-        credentials::view(app.credentials(), app.config().provider)
+    } else if !app.configured() {
+        credentials::view(app.credentials())
     } else {
         dashboard::view(app.usage())
     };

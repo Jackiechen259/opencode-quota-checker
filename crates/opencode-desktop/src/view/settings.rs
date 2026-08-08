@@ -4,22 +4,19 @@ use crate::state::{CredentialState, SettingsState};
 use crate::theme;
 use iced::widget::{button, column, container, row, text, text_input};
 use iced::{Element, Fill};
-use opencode_core::Provider;
 
-/// Renders data-source selection, monitor configuration and start/stop controls.
+/// Renders the OpenCode Go data source, monitor configuration and start/stop controls.
 pub fn view<'a>(
     state: &'a SettingsState,
     config: &AppConfig,
     credentials: &'a CredentialState,
 ) -> Element<'a, Message> {
-    let mut content =
-        column![header(config.provider), provider_selector(config.provider),].spacing(16);
-
-    if config.provider == Provider::OpenCodeGo {
-        content = content.push(opencode_section(credentials));
-    }
-
-    content = content.push(monitor_section(state, config));
+    let mut content = column![
+        header(),
+        opencode_section(credentials),
+        monitor_section(state, config)
+    ]
+    .spacing(16);
 
     if let Some(error) = &state.error {
         content = content.push(notice_box(error.user.as_str(), true));
@@ -30,15 +27,12 @@ pub fn view<'a>(
     content.into()
 }
 
-fn header(provider: Provider) -> Element<'static, Message> {
+fn header() -> Element<'static, Message> {
     row![
         text("设置").size(24).color(theme::palette::TEXT_PRIMARY),
-        text(match provider {
-            Provider::VolcArkV => "数据源：Volc ArK",
-            Provider::OpenCodeGo => "数据源：OpenCode Go",
-        })
-        .size(13)
-        .color(theme::palette::TEXT_MUTED),
+        text("数据源：OpenCode Go")
+            .size(13)
+            .color(theme::palette::TEXT_MUTED),
         row![].width(Fill),
         button("关闭")
             .on_press(Message::CloseSettings)
@@ -48,34 +42,6 @@ fn header(provider: Provider) -> Element<'static, Message> {
     .spacing(16)
     .align_y(iced::Alignment::Center)
     .into()
-}
-
-fn provider_selector(active: Provider) -> Element<'static, Message> {
-    let ark = provider_button("Volc ArK", Provider::VolcArkV, active);
-    let opencode = provider_button("OpenCode Go", Provider::OpenCodeGo, active);
-    container(row![ark, opencode].spacing(10))
-        .width(Fill)
-        .padding(18)
-        .style(move |_| theme::panel())
-        .into()
-}
-
-fn provider_button(
-    label: &str,
-    provider: Provider,
-    active: Provider,
-) -> iced::widget::Button<'_, Message> {
-    if provider == active {
-        button(label)
-            .on_press(Message::ProviderChanged(provider))
-            .style(button::primary)
-            .padding([10, 20])
-    } else {
-        button(label)
-            .on_press(Message::ProviderChanged(provider))
-            .style(theme::soft_button)
-            .padding([10, 20])
-    }
 }
 
 /// Editable OpenCode Go data source (workspace ID + auth cookie).

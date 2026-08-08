@@ -1,5 +1,5 @@
 use crate::state::UiError;
-use opencode_core::{AlertDecision, VolcError};
+use opencode_core::{AlertDecision, OpenCodeError};
 
 /// Delivers threshold decisions using the platform notification service.
 pub fn deliver(decisions: Vec<AlertDecision>) -> Result<(), UiError> {
@@ -10,7 +10,7 @@ pub fn deliver(decisions: Vec<AlertDecision>) -> Result<(), UiError> {
 }
 
 fn notification_error(error: impl std::fmt::Display) -> UiError {
-    UiError::from(VolcError::Config(format!(
+    UiError::from(OpenCodeError::Config(format!(
         "desktop notification failed: {error}"
     )))
 }

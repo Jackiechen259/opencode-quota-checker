@@ -1,5 +1,5 @@
+use opencode_core::{OpenCodeError, Thresholds};
 use serde::{Deserialize, Serialize};
-use opencode_core::{Provider, Thresholds, VolcError};
 
 /// Current configuration schema version.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -57,8 +57,6 @@ pub struct FloatPosition {
 pub struct AppConfig {
     /// Configuration schema version.
     pub schema_version: u32,
-    /// Active quota data source.
-    pub provider: Provider,
     /// Whether subscription-based monitoring is enabled.
     pub monitor_enabled: bool,
     /// Polling interval in seconds.
@@ -69,8 +67,6 @@ pub struct AppConfig {
     pub opencode_workspace_id: Option<String>,
     /// Main window close behavior.
     pub close_behavior: CloseBehavior,
-    /// Whether a legacy settings file has been imported.
-    pub legacy_migration_complete: bool,
     /// Whether the floating window should be restored on launch.
     pub float_open: bool,
     /// Floating-window layout mode.
@@ -83,13 +79,11 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
-            provider: Provider::default(),
             monitor_enabled: true,
             monitor_interval_secs: 300,
             thresholds: Thresholds::default(),
             opencode_workspace_id: None,
             close_behavior: CloseBehavior::MinimizeToTray,
-            legacy_migration_complete: false,
             float_open: false,
             float_mode: FloatMode::Full,
             float_position: None,
@@ -99,9 +93,9 @@ impl Default for AppConfig {
 
 impl AppConfig {
     /// Validates and normalizes persisted settings.
-    pub fn validate(mut self) -> Result<Self, VolcError> {
+    pub fn validate(mut self) -> Result<Self, OpenCodeError> {
         if !(30..=3_600).contains(&self.monitor_interval_secs) {
-            return Err(VolcError::Config(
+            return Err(OpenCodeError::Config(
                 "monitor interval must be between 30 and 3600 seconds".to_owned(),
             ));
         }

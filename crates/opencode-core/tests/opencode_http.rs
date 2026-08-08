@@ -1,8 +1,7 @@
+use opencode_core::{OpenCodeClient, OpenCodeError, QuotaService};
 use std::net::TcpListener;
 use std::time::Duration;
 use url::Url;
-use opencode_core::opencode::{OpenCodeGoClient, OpenCodeGoProvider};
-use opencode_core::{Provider, VolcError};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -12,8 +11,8 @@ const LOGIN: &str = include_str!("../../../tests/fixtures/opencode-go/login-page
 const WORKSPACE_ID: &str = "workspace-test-123";
 const AUTH_COOKIE: &str = "test-auth-cookie";
 
-async fn client(server: &MockServer) -> OpenCodeGoClient {
-    OpenCodeGoClient::with_endpoint(
+async fn client(server: &MockServer) -> OpenCodeClient {
+    OpenCodeClient::with_endpoint(
         server
             .uri()
             .parse::<Url>()
@@ -55,12 +54,9 @@ async fn returns_login_html_and_parser_classifies_it() {
         .fetch_dashboard(WORKSPACE_ID, AUTH_COOKIE)
         .await
         .expect("200 login HTML is still a successful fetch");
-    let error = opencode_core::opencode::parser::parse_open_code_go_quota(
-        &body,
-        chrono::Utc::now().timestamp_millis(),
-    )
-    .expect_err("login page must be classified as authentication failure");
-    assert!(matches!(error, VolcError::AuthenticationFailed));
+    let error = opencode_core::parser::parse_quota(&body, chrono::Utc::now().timestamp_millis())
+        .expect_err("login page must be classified as authentication failure");
+    assert!(matches!(error, OpenCodeError::AuthenticationFailed));
 }
 
 #[tokio::test]
@@ -109,7 +105,7 @@ async fn maps_server_errors_to_http_with_bounded_body() {
             .await
             .expect_err("5xx must fail");
         match error {
-            VolcError::Http {
+            OpenCodeError::Http {
                 status: actual,
                 body,
             } => {
@@ -134,14 +130,14 @@ async fn enforces_request_timeout() {
         .mount(&server)
         .await;
     let endpoint = server.uri().parse::<Url>().expect("mock URL parses");
-    let client = OpenCodeGoClient::with_endpoint_and_timeout(endpoint, Duration::from_millis(25))
+    let client = OpenCodeClient::with_endpoint_and_timeout(endpoint, Duration::from_millis(25))
         .expect("test timeout creates a client");
 
     let error = client
         .fetch_dashboard(WORKSPACE_ID, AUTH_COOKIE)
         .await
         .expect_err("delayed response must time out");
-    assert!(matches!(error, VolcError::Request(ref source) if source.is_timeout()));
+    assert!(matches!(error, OpenCodeError::Request(ref source) if source.is_timeout()));
 }
 
 #[tokio::test]
@@ -151,17 +147,17 @@ async fn connection_refusal_is_a_request_error() {
     drop(listener);
 
     let endpoint = Url::parse(&format!("http://{address}/")).expect("URL parses");
-    let client = OpenCodeGoClient::with_endpoint(endpoint).expect("endpoint has a host");
+    let client = OpenCodeClient::with_endpoint(endpoint).expect("endpoint has a host");
 
     let error = client
         .fetch_dashboard(WORKSPACE_ID, AUTH_COOKIE)
         .await
         .expect_err("refused connection must fail");
-    assert!(matches!(error, VolcError::Request(_)));
+    assert!(matches!(error, OpenCodeError::Request(_)));
 }
 
 #[tokio::test]
-async fn provider_pipeline_normalizes_the_mock_dashboard() {
+async fn quota_service_normalizes_the_mock_dashboard() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(header("cookie", "auth=test-auth-cookie"))
@@ -169,13 +165,12 @@ async fn provider_pipeline_normalizes_the_mock_dashboard() {
         .mount(&server)
         .await;
 
-    let provider = OpenCodeGoProvider::with_client(client(&server).await);
-    let report = provider
+    let service = QuotaService::with_client(client(&server).await);
+    let report = service
         .fetch_quota(WORKSPACE_ID, AUTH_COOKIE)
         .await
         .expect("mock pipeline is successful");
 
-    assert_eq!(report.provider, Provider::OpenCodeGo);
     assert_eq!(report.windows.len(), 3);
     assert_eq!(report.windows[0].key, "rolling-5h");
     assert_eq!(report.windows[0].percent, 78.0);
@@ -185,17 +180,20 @@ async fn provider_pipeline_normalizes_the_mock_dashboard() {
 }
 
 #[tokio::test]
-async fn provider_rejects_empty_configuration() {
-    let provider = OpenCodeGoProvider::default();
-    let missing_workspace = provider
+async fn quota_service_rejects_empty_configuration() {
+    let service = QuotaService::default();
+    let missing_workspace = service
         .fetch_quota("  ", AUTH_COOKIE)
         .await
         .expect_err("empty workspace must fail");
-    assert!(matches!(missing_workspace, VolcError::CredentialsMissing));
+    assert!(matches!(
+        missing_workspace,
+        OpenCodeError::CredentialsMissing
+    ));
 
-    let missing_cookie = provider
+    let missing_cookie = service
         .fetch_quota(WORKSPACE_ID, "  ")
         .await
         .expect_err("empty cookie must fail");
-    assert!(matches!(missing_cookie, VolcError::CredentialsMissing));
+    assert!(matches!(missing_cookie, OpenCodeError::CredentialsMissing));
 }

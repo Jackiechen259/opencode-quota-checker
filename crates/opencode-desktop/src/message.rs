@@ -1,11 +1,11 @@
 use crate::config::{AppConfig, FloatMode};
 use crate::platform::tray::TrayAction;
-use crate::state::{ProviderAvailability, UiError};
+use crate::state::UiError;
 #[cfg(not(target_os = "windows"))]
 use iced::Size;
 use iced::{keyboard, window};
+use opencode_core::UsageReport;
 use std::fmt;
-use opencode_core::{Provider, UsageReport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderAction {
@@ -92,12 +92,7 @@ pub enum Message {
     ConfigSaved(Result<AppConfig, UiError>),
     MonitorTick,
     NotificationsDelivered(Result<(), UiError>),
-    ProviderChanged(Provider),
-    CredentialsChecked(Result<ProviderAvailability, UiError>),
-    AccessKeyChanged(SensitiveInput),
-    SecretKeyChanged(SensitiveInput),
-    SaveCredentials,
-    CredentialsSaved(Result<(), UiError>),
+    CredentialsChecked(Result<bool, UiError>),
     OpenCodeWorkspaceChanged(String),
     OpenCodeCookieChanged(SensitiveInput),
     StartOpenCodeLogin,
@@ -107,7 +102,6 @@ pub enum Message {
     CancelClearCredentials,
     ClearCredentials,
     ConfirmClearCredentials,
-    CredentialsCleared(Result<(), UiError>),
     Refresh,
     UsageLoaded(Result<UsageReport, UiError>),
     LoadRaw,

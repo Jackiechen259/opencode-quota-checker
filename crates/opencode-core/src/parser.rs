@@ -8,10 +8,10 @@
 //! 2. **DOM strategy** - falls back to semantic `data-slot` attributes
 //!    (`usage-item`, `usage-label`, `usage-value`, `reset-time`).
 //! 3. **Fail safely** - any unsupported structure returns a typed
-//!    [`VolcError::Parse`] error and never fabricates zero usage.
+//!    [`OpenCodeError::Parse`] error and never fabricates zero usage.
 
-use crate::models::{Provider, UsageReport, WindowReport};
-use crate::VolcError;
+use crate::models::{UsageReport, WindowReport};
+use crate::OpenCodeError;
 
 /// SSR window tokens in document order, mapped to normalized keys and labels.
 const SSR_WINDOWS: [(&str, &str, &str); 3] = [
@@ -27,19 +27,19 @@ const RESET_TIME: &str = "reset-time";
 
 /// Parses dashboard HTML into a normalized OpenCode Go usage report.
 ///
-/// A login page is reported as [`VolcError::AuthenticationFailed`]; an
-/// unsupported structure is reported as [`VolcError::Parse`]. A parser failure
+/// A login page is reported as [`OpenCodeError::AuthenticationFailed`]; an
+/// unsupported structure is reported as [`OpenCodeError::Parse`]. A parser failure
 /// is never interpreted as zero usage.
-pub fn parse_open_code_go_quota(html: &str, now_ms: i64) -> Result<UsageReport, VolcError> {
+pub fn parse_quota(html: &str, now_ms: i64) -> Result<UsageReport, OpenCodeError> {
     if is_login_page(html) {
-        return Err(VolcError::AuthenticationFailed);
+        return Err(OpenCodeError::AuthenticationFailed);
     }
 
     let windows = parse_ssr(html)
         .or_else(|| parse_dom(html))
-        .ok_or_else(|| VolcError::Parse("no supported quota structure was found".to_owned()))?;
+        .ok_or_else(|| OpenCodeError::Parse("no supported quota structure was found".to_owned()))?;
     if windows.is_empty() {
-        return Err(VolcError::Parse(
+        return Err(OpenCodeError::Parse(
             "the dashboard contains no quota windows".to_owned(),
         ));
     }
@@ -49,7 +49,6 @@ pub fn parse_open_code_go_quota(html: &str, now_ms: i64) -> Result<UsageReport, 
         .map(|window| window.into_report(now_ms))
         .collect();
     Ok(UsageReport {
-        provider: Provider::OpenCodeGo,
         plan_type: String::new(),
         windows,
         fetched_at: now_ms,
@@ -367,19 +366,18 @@ fn decode_html_entities(value: &str) -> String {
 mod tests {
     use super::*;
 
-    const SSR: &str = include_str!("../../../../tests/fixtures/opencode-go/ssr-dashboard.html");
-    const DOM: &str = include_str!("../../../../tests/fixtures/opencode-go/dom-dashboard.html");
-    const LOGIN: &str = include_str!("../../../../tests/fixtures/opencode-go/login-page.html");
+    const SSR: &str = include_str!("../../../tests/fixtures/opencode-go/ssr-dashboard.html");
+    const DOM: &str = include_str!("../../../tests/fixtures/opencode-go/dom-dashboard.html");
+    const LOGIN: &str = include_str!("../../../tests/fixtures/opencode-go/login-page.html");
     const MALFORMED: &str =
-        include_str!("../../../../tests/fixtures/opencode-go/malformed-dashboard.html");
+        include_str!("../../../tests/fixtures/opencode-go/malformed-dashboard.html");
     const MISSING_WINDOW: &str =
-        include_str!("../../../../tests/fixtures/opencode-go/missing-window.html");
+        include_str!("../../../tests/fixtures/opencode-go/missing-window.html");
     const NOW_MS: i64 = 1_778_800_000_000;
 
     #[test]
     fn parses_valid_ssr_response() {
-        let report = parse_open_code_go_quota(SSR, NOW_MS).expect("SSR fixture is valid");
-        assert_eq!(report.provider, Provider::OpenCodeGo);
+        let report = parse_quota(SSR, NOW_MS).expect("SSR fixture is valid");
         assert_eq!(report.plan_type, "");
         assert_eq!(report.fetched_at, NOW_MS);
         assert_eq!(report.windows.len(), 3);
@@ -406,7 +404,7 @@ mod tests {
 
     #[test]
     fn dom_fallback_produces_the_same_windows() {
-        let report = parse_open_code_go_quota(DOM, NOW_MS).expect("DOM fixture is valid");
+        let report = parse_quota(DOM, NOW_MS).expect("DOM fixture is valid");
         assert_eq!(report.windows.len(), 3);
         let keys: Vec<&str> = report
             .windows
@@ -428,8 +426,7 @@ mod tests {
             "weeklyUsage": { "usagePercent": 52, "resetInSec": 200 },
             "rollingUsage": { "usagePercent": 78, "resetInSec": 300 }
         }</script>"#;
-        let report =
-            parse_open_code_go_quota(html, NOW_MS).expect("out-of-order keys parse safely");
+        let report = parse_quota(html, NOW_MS).expect("out-of-order keys parse safely");
         assert_eq!(report.windows.len(), 3);
         let by_key: std::collections::HashMap<&str, &WindowReport> = report
             .windows
@@ -456,8 +453,8 @@ mod tests {
             "weeklyUsage": { "resetInSec": 200, "usagePercent": 8 },
             "monthlyUsage": { "resetInSec": 100, "usagePercent": 4 }
         }</script>"#;
-        let report = parse_open_code_go_quota(html, NOW_MS)
-            .expect("the later monthly quota object is authoritative");
+        let report =
+            parse_quota(html, NOW_MS).expect("the later monthly quota object is authoritative");
         let by_key: std::collections::HashMap<&str, &WindowReport> = report
             .windows
             .iter()
@@ -471,8 +468,7 @@ mod tests {
 
     #[test]
     fn missing_one_window_keeps_the_rest() {
-        let report =
-            parse_open_code_go_quota(MISSING_WINDOW, NOW_MS).expect("partial fixture is valid");
+        let report = parse_quota(MISSING_WINDOW, NOW_MS).expect("partial fixture is valid");
         assert_eq!(report.windows.len(), 2);
         assert_eq!(report.windows[0].key, "rolling-5h");
         assert_eq!(report.windows[1].key, "weekly");
@@ -517,8 +513,7 @@ mod tests {
             "weeklyUsage": { "usagePercent": 150, "resetInSec": 100 },
             "monthlyUsage": { "usagePercent": "not-a-number", "resetInSec": 100 }
         }}}"#;
-        let report =
-            parse_open_code_go_quota(malformed, NOW_MS).expect("clamped windows are valid");
+        let report = parse_quota(malformed, NOW_MS).expect("clamped windows are valid");
         assert_eq!(report.windows.len(), 2);
         assert_eq!(report.windows[0].percent, 0.0);
         assert_eq!(report.windows[1].percent, 100.0);
@@ -526,15 +521,14 @@ mod tests {
 
     #[test]
     fn login_page_is_an_authentication_error() {
-        let error = parse_open_code_go_quota(LOGIN, NOW_MS).expect_err("login page must fail");
-        assert!(matches!(error, VolcError::AuthenticationFailed));
+        let error = parse_quota(LOGIN, NOW_MS).expect_err("login page must fail");
+        assert!(matches!(error, OpenCodeError::AuthenticationFailed));
     }
 
     #[test]
     fn unsupported_html_is_a_parse_error_not_zero_usage() {
-        let error =
-            parse_open_code_go_quota(MALFORMED, NOW_MS).expect_err("unknown HTML must fail");
-        assert!(matches!(error, VolcError::Parse(_)));
+        let error = parse_quota(MALFORMED, NOW_MS).expect_err("unknown HTML must fail");
+        assert!(matches!(error, OpenCodeError::Parse(_)));
     }
 
     #[test]

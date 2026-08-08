@@ -1,8 +1,8 @@
 use reqwest::StatusCode;
 
-/// Errors produced by the VOLC Status core.
+/// Errors produced by the OpenCode Quota Checker core.
 #[derive(Debug, thiserror::Error)]
-pub enum VolcError {
+pub enum OpenCodeError {
     /// No credential exists in the configured credential store.
     #[error("credentials are not configured")]
     CredentialsMissing,
@@ -15,7 +15,7 @@ pub enum VolcError {
     #[error("request failed: {0}")]
     Request(#[from] reqwest::Error),
 
-    /// The provider rejected the supplied authentication.
+    /// The dashboard rejected the supplied authentication.
     #[error("authentication failed")]
     AuthenticationFailed,
 
@@ -23,12 +23,12 @@ pub enum VolcError {
     #[error("workspace not found")]
     WorkspaceNotFound,
 
-    /// The provider rate-limited the request.
+    /// The dashboard rate-limited the request.
     #[error("request rate limited")]
     RateLimited,
 
-    /// The provider response could not be parsed by any known strategy.
-    #[error("cannot parse provider response: {0}")]
+    /// The dashboard response could not be parsed by any known strategy.
+    #[error("cannot parse dashboard response: {0}")]
     Parse(String),
 
     /// The server returned a non-success status.
@@ -40,27 +40,6 @@ pub enum VolcError {
         body: String,
     },
 
-    /// The API returned a structured error.
-    #[error("API returned an error [{code}]: {message}")]
-    Api {
-        /// Provider error code.
-        code: String,
-        /// Provider error message.
-        message: String,
-    },
-
-    /// The response could not be decoded.
-    #[error("invalid response: {0}")]
-    Response(#[from] serde_json::Error),
-
-    /// A decoded response violates the domain model.
-    #[error("invalid response: {0}")]
-    ResponseValue(String),
-
-    /// The signing input or cryptographic operation is invalid.
-    #[error("request signing failed: {0}")]
-    Signing(String),
-
     /// The platform credential store failed.
     #[error("credential store error: {0}")]
     Keyring(#[source] keyring::Error),
@@ -70,7 +49,7 @@ pub enum VolcError {
     Config(String),
 }
 
-impl VolcError {
+impl OpenCodeError {
     /// Returns a concise error suitable for the main UI.
     pub fn user_message(&self) -> String {
         match self {
@@ -85,9 +64,6 @@ impl VolcError {
             Self::RateLimited => "请求过于频繁，请稍后重试。".to_owned(),
             Self::Parse(_) => "OpenCode Go 页面结构已变化，无法解析配额数据。".to_owned(),
             Self::Http { status, .. } => format!("服务请求失败（HTTP {}）。", status.as_u16()),
-            Self::Api { code, message } => format!("方舟接口错误 [{code}]：{message}"),
-            Self::Response(_) | Self::ResponseValue(_) => "接口响应格式无法识别。".to_owned(),
-            Self::Signing(_) => "请求签名失败。".to_owned(),
             Self::Keyring(_) => "无法访问系统钥匙串。".to_owned(),
             Self::Config(message) => format!("配置无效：{message}"),
         }

@@ -11,16 +11,12 @@ use iced::widget::{column, container, row, text, Column, Row};
 use iced::{Color, Element, Fill, FillPortion, Font, Length};
 use opencode_core::UsageReport;
 
-/// Badge text for the report provider, including the Ark plan type when known.
+/// Badge text for the report data source.
 fn provider_badge(report: &UsageReport) -> String {
     if report.plan_type.trim().is_empty() {
-        report.provider.name().to_owned()
+        "OpenCode Go".to_owned()
     } else {
-        format!(
-            "{} · {}",
-            report.provider.name(),
-            report.plan_type.to_uppercase()
-        )
+        format!("OpenCode Go · {}", report.plan_type.to_uppercase())
     }
 }
 

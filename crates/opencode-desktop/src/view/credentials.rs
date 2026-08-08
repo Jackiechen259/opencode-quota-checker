@@ -3,14 +3,10 @@ use crate::state::CredentialState;
 use crate::theme;
 use iced::widget::{button, column, container, text, text_input};
 use iced::{Element, Fill};
-use opencode_core::Provider;
 
-/// Renders the no-credential empty state for the active provider.
-pub fn view(state: &CredentialState, provider: Provider) -> Element<'_, Message> {
-    let form = match provider {
-        Provider::VolcArkV => ark_form(state),
-        Provider::OpenCodeGo => opencode_form(state),
-    };
+/// Renders the no-credential empty state for the OpenCode Go data source.
+pub fn view(state: &CredentialState) -> Element<'_, Message> {
+    let form = opencode_form(state);
 
     let mut content = column![container(form)
         .width(Fill)
@@ -26,35 +22,6 @@ pub fn view(state: &CredentialState, provider: Provider) -> Element<'_, Message>
         );
     }
     content.into()
-}
-
-/// Volcano Ark Access Key / Secret Key form.
-fn ark_form(state: &CredentialState) -> Element<'_, Message> {
-    let access_key = text_input("Access Key", &state.access_key)
-        .on_input(|value| Message::AccessKeyChanged(SensitiveInput(value)))
-        .padding(12);
-    let secret_key = text_input("Secret Key", &state.secret_key)
-        .on_input(|value| Message::SecretKeyChanged(SensitiveInput(value)))
-        .secure(true)
-        .padding(12);
-    let can_save = !state.mutating
-        && !state.access_key.trim().is_empty()
-        && !state.secret_key.trim().is_empty();
-    let save = save_button("保存到系统钥匙串", can_save, Message::SaveCredentials);
-
-    column![
-        text("尚未配置访问凭证")
-            .size(22)
-            .color(theme::palette::TEXT_PRIMARY),
-        text("配置火山方舟凭证后即可查看配额使用情况。AK/SK 仅保存到操作系统钥匙串，不写入普通配置或日志。")
-            .size(13)
-            .color(theme::palette::TEXT_MUTED),
-        access_key,
-        secret_key,
-        save,
-    ]
-    .spacing(14)
-    .into()
 }
 
 /// OpenCode Go Workspace ID + auth cookie form.
