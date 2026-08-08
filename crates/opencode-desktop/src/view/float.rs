@@ -224,14 +224,14 @@ fn header(state: &UsageState, mode: FloatMode) -> Element<'_, Message> {
 
     let brand = mouse_area(
         row![
-            container(text("V").size(14).color(theme::palette::SURFACE))
+            container(text("OC").size(11).color(theme::palette::SURFACE))
                 .width(Length::Fixed(28.0))
                 .height(Length::Fixed(28.0))
                 .align_x(iced::alignment::Horizontal::Center)
                 .align_y(iced::alignment::Vertical::Center)
                 .style(move |_| theme::float_logo()),
             column![
-                text("VOLC Status")
+                text("OpenCode Quota Checker")
                     .size(13)
                     .color(theme::palette::TEXT_PRIMARY),
                 row![

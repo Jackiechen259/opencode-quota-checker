@@ -1,21 +1,21 @@
 {
   "$schema": "https://raw.githubusercontent.com/crabnebula-dev/cargo-packager/main/schema.json",
-  "name": "volc-status",
-  "productName": "VOLC Status",
-  "identifier": "io.github.jackiechen259.volc-status",
-  "version": "0.2.0",
-  "description": "Native desktop quota monitor for Volcano Ark Agent Plan",
-  "longDescription": "Monitor Volcano Ark Agent Plan quota windows, alerts, and reset times from a native Rust desktop application.",
+  "name": "opencode-quota-checker",
+  "productName": "OpenCode Quota Checker",
+  "identifier": "io.github.jackiechen259.opencode-quota-checker",
+  "version": "0.1.0",
+  "description": "Native desktop quota monitor for OpenCode Go",
+  "longDescription": "Monitor OpenCode Go quota windows, alerts, and reset times from a native Rust desktop application.",
   "authors": ["Jackie Chen"],
   "publisher": "Jackie Chen",
-  "homepage": "https://github.com/Jackiechen259/volc_status",
+  "homepage": "https://github.com/Jackiechen259/opencode-quota-checker",
   "licenseFile": "../../LICENSE",
   "category": "Utility",
   "outDir": "../../target/packages",
   "binariesDir": "../../target/release",
   "binaries": [
     {
-      "path": "volc-desktop",
+      "path": "opencode-quota-checker",
       "main": true
     }
   ],
@@ -29,7 +29,7 @@
   ],
   "formats": ["default"],
   "beforePackagingCommand": {
-    "script": "cargo build --release -p volc-desktop",
+    "script": "cargo build --release -p opencode-desktop",
     "dir": "../.."
   },
   "linux": {

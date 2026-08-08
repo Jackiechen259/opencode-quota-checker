@@ -17,15 +17,12 @@ repository = "https://github.com/Jackiechen259/opencode-quota-checker"
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 directories = "6"
-hex = "0.4"
-hmac = "0.12"
 iced = { version = "0.14", features = ["tokio", "wgpu", "image", "svg", "canvas", "advanced"] }
 keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 raw-window-handle = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1"

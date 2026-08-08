@@ -66,7 +66,7 @@ impl TrayService {
         }));
 
         let tray_icon = TrayIconBuilder::new()
-            .with_tooltip("VOLC Status")
+            .with_tooltip("OpenCode Quota Checker")
             .with_menu(Box::new(menu))
             .with_icon(icon::tray()?)
             .build()

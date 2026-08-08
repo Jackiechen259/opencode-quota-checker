@@ -9,10 +9,10 @@ pub mod typography;
 
 pub use colors as palette;
 
-/// Builds the modern, bright "VOLC Status" theme with a white base tone.
+/// Builds the modern, bright "OpenCode Quota Checker" theme with a white base tone.
 pub fn application() -> Theme {
     Theme::custom(
-        "VOLC Status",
+        "OpenCode Quota Checker",
         Palette {
             background: palette::BACKGROUND,
             text: palette::TEXT_PRIMARY,

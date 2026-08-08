@@ -1,5 +1,9 @@
 # Phase 10 notification dependency note
 
+> **Historical record.** This decision note was written during the Iced
+> native-UI migration in the original `volc_status` repository. The platform
+> notification adapters it describes are still used by OpenCode Quota Checker.
+
 The initial native implementation used `notify-rust`, as proposed by the
 refactor plan. On Windows, that crate resolves a standalone WinRT helper whose
 package name contains the removed framework's name. Although it did not bring

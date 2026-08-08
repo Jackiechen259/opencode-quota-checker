@@ -1,5 +1,9 @@
 # Phase 8 native UI comparison
 
+> **Historical record.** This comparison was written during the Iced native-UI
+> migration in the original `volc_status` repository and is retained for
+> architectural context.
+
 The Iced implementation preserves the legacy application's user-visible
 capabilities without attempting pixel-for-pixel HTML/CSS reproduction.
 

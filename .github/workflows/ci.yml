@@ -97,4 +97,4 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build native desktop binary
-        run: cargo build -p volc-desktop --release --locked --target ${{ matrix.target }}
+        run: cargo build -p opencode-desktop --release --locked --target ${{ matrix.target }}

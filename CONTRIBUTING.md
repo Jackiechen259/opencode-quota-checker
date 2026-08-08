@@ -17,19 +17,20 @@ cargo test --workspace
 cargo build --workspace --release
 ```
 
-Changes to signing, response parsing, thresholds, configuration migration, or
-credential handling need regression tests. HTTP behavior should use the local
-mock server in `crates/volc-core/tests`; tests must never contain real keys.
+Changes to response parsing, thresholds, configuration, or credential
+handling need regression tests. HTTP behavior should use the local mock server
+in `crates/opencode-core/tests`; tests must never contain real cookies or
+secrets.
 
-Keep platform-specific behavior in `crates/volc-desktop/src/platform` or
-`crates/volc-desktop/src/window`. State changes must flow through the Iced
+Keep platform-specific behavior in `crates/opencode-desktop/src/platform` or
+`crates/opencode-desktop/src/window`. State changes must flow through the Iced
 message/update path, and blocking I/O must not run on the UI thread.
 
 ## Security
 
-Never commit access keys, secret keys, exported keyring data, local
-configuration files, or raw production API responses. Public error messages
-must remain bounded and must not include credentials.
+Never commit auth cookies, exported keyring data, local configuration files, or
+raw production responses. Public error messages must remain bounded and must
+not include credentials.
 
 ## Releases
 

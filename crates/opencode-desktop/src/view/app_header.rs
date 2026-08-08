@@ -80,8 +80,8 @@ fn brand(tray_online: bool) -> Element<'static, Message> {
         "托盘不可用"
     };
     let logo = container(
-        text("V")
-            .size(theme::typography::PAGE_TITLE)
+        text("OC")
+            .size(theme::typography::CARD_TITLE)
             .color(theme::palette::SURFACE),
     )
     .width(Length::Fixed(44.0))
@@ -91,7 +91,7 @@ fn brand(tray_online: bool) -> Element<'static, Message> {
     .style(move |_| theme::logo());
 
     let meta = row![
-        text("Agent Plan · AFP 配额")
+        text("OpenCode Go · 配额监控")
             .size(theme::typography::LABEL)
             .color(theme::palette::TEXT_SECONDARY),
         text("●").size(9).color(tray_color),
@@ -105,7 +105,7 @@ fn brand(tray_online: bool) -> Element<'static, Message> {
     row![
         logo,
         column![
-            text("VOLC Status")
+            text("OpenCode Quota Checker")
                 .size(theme::typography::PAGE_TITLE)
                 .color(theme::palette::TEXT_PRIMARY),
             meta,

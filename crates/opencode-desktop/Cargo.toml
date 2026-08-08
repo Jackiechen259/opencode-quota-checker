@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 description = "Native Iced desktop application for OpenCode Quota Checker"
 
+[[bin]]
+name = "opencode-quota-checker"
+path = "src/main.rs"
+
 [dependencies]
 chrono.workspace = true
 directories.workspace = true

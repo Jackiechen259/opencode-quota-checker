@@ -69,7 +69,12 @@ fn send(title: &str, body: &str) -> std::io::Result<()> {
 fn send(title: &str, body: &str) -> std::io::Result<()> {
     use std::process::Command;
 
-    command_succeeded(Command::new("notify-send").args(["--app-name", "VOLC Status", title, body]))
+    command_succeeded(Command::new("notify-send").args([
+        "--app-name",
+        "OpenCode Quota Checker",
+        title,
+        body,
+    ]))
 }
 
 #[cfg(any(target_os = "macos", all(unix, not(target_os = "macos"))))]

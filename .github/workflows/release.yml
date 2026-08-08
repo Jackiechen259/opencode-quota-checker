@@ -103,20 +103,20 @@ jobs:
         run: cargo install cargo-packager --locked
 
       - name: Build release binary
-        run: cargo build -p volc-desktop --release --locked --target ${{ matrix.target }}
+        run: cargo build -p opencode-desktop --release --locked --target ${{ matrix.target }}
 
       - name: Stage target binary for packager
         shell: bash
         run: |
           mkdir -p target/release
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cp "target/${{ matrix.target }}/release/volc-desktop.exe" target/release/
+            cp "target/${{ matrix.target }}/release/opencode-quota-checker.exe" target/release/
           else
-            cp "target/${{ matrix.target }}/release/volc-desktop" target/release/
+            cp "target/${{ matrix.target }}/release/opencode-quota-checker" target/release/
           fi
 
       - name: Create native package
-        run: cargo packager --release --config crates/volc-desktop/packager.json --formats ${{ matrix.formats }}
+        run: cargo packager --release --config crates/opencode-desktop/packager.json --formats ${{ matrix.formats }}
 
       - name: Upload package
         uses: actions/upload-artifact@v4
@@ -144,7 +144,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.resolve.outputs.tag }}
-          name: VOLC Status ${{ needs.resolve.outputs.tag }}
+          name: OpenCode Quota Checker ${{ needs.resolve.outputs.tag }}
           prerelease: ${{ needs.resolve.outputs.prerelease }}
           generate_release_notes: true
           files: release-assets/*
