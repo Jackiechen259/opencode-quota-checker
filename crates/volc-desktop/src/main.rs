@@ -1,6 +1,7 @@
 mod app;
 mod config;
 mod message;
+mod opencode_login;
 mod platform;
 mod state;
 mod subscription;

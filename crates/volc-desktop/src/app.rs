@@ -1,5 +1,6 @@
 use crate::config::{AppConfig, CloseBehavior, ConfigStore, FloatMode, FloatPosition};
 use crate::message::{HeaderAction, Message, SensitiveInput, ThresholdField};
+use crate::opencode_login;
 use crate::platform::notification;
 use crate::platform::tray::{TrayAction, TrayService};
 use crate::state::{
@@ -424,6 +425,26 @@ impl App {
             }
             Message::OpenCodeCookieChanged(SensitiveInput(value)) => {
                 self.credentials.opencode_cookie = value;
+                Task::none()
+            }
+            Message::StartOpenCodeLogin => {
+                self.credentials.error = None;
+                match opencode_login::open_login_page() {
+                    Ok(()) => {
+                        self.credentials.login_notice = Some(
+                            "已在浏览器中打开 opencode.ai 登录页。请完成 GitHub / Google 登录,打开你的工作区,将地址栏的 Workspace ID 填入上方,并在浏览器开发者工具中复制 auth Cookie 填入下方,再点击保存。"
+                                .to_owned(),
+                        );
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "failed to open OpenCode login page");
+                        self.credentials.error = Some(UiError {
+                            user: "无法打开浏览器,请手动访问 opencode.ai/auth 完成登录。"
+                                .to_owned(),
+                            detail: format!("failed to open browser: {error}"),
+                        });
+                    }
+                }
                 Task::none()
             }
             Message::SaveOpenCodeCredentials if !self.credentials.mutating => {

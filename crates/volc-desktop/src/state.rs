@@ -85,6 +85,8 @@ pub struct CredentialState {
     pub opencode_workspace: String,
     /// OpenCode Go auth cookie form value.
     pub opencode_cookie: String,
+    /// Helper text shown under the OpenCode credential form.
+    pub login_notice: Option<String>,
     /// Whether a save or clear operation is running.
     pub mutating: bool,
     /// Latest credential-specific error.

@@ -100,6 +100,7 @@ pub enum Message {
     CredentialsSaved(Result<(), UiError>),
     OpenCodeWorkspaceChanged(String),
     OpenCodeCookieChanged(SensitiveInput),
+    StartOpenCodeLogin,
     SaveOpenCodeCredentials,
     OpenCodeCredentialsSaved(Result<(), UiError>),
     OpenCodeCredentialsCleared(Result<(), UiError>),

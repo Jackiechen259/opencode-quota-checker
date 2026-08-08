@@ -120,35 +120,36 @@ impl RawWindow {
 
 /// Strategy A - structured server-rendered data.
 fn parse_ssr(html: &str) -> Option<Vec<RawWindow>> {
-    let positions: [Option<usize>; 3] =
-        std::array::from_fn(|index| find_key(html, SSR_WINDOWS[index].0));
-    if positions.iter().all(Option::is_none) {
+    let mut boundaries = SSR_WINDOWS
+        .iter()
+        .flat_map(|(token, _, _)| key_positions(html, token))
+        .collect::<Vec<_>>();
+    if boundaries.is_empty() {
         return None;
     }
+    boundaries.sort_unstable();
+    boundaries.dedup();
 
     let mut windows = Vec::new();
-    for (index, (token, key, label)) in SSR_WINDOWS.iter().enumerate() {
-        let Some(start) = positions[index] else {
+    for (token, key, label) in SSR_WINDOWS {
+        let parsed = key_positions(html, token).find_map(|start| {
+            let end = boundaries
+                .iter()
+                .copied()
+                .find(|position| *position > start)
+                .unwrap_or(html.len());
+            let segment = &html[start..end];
+            let usage_percent = extract_number(segment, "usagePercent")?;
+            usage_percent.is_finite().then(|| {
+                let reset_in_secs = extract_number(segment, "resetInSec")
+                    .filter(|value| value.is_finite())
+                    .map_or(0, |value| value as i64);
+                (usage_percent, reset_in_secs)
+            })
+        });
+        let Some((usage_percent, reset_in_secs)) = parsed else {
             continue;
         };
-        let end = positions[index + 1..]
-            .iter()
-            .flatten()
-            .copied()
-            .min()
-            .unwrap_or(html.len());
-        let segment = &html[start..end];
-
-        let Some(usage_percent) = extract_number(segment, "usagePercent") else {
-            continue;
-        };
-        if !usage_percent.is_finite() {
-            continue;
-        }
-        let reset_in_secs = extract_number(segment, "resetInSec")
-            .filter(|value| value.is_finite())
-            .map_or(0, |value| value as i64);
-        let _ = token;
         windows.push(RawWindow {
             key,
             label,
@@ -209,11 +210,14 @@ fn parse_dom(html: &str) -> Option<Vec<RawWindow>> {
     }
 }
 
-/// Locates a window key, preferring the JSON-quoted form to avoid matching
-/// bare identifiers in scripts.
-fn find_key(html: &str, key: &str) -> Option<usize> {
-    let quoted = format!("\"{key}\"");
-    html.find(&quoted).or_else(|| html.find(key))
+/// Locates every occurrence of a window key.
+///
+/// Solid's hydration output can mention a key before the object containing its
+/// quota values. Each occurrence is therefore evaluated within the boundary of
+/// the next known window key instead of assuming that the first occurrence is
+/// authoritative or that the three keys have a fixed document order.
+fn key_positions<'a>(html: &'a str, key: &'a str) -> impl Iterator<Item = usize> + 'a {
+    html.match_indices(key).map(|(position, _)| position)
 }
 
 /// Extracts the first numeric value assigned to a JSON field in a segment.
@@ -412,6 +416,57 @@ mod tests {
         assert_eq!(keys, vec!["rolling-5h", "weekly", "monthly"]);
         let percents: Vec<f64> = report.windows.iter().map(|window| window.percent).collect();
         assert_eq!(percents, vec![78.0, 52.0, 19.0]);
+    }
+
+    #[test]
+    fn out_of_order_ssr_keys_do_not_panic() {
+        // The real dashboard can emit the window keys in any order (for example
+        // nested inside a JSON blob). Each window must still read its own value
+        // and the parser must never slice the document backwards.
+        let html = r#"<script>window.__DATA__ = {
+            "monthlyUsage": { "usagePercent": 19, "resetInSec": 100 },
+            "weeklyUsage": { "usagePercent": 52, "resetInSec": 200 },
+            "rollingUsage": { "usagePercent": 78, "resetInSec": 300 }
+        }</script>"#;
+        let report =
+            parse_open_code_go_quota(html, NOW_MS).expect("out-of-order keys parse safely");
+        assert_eq!(report.windows.len(), 3);
+        let by_key: std::collections::HashMap<&str, &WindowReport> = report
+            .windows
+            .iter()
+            .map(|window| (window.key.as_str(), window))
+            .collect();
+        assert_eq!(by_key["rolling-5h"].percent, 78.0);
+        assert_eq!(by_key["weekly"].percent, 52.0);
+        assert_eq!(by_key["monthly"].percent, 19.0);
+        assert_eq!(by_key["rolling-5h"].reset_in_secs, 300);
+        assert_eq!(by_key["weekly"].reset_in_secs, 200);
+        assert_eq!(by_key["monthly"].reset_in_secs, 100);
+    }
+
+    #[test]
+    fn duplicate_key_without_values_does_not_shadow_real_window() {
+        // The live Solid hydration payload currently mentions monthlyUsage in
+        // metadata before emitting the actual quota objects. The metadata key
+        // must not borrow rollingUsage's values or shadow the later monthly
+        // object.
+        let html = r#"<script>window.__DATA__ = {
+            "monthlyUsage": null,
+            "rollingUsage": { "resetInSec": 300, "usagePercent": 3 },
+            "weeklyUsage": { "resetInSec": 200, "usagePercent": 8 },
+            "monthlyUsage": { "resetInSec": 100, "usagePercent": 4 }
+        }</script>"#;
+        let report = parse_open_code_go_quota(html, NOW_MS)
+            .expect("the later monthly quota object is authoritative");
+        let by_key: std::collections::HashMap<&str, &WindowReport> = report
+            .windows
+            .iter()
+            .map(|window| (window.key.as_str(), window))
+            .collect();
+        assert_eq!(by_key["rolling-5h"].percent, 3.0);
+        assert_eq!(by_key["weekly"].percent, 8.0);
+        assert_eq!(by_key["monthly"].percent, 4.0);
+        assert_eq!(by_key["monthly"].reset_in_secs, 100);
     }
 
     #[test]
