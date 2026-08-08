@@ -1,11 +1,11 @@
 use crate::config::{AppConfig, FloatMode};
 use crate::platform::tray::TrayAction;
-use crate::state::UiError;
+use crate::state::{ProviderAvailability, UiError};
 #[cfg(not(target_os = "windows"))]
 use iced::Size;
 use iced::{keyboard, window};
 use std::fmt;
-use volc_core::UsageReport;
+use volc_core::{Provider, UsageReport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderAction {
@@ -92,11 +92,17 @@ pub enum Message {
     ConfigSaved(Result<AppConfig, UiError>),
     MonitorTick,
     NotificationsDelivered(Result<(), UiError>),
-    CredentialsChecked(Result<bool, UiError>),
+    ProviderChanged(Provider),
+    CredentialsChecked(Result<ProviderAvailability, UiError>),
     AccessKeyChanged(SensitiveInput),
     SecretKeyChanged(SensitiveInput),
     SaveCredentials,
     CredentialsSaved(Result<(), UiError>),
+    OpenCodeWorkspaceChanged(String),
+    OpenCodeCookieChanged(SensitiveInput),
+    SaveOpenCodeCredentials,
+    OpenCodeCredentialsSaved(Result<(), UiError>),
+    OpenCodeCredentialsCleared(Result<(), UiError>),
     CancelClearCredentials,
     ClearCredentials,
     ConfirmClearCredentials,

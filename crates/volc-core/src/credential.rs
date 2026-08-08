@@ -3,6 +3,8 @@ use std::fmt;
 
 const SERVICE: &str = "volc-status";
 const ACCOUNT: &str = "volcengine-ak-sk";
+const OPENCODE_SERVICE: &str = "volc-status";
+const OPENCODE_ACCOUNT: &str = "opencode-go-auth";
 const SEPARATOR: char = '\0';
 
 /// A validated Access Key / Secret Key pair.
@@ -115,6 +117,57 @@ impl CredentialStore for KeyringCredentialStore {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(error) => Err(VolcError::Keyring(error)),
         }
+    }
+}
+
+/// Keyring entry for the OpenCode Go `auth` cookie.
+///
+/// The cookie is treated as a secret: it is never persisted to the plaintext
+/// configuration file and is never printed in logs or diagnostics.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct OpenCodeAuthStore;
+
+impl OpenCodeAuthStore {
+    fn entry() -> Result<keyring::Entry, VolcError> {
+        keyring::Entry::new(OPENCODE_SERVICE, OPENCODE_ACCOUNT).map_err(VolcError::Keyring)
+    }
+
+    /// Saves a raw `auth` cookie value after trimming surrounding whitespace.
+    pub fn save(&self, cookie: &str) -> Result<(), VolcError> {
+        let cookie = cookie.trim();
+        if cookie.is_empty() {
+            return Err(VolcError::CredentialsInvalid(
+                "auth cookie must not be empty".to_owned(),
+            ));
+        }
+        Self::entry()?
+            .set_password(cookie)
+            .map_err(VolcError::Keyring)
+    }
+
+    /// Loads the stored `auth` cookie value.
+    pub fn load(&self) -> Result<String, VolcError> {
+        match Self::entry()?.get_password() {
+            Ok(value) if value.trim().is_empty() => Err(VolcError::CredentialsInvalid(
+                "stored auth cookie is empty".to_owned(),
+            )),
+            Ok(value) => Ok(value),
+            Err(keyring::Error::NoEntry) => Err(VolcError::CredentialsMissing),
+            Err(error) => Err(VolcError::Keyring(error)),
+        }
+    }
+
+    /// Removes the stored cookie. Missing entries are accepted.
+    pub fn clear(&self) -> Result<(), VolcError> {
+        match Self::entry()?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(VolcError::Keyring(error)),
+        }
+    }
+
+    /// Reports whether a cookie is currently stored.
+    pub fn has(&self) -> bool {
+        self.load().is_ok()
     }
 }
 

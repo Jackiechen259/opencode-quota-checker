@@ -3,15 +3,15 @@ use crate::message::{HeaderAction, Message, SensitiveInput, ThresholdField};
 use crate::platform::notification;
 use crate::platform::tray::{TrayAction, TrayService};
 use crate::state::{
-    CredentialState, FloatState, MonitorState, SettingsState, UiError, UiState, UsageState,
-    WindowState,
+    CredentialState, FloatState, MonitorState, ProviderAvailability, SettingsState, UiError,
+    UiState, UsageState, WindowState,
 };
 use crate::{subscription, theme, view, window as app_window};
 use iced::keyboard::{key::Named, Key};
 use iced::{clipboard, keyboard, window, Element, Subscription, Task, Theme};
 use volc_core::{
-    evaluate_alerts, ArkClient, CredentialStore, Credentials, KeyringCredentialStore, Thresholds,
-    UsageReport, VolcError,
+    evaluate_alerts, opencode::OpenCodeGoProvider, ArkClient, CredentialStore, Credentials,
+    KeyringCredentialStore, OpenCodeAuthStore, Provider, Thresholds, UsageReport, VolcError,
 };
 
 /// The single state container shared by every application window.
@@ -151,8 +151,11 @@ impl App {
                 modifiers,
                 ..
             }) if self.dashboard_open() => {
-                self.ui.header_focus =
-                    Some(next_header_focus(self.ui.header_focus, modifiers.shift()));
+                self.ui.header_focus = Some(next_header_focus(
+                    self.ui.header_focus,
+                    modifiers.shift(),
+                    self.config.provider,
+                ));
                 Task::none()
             }
             Message::Keyboard(keyboard::Event::KeyPressed {
@@ -258,7 +261,7 @@ impl App {
                             Task::none()
                         };
                         let refresh_task =
-                            if self.credentials.configured && self.config.monitor_enabled {
+                            if self.provider_configured() && self.config.monitor_enabled {
                                 self.refresh()
                             } else {
                                 Task::none()
@@ -347,6 +350,20 @@ impl App {
                 Task::none()
             }
             Message::MonitorTick => self.refresh(),
+            Message::ProviderChanged(provider) if provider != self.config.provider => {
+                self.config.provider = provider;
+                self.settings.error = None;
+                self.credentials.error = None;
+                self.usage = UsageState::new();
+                self.ui.confirm_clear_credentials = false;
+                let refresh = if self.provider_configured() {
+                    self.refresh()
+                } else {
+                    Task::none()
+                };
+                Task::batch([self.persist_config_silently(), refresh])
+            }
+            Message::ProviderChanged(_) => Task::none(),
             Message::NotificationsDelivered(result) => {
                 self.monitor.notification_error = result.err();
                 Task::none()
@@ -354,10 +371,11 @@ impl App {
             Message::CredentialsChecked(result) => {
                 self.credentials.checking = false;
                 match result {
-                    Ok(configured) => {
-                        self.credentials.configured = configured;
+                    Ok(availability) => {
+                        self.credentials.ark = availability.ark;
+                        self.credentials.opencode = availability.opencode;
                         self.credentials.error = None;
-                        if configured {
+                        if self.provider_configured() {
                             return self.refresh();
                         }
                     }
@@ -388,11 +406,58 @@ impl App {
                 self.credentials.mutating = false;
                 match result {
                     Ok(()) => {
-                        self.credentials.configured = true;
+                        self.credentials.ark = true;
                         self.credentials.access_key.clear();
                         self.credentials.secret_key.clear();
                         self.credentials.error = None;
                         self.refresh()
+                    }
+                    Err(error) => {
+                        self.credentials.error = Some(error);
+                        Task::none()
+                    }
+                }
+            }
+            Message::OpenCodeWorkspaceChanged(value) => {
+                self.credentials.opencode_workspace = value;
+                Task::none()
+            }
+            Message::OpenCodeCookieChanged(SensitiveInput(value)) => {
+                self.credentials.opencode_cookie = value;
+                Task::none()
+            }
+            Message::SaveOpenCodeCredentials if !self.credentials.mutating => {
+                let workspace = self.credentials.opencode_workspace.trim().to_owned();
+                if workspace.is_empty() {
+                    self.credentials.error = Some(UiError {
+                        user: "Workspace ID 不能为空。".to_owned(),
+                        detail: "empty OpenCode workspace id".to_owned(),
+                    });
+                    return Task::none();
+                }
+                self.credentials.mutating = true;
+                self.credentials.error = None;
+                let cookie = self.credentials.opencode_cookie.clone();
+                Task::perform(
+                    save_opencode_credentials(cookie),
+                    Message::OpenCodeCredentialsSaved,
+                )
+            }
+            Message::SaveOpenCodeCredentials => Task::none(),
+            Message::OpenCodeCredentialsSaved(result) => {
+                self.credentials.mutating = false;
+                match result {
+                    Ok(()) => {
+                        self.credentials.opencode = true;
+                        let workspace = self.credentials.opencode_workspace.trim().to_owned();
+                        // Keep the non-sensitive workspace visible; clear the
+                        // cookie so the saved secret is never shown back.
+                        self.credentials.opencode_workspace = workspace.clone();
+                        self.credentials.opencode_cookie.clear();
+                        self.credentials.error = None;
+                        self.config.provider = Provider::OpenCodeGo;
+                        self.config.opencode_workspace_id = Some(workspace);
+                        Task::batch([self.persist_config_silently(), self.refresh()])
                     }
                     Err(error) => {
                         self.credentials.error = Some(error);
@@ -408,7 +473,14 @@ impl App {
             Message::ConfirmClearCredentials if !self.credentials.mutating => {
                 self.credentials.mutating = true;
                 self.credentials.error = None;
-                Task::perform(clear_credentials(), Message::CredentialsCleared)
+                match self.config.provider {
+                    Provider::VolcArkV => {
+                        Task::perform(clear_credentials(), Message::CredentialsCleared)
+                    }
+                    Provider::OpenCodeGo => {
+                        Task::perform(clear_opencode_cookie(), Message::OpenCodeCredentialsCleared)
+                    }
+                }
             }
             Message::ConfirmClearCredentials => Task::none(),
             Message::CancelClearCredentials => {
@@ -420,13 +492,35 @@ impl App {
                 self.ui.confirm_clear_credentials = false;
                 match result {
                     Ok(()) => {
-                        self.credentials.configured = false;
+                        self.credentials.ark = false;
                         self.credentials.access_key.clear();
                         self.credentials.secret_key.clear();
                         self.credentials.error = None;
                         self.usage = UsageState::new();
                         self.monitor = MonitorState::default();
                         self.config.monitor_enabled = false;
+                        return Task::perform(
+                            save_config(self.config.clone()),
+                            Message::ConfigSaved,
+                        );
+                    }
+                    Err(error) => self.credentials.error = Some(error),
+                }
+                Task::none()
+            }
+            Message::OpenCodeCredentialsCleared(result) => {
+                self.credentials.mutating = false;
+                self.ui.confirm_clear_credentials = false;
+                match result {
+                    Ok(()) => {
+                        self.credentials.opencode = false;
+                        self.credentials.opencode_workspace.clear();
+                        self.credentials.opencode_cookie.clear();
+                        self.credentials.error = None;
+                        self.config.opencode_workspace_id = None;
+                        self.config.monitor_enabled = false;
+                        self.usage = UsageState::new();
+                        self.monitor = MonitorState::default();
                         return Task::perform(
                             save_config(self.config.clone()),
                             Message::ConfigSaved,
@@ -450,7 +544,11 @@ impl App {
                 }
                 Task::none()
             }
-            Message::LoadRaw if !self.usage.raw_loading && self.credentials.configured => {
+            Message::LoadRaw
+                if !self.usage.raw_loading
+                    && self.provider_configured()
+                    && self.config.provider == Provider::VolcArkV =>
+            {
                 self.settings.open = false;
                 self.ui.debug_open = true;
                 self.usage.raw_loading = true;
@@ -549,7 +647,7 @@ impl App {
     }
 
     pub fn monitor_interval(&self) -> Option<u64> {
-        (self.config_loaded && self.credentials.configured && self.config.monitor_enabled)
+        (self.config_loaded && self.provider_configured() && self.config.monitor_enabled)
             .then_some(self.config.monitor_interval_secs)
     }
 
@@ -570,7 +668,22 @@ impl App {
             && !self.settings.open
             && !self.credentials.checking
             && self.config_loaded
-            && self.credentials.configured
+            && self.provider_configured()
+    }
+
+    /// Reports whether the active provider has all required configuration.
+    pub fn provider_configured(&self) -> bool {
+        match self.config.provider {
+            Provider::VolcArkV => self.credentials.ark,
+            Provider::OpenCodeGo => {
+                self.credentials.opencode
+                    && self
+                        .config
+                        .opencode_workspace_id
+                        .as_deref()
+                        .is_some_and(|value| !value.trim().is_empty())
+            }
+        }
     }
 
     fn apply_config(&mut self, config: AppConfig) {
@@ -582,6 +695,8 @@ impl App {
         self.settings.five_hour = config.thresholds.five_hour.to_string();
         self.settings.weekly = config.thresholds.weekly.to_string();
         self.settings.monthly = config.thresholds.monthly.to_string();
+        self.credentials.opencode_workspace =
+            config.opencode_workspace_id.clone().unwrap_or_default();
         self.config = config;
     }
 
@@ -602,15 +717,25 @@ impl App {
     }
 
     fn refresh(&mut self) -> Task<Message> {
-        if self.usage.loading || !self.credentials.configured {
+        if self.usage.loading || !self.provider_configured() {
             return Task::none();
         }
         self.usage.loading = true;
         self.usage.error = None;
-        Task::perform(
-            fetch_usage(self.client.clone(), self.credential_store),
-            Message::UsageLoaded,
-        )
+        match self.config.provider {
+            Provider::VolcArkV => Task::perform(
+                fetch_usage(self.client.clone(), self.credential_store),
+                Message::UsageLoaded,
+            ),
+            Provider::OpenCodeGo => {
+                let workspace = self
+                    .config
+                    .opencode_workspace_id
+                    .clone()
+                    .unwrap_or_default();
+                Task::perform(fetch_opencode_usage(workspace), Message::UsageLoaded)
+            }
+        }
     }
 
     fn alert_task(&mut self, report: &UsageReport) -> Task<Message> {
@@ -700,8 +825,15 @@ impl App {
     }
 }
 
-fn next_header_focus(current: Option<HeaderAction>, reverse: bool) -> HeaderAction {
-    let actions = HeaderAction::ALL;
+fn next_header_focus(
+    current: Option<HeaderAction>,
+    reverse: bool,
+    provider: Provider,
+) -> HeaderAction {
+    let actions: Vec<HeaderAction> = HeaderAction::ALL
+        .into_iter()
+        .filter(|action| provider != Provider::OpenCodeGo || *action != HeaderAction::Details)
+        .collect();
     let current_index =
         current.and_then(|action| actions.iter().position(|candidate| *candidate == action));
     let next_index = match (current_index, reverse) {
@@ -740,12 +872,18 @@ async fn save_config(config: AppConfig) -> Result<AppConfig, UiError> {
     Ok(config)
 }
 
-async fn check_credentials() -> Result<bool, UiError> {
-    match KeyringCredentialStore.load() {
-        Ok(_) => Ok(true),
-        Err(VolcError::CredentialsMissing) => Ok(false),
-        Err(error) => Err(error.into()),
-    }
+async fn check_credentials() -> Result<ProviderAvailability, UiError> {
+    let ark = match KeyringCredentialStore.load() {
+        Ok(_) => true,
+        Err(VolcError::CredentialsMissing) => false,
+        Err(error) => return Err(error.into()),
+    };
+    let opencode = match OpenCodeAuthStore.load() {
+        Ok(_) => true,
+        Err(VolcError::CredentialsMissing) => false,
+        Err(error) => return Err(error.into()),
+    };
+    Ok(ProviderAvailability { ark, opencode })
 }
 
 async fn save_credentials(access_key: String, secret_key: String) -> Result<(), UiError> {
@@ -757,6 +895,22 @@ async fn save_credentials(access_key: String, secret_key: String) -> Result<(), 
 
 async fn clear_credentials() -> Result<(), UiError> {
     KeyringCredentialStore.clear().map_err(UiError::from)
+}
+
+async fn save_opencode_credentials(cookie: String) -> Result<(), UiError> {
+    OpenCodeAuthStore.save(&cookie).map_err(UiError::from)
+}
+
+async fn clear_opencode_cookie() -> Result<(), UiError> {
+    OpenCodeAuthStore.clear().map_err(UiError::from)
+}
+
+async fn fetch_opencode_usage(workspace_id: String) -> Result<UsageReport, UiError> {
+    let cookie = OpenCodeAuthStore.load().map_err(UiError::from)?;
+    OpenCodeGoProvider::default()
+        .fetch_quota(&workspace_id, &cookie)
+        .await
+        .map_err(UiError::from)
 }
 
 async fn fetch_usage(

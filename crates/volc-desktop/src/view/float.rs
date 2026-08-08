@@ -8,7 +8,7 @@ use crate::view::components::quota_card::QuotaHealth;
 use crate::view::format;
 use iced::widget::{button, column, container, mouse_area, progress_bar, row, text, Column};
 use iced::{Alignment, Element, Fill, Font, Length};
-use volc_core::WindowReport;
+use volc_core::{Provider, UsageReport, WindowReport};
 
 /// Renders the floating window from the shared usage state.
 pub fn view(state: &UsageState, mode: FloatMode) -> Element<'_, Message> {
@@ -44,7 +44,7 @@ fn full(state: &UsageState) -> Element<'_, Message> {
         content = content.push(
             row![
                 container(
-                    text(plan_label(&report.plan_type))
+                    text(plan_label(report))
                         .size(11)
                         .color(theme::palette::PRIMARY),
                 )
@@ -385,10 +385,15 @@ fn health_label(health: QuotaHealth) -> &'static str {
     }
 }
 
-fn plan_label(plan_type: &str) -> String {
-    if plan_type.trim().is_empty() {
-        "AFP 套餐".to_owned()
-    } else {
-        format!("AFP · {plan_type}")
+fn plan_label(report: &UsageReport) -> String {
+    match report.provider {
+        Provider::OpenCodeGo => "OpenCode Go".to_owned(),
+        Provider::VolcArkV => {
+            if report.plan_type.trim().is_empty() {
+                "Volc ArK".to_owned()
+            } else {
+                format!("AFP · {}", report.plan_type)
+            }
+        }
     }
 }

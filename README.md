@@ -7,13 +7,14 @@
 
 ## 功能
 
+- 数据源可选：火山方舟 Agent Plan（AK/SK）或 OpenCode Go（Workspace ID + auth Cookie）
 - 展示 5 小时、近一周、近一月配额、用量、剩余量与重置时间
 - 原生系统托盘，关闭主窗口后可继续后台监控
 - Full、Compact、Docked 三种置顶悬浮窗
 - 可配置轮询间隔和每个时间窗口的告警阈值
 - 原生桌面通知及同一告警周期去重
 - 原始 API 响应调试浮层和一键复制
-- AK/SK 仅保存到系统钥匙串，配置文件不包含敏感字段
+- AK/SK 与 OpenCode auth Cookie 仅保存到系统钥匙串，配置文件不包含敏感字段
 
 ## 技术栈
 
@@ -54,14 +55,20 @@ Linux 桌面需支持 AppIndicator；部分 GNOME 环境需要启用对应扩展
 
 ## 使用
 
-1. 启动后在凭据页面输入火山引擎 Access Key 和 Secret Key。
-2. 点击保存；凭据写入系统钥匙串。
-3. 刷新配额，按需打开后台监控、告警和悬浮窗。
-4. 调试时可打开原始响应浮层；其中可能包含服务端元数据，分享前请检查。
+1. 启动后在设置中选择数据源：Volc ArK 或 OpenCode Go。
+2. 火山方舟：输入 Access Key 和 Secret Key，点击保存；凭据写入系统钥匙串。
+3. OpenCode Go：登录 opencode.ai 后打开目标工作区，从地址栏复制
+   Workspace ID，并在浏览器开发者工具中找到 `auth` Cookie 值后填入保存。
+   Workspace ID 写入普通配置，auth Cookie 仅写入系统钥匙串。
+4. 刷新配额，按需打开后台监控、告警和悬浮窗。
+5. 调试时可打开原始响应浮层；其中可能包含服务端元数据，分享前请检查。
+
+> OpenCode Go 尚无公开的配额 API，配额来自登录后的工作区面板。页面结构
+> 变化可能导致解析失败，此时界面会提示而不是展示错误数据。
 
 常规设置写入系统标准配置目录下的
-`volc-status/config.json`。写入采用同目录临时文件与原子替换；AK/SK
-不会写入该文件。
+`volc-status/config.json`。写入采用同目录临时文件与原子替换；AK/SK 与
+OpenCode auth Cookie 不会写入该文件。
 
 ## 目录
 
@@ -69,7 +76,7 @@ Linux 桌面需支持 AppIndicator；部分 GNOME 环境需要启用对应扩展
 .
 ├── assets/icons/             # 安装包图标
 ├── crates/
-│   ├── volc-core/            # API、签名、模型、凭据和告警规则
+│   ├── volc-core/            # API、OpenCode Go 客户端/解析器、模型、凭据和告警规则
 │   └── volc-desktop/         # Iced 应用、视图、窗口、托盘和配置
 ├── docs/                     # 架构、构建、发布及迁移记录
 ├── spikes/iced-tray-daemon/  # Phase 1 生命周期验证原型
@@ -103,7 +110,8 @@ Silicon 打包，并发布 SHA-256 校验和。详细步骤见
 
 ## 安全
 
-- 不在日志、配置、测试 fixture 或错误信息中输出 AK/SK。
+- 不在日志、配置、测试 fixture 或错误信息中输出 AK/SK 与 OpenCode
+  auth Cookie。
 - HTTP 请求使用 rustls TLS，并设置有限超时及响应体错误截断。
 - 发布包当前未配置平台代码签名；正式分发前应配置 Windows 与 macOS
   签名凭据。

@@ -43,7 +43,7 @@ impl Thresholds {
     /// Returns the threshold for a report window key.
     pub fn for_key(self, key: &str) -> f64 {
         match key {
-            "five_hour" => self.five_hour,
+            "five_hour" | "rolling-5h" => self.five_hour,
             "weekly" => self.weekly,
             "monthly" => self.monthly,
             _ => 80.0,
@@ -114,6 +114,7 @@ mod tests {
 
     fn report(percent: f64, cycle: i64) -> UsageReport {
         UsageReport {
+            provider: crate::Provider::VolcArkV,
             plan_type: "Large".to_owned(),
             windows: vec![WindowReport {
                 key: "five_hour".to_owned(),
@@ -161,5 +162,17 @@ mod tests {
         }
         .validate()
         .is_err());
+    }
+
+    #[test]
+    fn opencode_rolling_window_uses_five_hour_threshold() {
+        let thresholds = Thresholds {
+            five_hour: 62.0,
+            ..Thresholds::default()
+        };
+        assert_eq!(thresholds.for_key("rolling-5h"), 62.0);
+        assert_eq!(thresholds.for_key("weekly"), thresholds.weekly);
+        assert_eq!(thresholds.for_key("monthly"), thresholds.monthly);
+        assert_eq!(thresholds.for_key("unknown"), 80.0);
     }
 }

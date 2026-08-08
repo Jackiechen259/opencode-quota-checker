@@ -1,6 +1,36 @@
 use crate::VolcError;
 use serde::{Deserialize, Serialize};
 
+/// The quota data source behind a usage report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Provider {
+    /// Volcano Ark Agent Plan.
+    #[default]
+    #[serde(rename = "volc_ark")]
+    VolcArkV,
+    /// OpenCode Go workspace dashboard.
+    #[serde(rename = "opencode_go")]
+    OpenCodeGo,
+}
+
+impl Provider {
+    /// Stable identifier used in configuration and diagnostics.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::VolcArkV => "volc-ark",
+            Self::OpenCodeGo => "opencode-go",
+        }
+    }
+
+    /// Human-readable provider name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::VolcArkV => "Volc ArK",
+            Self::OpenCodeGo => "OpenCode Go",
+        }
+    }
+}
+
 /// Full `GetAFPUsage` API response.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AfpResponse {
@@ -125,6 +155,8 @@ pub struct WindowReport {
 /// Display-ready AFP usage report.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UsageReport {
+    /// Quota data source.
+    pub provider: Provider,
     /// Subscribed plan type.
     pub plan_type: String,
     /// Five-hour, weekly, and monthly windows that were present.
@@ -184,6 +216,7 @@ impl AfpResult {
         }
 
         Ok(UsageReport {
+            provider: Provider::VolcArkV,
             plan_type: self.plan_type,
             windows,
             fetched_at: now_ms,
@@ -260,5 +293,14 @@ mod tests {
             response.into_report_at(0),
             Err(VolcError::ResponseValue(_))
         ));
+    }
+
+    #[test]
+    fn provider_identities_are_stable_and_volc_by_default() {
+        assert_eq!(Provider::default(), Provider::VolcArkV);
+        assert_eq!(Provider::VolcArkV.id(), "volc-ark");
+        assert_eq!(Provider::VolcArkV.name(), "Volc ArK");
+        assert_eq!(Provider::OpenCodeGo.id(), "opencode-go");
+        assert_eq!(Provider::OpenCodeGo.name(), "OpenCode Go");
     }
 }

@@ -12,6 +12,7 @@ pub fn view(
     loading: bool,
     tray_error: Option<&str>,
     focused_action: Option<HeaderAction>,
+    details_enabled: bool,
 ) -> Element<'static, Message> {
     let report = report.cloned();
     let tray_online = tray_error.is_none();
@@ -22,6 +23,7 @@ pub fn view(
             loading,
             tray_online,
             focused_action,
+            details_enabled,
             size.width,
         )
     })
@@ -35,11 +37,12 @@ fn layout(
     loading: bool,
     tray_online: bool,
     focused_action: Option<HeaderAction>,
+    details_enabled: bool,
     width: f32,
 ) -> Element<'static, Message> {
     let brand = brand(tray_online);
     let metrics = metrics_row(report, now_ms);
-    let actions = actions(loading, now_ms, focused_action);
+    let actions = actions(loading, now_ms, focused_action, details_enabled);
 
     let content: Element<'static, Message> = if width >= 980.0 {
         row![brand, space::horizontal(), metrics, actions]
@@ -177,6 +180,7 @@ fn actions(
     loading: bool,
     now_ms: i64,
     focused_action: Option<HeaderAction>,
+    details_enabled: bool,
 ) -> Element<'static, Message> {
     let refresh = if loading {
         icon_button::loading(
@@ -193,32 +197,36 @@ fn actions(
         )
     };
 
-    row![
-        refresh,
-        action_button(
+    let mut buttons = vec![refresh];
+    if details_enabled {
+        buttons.push(action_button(
             icons::CODE,
             "开发者详情",
             HeaderAction::Details,
-            focused_action
-        ),
+            focused_action,
+        ));
+    }
+    buttons.extend([
         action_button(
             icons::SETTINGS,
             "设置",
             HeaderAction::Settings,
-            focused_action
+            focused_action,
         ),
         action_button(icons::FLOAT, "悬浮窗", HeaderAction::Float, focused_action),
         action_button(
             icons::HIDE,
             "隐藏到托盘",
             HeaderAction::Hide,
-            focused_action
+            focused_action,
         ),
         action_button(icons::EXIT, "退出", HeaderAction::Exit, focused_action),
-    ]
-    .spacing(6)
-    .align_y(iced::Alignment::Center)
-    .into()
+    ]);
+
+    row(buttons)
+        .spacing(6)
+        .align_y(iced::Alignment::Center)
+        .into()
 }
 
 fn action_button(
