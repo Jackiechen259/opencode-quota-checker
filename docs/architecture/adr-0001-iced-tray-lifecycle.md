@@ -41,18 +41,13 @@ prevents an unrecoverable background process.
 - Platform runtime tests remain mandatory. A successful compile does not prove
   that a particular Linux desktop exposes an AppIndicator-compatible tray.
 - If macOS or Linux runtime testing shows that tray creation must happen later
-  than daemon boot, the thin custom-winit fallback described in the refactor
-  plan will be used without changing core or view state.
+  than daemon boot, the thin custom-winit fallback will be used without
+  changing core or view state.
 
-## Spike
+## Runtime smoke tests
 
-The compilable prototype is in `spikes/iced-tray-daemon`. Run it with:
-
-```bash
-cargo run --manifest-path spikes/iced-tray-daemon/Cargo.toml
-```
-
-Manual acceptance:
+Exercise the daemon/tray lifecycle with the packaged binary before release
+approval:
 
 1. Close the main window and verify the process remains.
 2. Use the tray menu to recreate the main window.
