@@ -1,6 +1,7 @@
 use crate::config::{AppConfig, FloatMode};
 use crate::platform::tray::TrayAction;
 use crate::state::UiError;
+use crate::update::{UpdateInfo, VerifiedPackage};
 #[cfg(not(target_os = "windows"))]
 use iced::Size;
 use iced::{keyboard, window};
@@ -107,5 +108,36 @@ pub enum Message {
     LoadRaw,
     RawLoaded(Result<String, UiError>),
     Tick(i64),
+    /// Manually request an update check.
+    CheckForUpdate,
+    /// Result of a check; `None` means the running version is current.
+    UpdateChecked(Result<Option<UpdateInfo>, UiError>),
+    /// Periodic timer to re-check for updates.
+    UpdateCheckTick,
+    /// Download progress from the streaming downloader.
+    UpdateDownloadProgress {
+        /// Bytes downloaded so far.
+        downloaded: u64,
+        /// Total bytes when known.
+        total: Option<u64>,
+    },
+    /// Start downloading the available update.
+    DownloadUpdate,
+    /// Result of a package download.
+    UpdateDownloaded(Result<VerifiedPackage, UiError>),
+    /// Confirm and install the verified update.
+    InstallUpdate,
+    /// Result of launching the platform installer. `Ok(true)` means the app
+    /// should exit; `Ok(false)` means the package was opened and it keeps
+    /// running.
+    UpdateInstallStarted(Result<bool, UiError>),
+    /// Hide the dashboard update banner for this run.
+    DismissUpdate,
+    /// Open the release notes in the system browser.
+    OpenReleaseNotes,
+    /// Toggle whether startup/periodic checks are enabled.
+    UpdateChecksEnabledChanged(bool),
+    /// Toggle whether found updates auto-download.
+    AutoDownloadUpdatesChanged(bool),
     Exit,
 }

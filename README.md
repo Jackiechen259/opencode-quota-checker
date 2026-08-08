@@ -14,6 +14,7 @@ OpenCode Go 配额的原生 Rust 桌面监控工具。展示 5 小时、近一�
 - Full、Compact、Docked 三种置顶悬浮窗，拖到屏幕顶部附近自动停靠为单行 Docked 状态
 - 可配置轮询间隔（30–3600 秒）与每个窗口的告警阈值（0–100%）
 - 原生桌面通知，同一重置周期内只提醒一次
+- 自动更新：从 GitHub Releases 检查新版本、自动下载并校验 SHA-256，安装前需用户确认
 - 原始响应调试浮层与一键复制
 - auth Cookie 仅保存到系统钥匙串，配置文件不包含敏感字段
 
@@ -66,6 +67,17 @@ Windows 11 24H2 上 winit 0.30 存在跨 DPI 拖拽窗口时的 `WM_DPICHANGED` 
 
 主窗口关闭默认最小化到托盘（托盘不可用时改为退出）。主窗口头部支持 Tab / Shift+Tab 在操作间循环切换、Enter 激活、Esc 关闭调试浮层或设置。
 
+## 自动更新
+
+应用默认自动从官方 GitHub Releases 检查新版本（可在设置中关闭）：
+
+- 启动后检查一次，之后每约 6 小时检查一次，仅接受 stable 版本，不会提示预发布版本。
+- 发现新版本后默认自动下载（可在设置中关闭），更新包下载到系统缓存目录。
+- 下载完成后校验 SHA-256，与发布清单不符时丢弃文件并提示，绝不会运行未校验的包。
+- 安装前始终要求用户确认：Windows 启动安装程序、macOS 打开 DMG、Linux AppImage 安全替换并重启或打开 deb 包。
+- 更新检查失败不影响额度监控，错误只在设置页显示，可随时手动重新检查。
+- macOS Intel 与其它未发布平台不会收到任何更新包。
+
 ## 目录
 
 ```text
@@ -103,7 +115,7 @@ cargo xtask release 1.0.0-rc.1
 cargo xtask release 1.0.0 --push
 ```
 
-`v*` tag 触发 Windows x64（NSIS）、Linux x64（deb / AppImage）、macOS Intel 和 macOS Apple Silicon（DMG）打包，并发布 SHA-256 校验和。详细步骤见[发布说明](docs/release.md)。
+`v*` tag 触发 Windows x64（NSIS）、Linux x64（deb / AppImage）和 macOS Apple Silicon（DMG）打包，自动生成 SHA256 校验和与 `update.json` 更新清单并发布。详细步骤见[发布说明](docs/release.md)。
 
 ## 安全
 

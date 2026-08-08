@@ -28,6 +28,10 @@ pub fn subscription(app: &App) -> Subscription<Message> {
         subscriptions
             .push(time::every(Duration::from_secs(interval)).map(|_| Message::MonitorTick));
     }
+    if app.config_loaded() && app.update_checks_enabled() {
+        subscriptions
+            .push(time::every(Duration::from_secs(6 * 60 * 60)).map(|_| Message::UpdateCheckTick));
+    }
     if app.float_position_dirty() {
         subscriptions
             .push(time::every(Duration::from_millis(750)).map(|_| Message::PersistFloatPosition));

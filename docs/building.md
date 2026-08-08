@@ -14,8 +14,8 @@ Install the Visual Studio C++ build tools and the Windows SDK. The
 
 ### macOS
 
-Install Xcode Command Line Tools. CI builds both `x86_64-apple-darwin` and
-`aarch64-apple-darwin` on native runners.
+Install Xcode Command Line Tools. CI builds `aarch64-apple-darwin` on a native
+Apple Silicon runner.
 
 ### Ubuntu 22.04+
 

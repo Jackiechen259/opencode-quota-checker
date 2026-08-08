@@ -6,6 +6,7 @@ mod platform;
 mod state;
 mod subscription;
 mod theme;
+mod update;
 mod view;
 mod window;
 

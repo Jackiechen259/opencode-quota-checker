@@ -1,9 +1,12 @@
 use std::{
+    collections::BTreeMap,
     env, fmt, fs,
     path::{Path, PathBuf},
     process::{Command, ExitCode},
     str::FromStr,
 };
+
+use sha2::{Digest, Sha256};
 
 const PACKAGER_VERSION_KEY: &str = "\"version\": \"";
 
@@ -34,13 +37,19 @@ fn run() -> Result<(), String> {
             let tag = args.next();
             verify_version(&root, tag.as_deref())
         }
+        "update-manifest" => {
+            let tag = args.next().ok_or_else(usage)?;
+            let dir = args.next().ok_or_else(usage)?;
+            update_manifest(&root, &tag, &dir)
+        }
         _ => Err(usage()),
     }
 }
 
 fn usage() -> String {
     "usage: cargo xtask release <patch|minor|major|VERSION> [--push]\n\
-     or:    cargo xtask verify-version [vVERSION]"
+     or:    cargo xtask verify-version [vVERSION]\n\
+     or:    cargo xtask update-manifest <vVERSION> <asset-directory>"
         .to_owned()
 }
 
@@ -140,6 +149,161 @@ fn verify_version(root: &Path, tag: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
+/// Generates `SHA256SUMS` and `update.json` for a release tag from the
+/// package assets in `asset_directory`. Fails when any platform asset that
+/// the updater relies on is missing, so a release can never point at files
+/// that do not exist.
+fn update_manifest(root: &Path, tag: &str, asset_directory: &str) -> Result<(), String> {
+    let repository = workspace_repository(root)?;
+    update_manifest_at(&repository, tag, &root.join(asset_directory))
+}
+
+fn update_manifest_at(repository: &str, tag: &str, asset_dir: &Path) -> Result<(), String> {
+    Version::from_str(tag.strip_prefix('v').unwrap_or(tag))?;
+    if !asset_dir.is_dir() {
+        return Err(format!(
+            "asset directory does not exist: {}",
+            asset_dir.display()
+        ));
+    }
+
+    let mut platforms = BTreeMap::new();
+    for spec in REQUIRED_ASSETS {
+        let path = asset_dir.join(spec.filename);
+        if !path.is_file() {
+            return Err(format!("missing required asset: {}", spec.filename));
+        }
+        let digest = sha256_of(&path)?;
+        platforms.insert(
+            spec.key.to_owned(),
+            UpdatePlatform {
+                kind: spec.kind,
+                url: format!("{repository}/releases/download/{tag}/{}", spec.filename),
+                sha256: digest,
+            },
+        );
+    }
+
+    let sums_path = asset_dir.join("SHA256SUMS");
+    fs::write(&sums_path, checksums_for(asset_dir)?)
+        .map_err(|error| format!("failed to write {}: {error}", sums_path.display()))?;
+
+    let manifest = UpdateManifest {
+        schema: 1,
+        version: tag.strip_prefix('v').unwrap_or(tag).to_owned(),
+        tag: tag.to_owned(),
+        prerelease: tag.contains('-'),
+        release_notes_url: format!("{repository}/releases/tag/{tag}"),
+        platforms,
+    };
+    let manifest_path = asset_dir.join("update.json");
+    let json = serde_json::to_string_pretty(&manifest)
+        .map_err(|error| format!("failed to serialize update.json: {error}"))?;
+    fs::write(&manifest_path, format!("{json}\n"))
+        .map_err(|error| format!("failed to write {}: {error}", manifest_path.display()))?;
+
+    for path in sorted_files(asset_dir)? {
+        let name = file_name(&path);
+        if name != "SHA256SUMS"
+            && name != "update.json"
+            && !REQUIRED_ASSETS.iter().any(|spec| spec.filename == name)
+        {
+            println!("warning: unexpected file in release: {name}");
+        }
+    }
+
+    println!(
+        "generated update.json and SHA256SUMS for {tag} in {}",
+        asset_dir.display()
+    );
+    Ok(())
+}
+
+/// `{sha256}  {filename}` lines over every file in the directory, sorted by name.
+fn checksums_for(dir: &Path) -> Result<String, String> {
+    let mut output = String::new();
+    for path in sorted_files(dir)? {
+        output.push_str(&format!("{}  {}\n", sha256_of(&path)?, file_name(&path)));
+    }
+    Ok(output)
+}
+
+fn sorted_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut files = fs::read_dir(dir)
+        .map_err(|error| format!("failed to read {}: {error}", dir.display()))?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_file())
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
+    files.sort();
+    Ok(files)
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+fn sha256_of(path: &Path) -> Result<String, String> {
+    let bytes =
+        fs::read(path).map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    Ok(hex_encode(&Sha256::digest(&bytes)))
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Release asset contract shared with the desktop updater. Only these
+/// platforms are built and published; macOS Intel is intentionally absent.
+struct AssetSpec {
+    key: &'static str,
+    kind: &'static str,
+    filename: &'static str,
+}
+
+const REQUIRED_ASSETS: [AssetSpec; 4] = [
+    AssetSpec {
+        key: "windows-x86_64",
+        kind: "nsis",
+        filename: "opencode-quota-checker-windows-x86_64.exe",
+    },
+    AssetSpec {
+        key: "linux-x86_64-appimage",
+        kind: "appimage",
+        filename: "opencode-quota-checker-linux-x86_64.AppImage",
+    },
+    AssetSpec {
+        key: "linux-x86_64-deb",
+        kind: "deb",
+        filename: "opencode-quota-checker-linux-x86_64.deb",
+    },
+    AssetSpec {
+        key: "macos-aarch64",
+        kind: "dmg",
+        filename: "opencode-quota-checker-macos-aarch64.dmg",
+    },
+];
+
+#[derive(serde::Serialize)]
+struct UpdateManifest {
+    schema: u32,
+    version: String,
+    tag: String,
+    prerelease: bool,
+    release_notes_url: String,
+    platforms: BTreeMap<String, UpdatePlatform>,
+}
+
+#[derive(serde::Serialize)]
+struct UpdatePlatform {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    url: String,
+    sha256: String,
+}
+
 fn ensure_clean(root: &Path) -> Result<(), String> {
     let output = Command::new("git")
         .args(["status", "--porcelain"])
@@ -166,6 +330,19 @@ fn workspace_version(root: &Path) -> Result<Version, String> {
         .find(|line| line.trim_start().starts_with("version = "))
         .ok_or("missing workspace version")?;
     Version::from_str(quoted_value(line)?)
+}
+
+fn workspace_repository(root: &Path) -> Result<String, String> {
+    let manifest = read(root.join("Cargo.toml"))?;
+    let section = manifest
+        .split_once("[workspace.package]")
+        .ok_or("missing [workspace.package]")?
+        .1;
+    let line = section
+        .lines()
+        .find(|line| line.trim_start().starts_with("repository = "))
+        .ok_or("missing workspace repository")?;
+    Ok(quoted_value(line)?.to_owned())
 }
 
 fn packager_version(root: &Path) -> Result<Version, String> {
@@ -330,7 +507,7 @@ fn valid_prerelease(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::Version;
+    use super::*;
     use std::str::FromStr;
 
     #[test]
@@ -353,5 +530,123 @@ mod tests {
         assert_eq!(version.bump_patch().to_string(), "1.2.4");
         assert_eq!(version.bump_minor().to_string(), "1.3.0");
         assert_eq!(version.bump_major().to_string(), "2.0.0");
+    }
+
+    #[test]
+    fn generates_manifest_for_all_required_assets() {
+        let directory = tempfile::tempdir().expect("temporary directory is available");
+        let dir = directory.path();
+        for spec in REQUIRED_ASSETS {
+            fs::write(dir.join(spec.filename), b"package").expect("asset is written");
+        }
+
+        update_manifest_at(
+            "https://github.com/example/opencode-quota-checker",
+            "v0.2.0",
+            dir,
+        )
+        .expect("manifest generates");
+
+        let raw = fs::read_to_string(dir.join("update.json")).expect("update.json is written");
+        let manifest: serde_json::Value =
+            serde_json::from_str(&raw).expect("update.json is valid JSON");
+        assert_eq!(manifest["schema"], 1);
+        assert_eq!(manifest["version"], "0.2.0");
+        assert_eq!(manifest["tag"], "v0.2.0");
+        assert_eq!(manifest["prerelease"], false);
+        assert_eq!(
+            manifest["release_notes_url"],
+            "https://github.com/example/opencode-quota-checker/releases/tag/v0.2.0"
+        );
+
+        let platforms = manifest["platforms"]
+            .as_object()
+            .expect("platforms is an object");
+        assert_eq!(platforms.len(), 4);
+        assert!(!platforms.contains_key("macos-x86_64"));
+        let windows = platforms["windows-x86_64"]
+            .as_object()
+            .expect("platform entry");
+        assert_eq!(windows["type"], "nsis");
+        assert_eq!(
+            windows["url"],
+            "https://github.com/example/opencode-quota-checker/releases/download/v0.2.0/opencode-quota-checker-windows-x86_64.exe"
+        );
+        assert_eq!(
+            windows["sha256"],
+            "bc4a71180870f7945155fbb02f4b0a2e3faa2a62d6d31b7039013055ed19869a"
+        );
+    }
+
+    #[test]
+    fn writes_sha256sums_for_every_asset() {
+        let directory = tempfile::tempdir().expect("temporary directory is available");
+        let dir = directory.path();
+        fs::write(dir.join(REQUIRED_ASSETS[0].filename), b"package").expect("asset is written");
+        for spec in &REQUIRED_ASSETS[1..] {
+            fs::write(dir.join(spec.filename), b"package").expect("asset is written");
+        }
+
+        update_manifest_at(
+            "https://github.com/example/opencode-quota-checker",
+            "v0.2.0",
+            dir,
+        )
+        .expect("manifest generates");
+
+        let sums = fs::read_to_string(dir.join("SHA256SUMS")).expect("SHA256SUMS is written");
+        let lines = sums.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 4);
+        assert!(lines.iter().all(|line| {
+            let parts = line.split_whitespace().collect::<Vec<_>>();
+            parts.len() == 2
+                && parts[0].len() == 64
+                && parts[0]
+                    .chars()
+                    .all(|character| character.is_ascii_hexdigit())
+                && REQUIRED_ASSETS.iter().any(|spec| spec.filename == parts[1])
+        }));
+    }
+
+    #[test]
+    fn fails_when_a_required_asset_is_missing() {
+        let directory = tempfile::tempdir().expect("temporary directory is available");
+        let dir = directory.path();
+        fs::write(dir.join(REQUIRED_ASSETS[0].filename), b"package").expect("asset is written");
+
+        let error = update_manifest_at(
+            "https://github.com/example/opencode-quota-checker",
+            "v0.2.0",
+            dir,
+        )
+        .expect_err("missing assets must fail");
+        assert!(error.contains("missing required asset"));
+    }
+
+    #[test]
+    fn marks_prerelease_tags_and_rejects_invalid_versions() {
+        let directory = tempfile::tempdir().expect("temporary directory is available");
+        let dir = directory.path();
+        for spec in REQUIRED_ASSETS {
+            fs::write(dir.join(spec.filename), b"package").expect("asset is written");
+        }
+
+        update_manifest_at(
+            "https://github.com/example/opencode-quota-checker",
+            "v1.0.0-rc.1",
+            dir,
+        )
+        .expect("prerelease manifest generates");
+        let raw = fs::read_to_string(dir.join("update.json")).expect("update.json is written");
+        let manifest: serde_json::Value =
+            serde_json::from_str(&raw).expect("update.json is valid JSON");
+        assert_eq!(manifest["prerelease"], true);
+
+        assert!(update_manifest_at(
+            "https://github.com/example/opencode-quota-checker",
+            "not-a-version",
+            dir,
+        )
+        .is_err());
     }
 }

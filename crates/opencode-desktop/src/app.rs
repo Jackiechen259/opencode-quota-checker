@@ -4,9 +4,10 @@ use crate::opencode_login;
 use crate::platform::notification;
 use crate::platform::tray::{TrayAction, TrayService};
 use crate::state::{
-    CredentialState, FloatState, MonitorState, SettingsState, UiError, UiState, UsageState,
-    WindowState,
+    CredentialState, FloatState, MonitorState, SettingsState, UiError, UiState, UpdateProgress,
+    UpdateState, UpdateStatus, UsageState, WindowState,
 };
+use crate::update::{check_for_update, download_task, install_update, open_url};
 use crate::{subscription, theme, view, window as app_window};
 use iced::keyboard::{key::Named, Key};
 use iced::{clipboard, keyboard, window, Element, Subscription, Task, Theme};
@@ -23,6 +24,7 @@ pub struct App {
     settings: SettingsState,
     monitor: MonitorState,
     floating: FloatState,
+    updater: UpdateState,
     ui: UiState,
     config: AppConfig,
     config_loaded: bool,
@@ -57,6 +59,7 @@ impl App {
                 settings: SettingsState::default(),
                 monitor: MonitorState::default(),
                 floating: FloatState::default(),
+                updater: UpdateState::default(),
                 ui: UiState::default(),
                 config: AppConfig::default(),
                 config_loaded: false,
@@ -260,7 +263,12 @@ impl App {
                         } else {
                             Task::none()
                         };
-                        return Task::batch([float_task, refresh_task]);
+                        let update_task = if self.config.update_checks_enabled {
+                            self.start_update_check()
+                        } else {
+                            Task::none()
+                        };
+                        return Task::batch([float_task, refresh_task, update_task]);
                     }
                     Err(error) => self.settings.error = Some(error),
                 }
@@ -508,6 +516,90 @@ impl App {
                 self.usage.now_ms = now_ms;
                 Task::none()
             }
+            Message::CheckForUpdate if self.updater.status.busy() => Task::none(),
+            Message::CheckForUpdate => self.start_update_check(),
+            Message::UpdateCheckTick => {
+                if self.config.update_checks_enabled && !self.updater.status.busy() {
+                    self.start_update_check()
+                } else {
+                    Task::none()
+                }
+            }
+            Message::UpdateChecked(result) => {
+                let start = self.updater.apply_check_result(
+                    chrono::Utc::now().timestamp_millis(),
+                    result,
+                    self.config.auto_download_updates,
+                );
+                if start {
+                    return self.start_download();
+                }
+                Task::none()
+            }
+            Message::UpdateDownloadProgress { downloaded, total } => {
+                self.updater.progress = Some(UpdateProgress { downloaded, total });
+                Task::none()
+            }
+            Message::DownloadUpdate if !self.updater.status.busy() => self.start_download(),
+            Message::DownloadUpdate => Task::none(),
+            Message::UpdateDownloaded(result) => {
+                self.updater.apply_download_result(result);
+                Task::none()
+            }
+            Message::InstallUpdate => {
+                let Some(package) = self.updater.downloaded.clone() else {
+                    return Task::none();
+                };
+                self.updater.status = UpdateStatus::Installing;
+                self.updater.error = None;
+                Task::perform(
+                    async move { install_update(&package) },
+                    Message::UpdateInstallStarted,
+                )
+            }
+            Message::UpdateInstallStarted(result) => match result {
+                Ok(true) => iced::exit(),
+                Ok(false) => {
+                    self.updater.status = UpdateStatus::UpToDate;
+                    self.updater.available = None;
+                    self.updater.downloaded = None;
+                    self.settings.notice = Some("更新包已打开，请按提示完成安装。".to_owned());
+                    Task::none()
+                }
+                Err(error) => {
+                    self.updater.error = Some(error);
+                    self.updater.status = UpdateStatus::Error;
+                    Task::none()
+                }
+            },
+            Message::DismissUpdate => {
+                self.updater.banner_dismissed = true;
+                Task::none()
+            }
+            Message::OpenReleaseNotes => {
+                if let Some(info) = &self.updater.available {
+                    if let Err(error) = open_url(&info.release_notes_url) {
+                        self.updater.error = Some(UiError {
+                            user: "无法打开更新说明。".to_owned(),
+                            detail: error,
+                        });
+                    }
+                }
+                Task::none()
+            }
+            Message::UpdateChecksEnabledChanged(enabled) => {
+                self.config.update_checks_enabled = enabled;
+                let check = if enabled && !self.updater.status.busy() {
+                    self.start_update_check()
+                } else {
+                    Task::none()
+                };
+                Task::batch([self.persist_config_silently(), check])
+            }
+            Message::AutoDownloadUpdatesChanged(enabled) => {
+                self.config.auto_download_updates = enabled;
+                self.persist_config_silently()
+            }
             Message::Tray(TrayAction::Quit) | Message::Exit => iced::exit(),
         }
     }
@@ -574,6 +666,14 @@ impl App {
 
     pub fn ui(&self) -> &UiState {
         &self.ui
+    }
+
+    pub fn updater(&self) -> &UpdateState {
+        &self.updater
+    }
+
+    pub fn update_checks_enabled(&self) -> bool {
+        self.config.update_checks_enabled
     }
 
     pub fn has_report(&self) -> bool {
@@ -661,6 +761,20 @@ impl App {
             fetch_opencode_usage(service, workspace),
             Message::UsageLoaded,
         )
+    }
+
+    fn start_update_check(&mut self) -> Task<Message> {
+        self.updater.status = UpdateStatus::Checking;
+        self.updater.error = None;
+        Task::perform(check_for_update(), Message::UpdateChecked)
+    }
+
+    fn start_download(&mut self) -> Task<Message> {
+        let Some(info) = self.updater.available.clone() else {
+            return Task::none();
+        };
+        self.updater.begin_download();
+        download_task(info)
     }
 
     fn alert_task(&mut self, report: &UsageReport) -> Task<Message> {

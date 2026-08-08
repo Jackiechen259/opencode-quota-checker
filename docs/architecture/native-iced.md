@@ -53,7 +53,7 @@ The OpenCode `auth` cookie uses the system keyring service
 
 ## Cross-platform boundary
 
-CI compiles the native desktop binary on Windows x64, Linux x64, macOS Intel,
-and macOS Apple Silicon. Release approval additionally requires real installed
+CI compiles the native desktop binary on Windows x64, Linux x64, and macOS
+Apple Silicon. Release approval additionally requires real installed
 package tests for tray lifecycle, notifications, keyring, floating placement,
 and desktop-specific indicator behavior.

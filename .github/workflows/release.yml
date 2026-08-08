@@ -56,11 +56,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
             formats: deb,appimage
             artifact: linux-x86_64
-          - name: macOS Intel
-            os: macos-13
-            target: x86_64-apple-darwin
-            formats: dmg
-            artifact: macos-x86_64
           - name: macOS Apple Silicon
             os: macos-14
             target: aarch64-apple-darwin
@@ -118,6 +113,34 @@ jobs:
       - name: Create native package
         run: cargo packager --release --config crates/opencode-desktop/packager.json --formats ${{ matrix.formats }}
 
+      - name: Normalize release asset names
+        shell: bash
+        run: |
+          cd target/packages
+          rename_one() {
+            local ext="$1" name="$2"
+            local count
+            count=$(find . -maxdepth 1 -type f -name "$ext" | wc -l)
+            if [[ "$count" -ne 1 ]]; then
+              echo "expected exactly one $ext package, found $count" >&2
+              exit 1
+            fi
+            find . -maxdepth 1 -type f -name "$ext" -exec mv {} "$name" \;
+          }
+          case "${{ matrix.artifact }}" in
+            windows-x86_64)
+              rename_one "*.exe" opencode-quota-checker-windows-x86_64.exe
+              ;;
+            linux-x86_64)
+              rename_one "*.AppImage" opencode-quota-checker-linux-x86_64.AppImage
+              rename_one "*.deb" opencode-quota-checker-linux-x86_64.deb
+              ;;
+            macos-aarch64)
+              rename_one "*.dmg" opencode-quota-checker-macos-aarch64.dmg
+              ;;
+          esac
+          ls -la
+
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
@@ -125,20 +148,44 @@ jobs:
           path: target/packages/*
           if-no-files-found: error
 
-  publish:
-    name: Publish GitHub release
+  prepare-release:
+    name: Prepare release assets
     needs: [resolve, package]
     runs-on: ubuntu-22.04
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
-      - name: Generate SHA-256 checksums
-        working-directory: release-assets
-        run: find . -maxdepth 1 -type f -printf '%f\0' | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - name: Generate SHA256SUMS and update.json
+        run: cargo xtask update-manifest ${{ needs.resolve.outputs.tag }} release-assets
+
+      - name: Upload final release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [resolve, package, prepare-release]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets
 
       - name: Publish release
         uses: softprops/action-gh-release@v2

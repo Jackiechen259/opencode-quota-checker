@@ -104,6 +104,7 @@ impl ConfigStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::model::SCHEMA_VERSION;
 
     #[test]
     fn saves_and_loads_without_sensitive_fields() {
@@ -138,6 +139,29 @@ mod tests {
             ..AppConfig::default()
         };
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn schema_1_config_migrates_with_new_update_defaults() {
+        let directory = tempfile::tempdir().expect("temporary directory is available");
+        let path = directory.path().join("config.json");
+        // A pre-update config file: no update fields, old schema number.
+        fs::write(&path, r#"{"schema_version":1,"monitor_enabled":true}"#)
+            .expect("legacy config is written");
+        let store = ConfigStore::at(path);
+
+        let config = store.load().expect("legacy config loads");
+        assert_eq!(config.schema_version, SCHEMA_VERSION);
+        assert!(config.monitor_enabled);
+        assert!(
+            config.update_checks_enabled,
+            "new checks default to enabled"
+        );
+        assert!(
+            config.auto_download_updates,
+            "new auto-download defaults to enabled"
+        );
+        assert_eq!(config.monitor_interval_secs, 300);
     }
 
     #[test]

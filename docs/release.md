@@ -17,17 +17,88 @@ The command updates version metadata and `Cargo.lock`, formats, lints, tests,
 commits, and creates an annotated `vVERSION` tag. It does not push by default.
 Add `--push` to push the current branch and tag.
 
-A pushed `v*` tag runs `.github/workflows/release.yml`, which builds:
+A pushed `v*` tag runs `.github/workflows/release.yml`:
 
-- Windows x86-64 NSIS installer
-- macOS Intel DMG
-- macOS Apple Silicon DMG
-- Linux x86-64 deb and AppImage
+```text
+resolve
+   ↓
+package (Windows x64 / Linux x64 / macOS Apple Silicon)
+   ↓
+prepare-release (normalize assets, SHA256SUMS, update.json)
+   ↓
+publish (GitHub release)
+```
 
-The publish job combines the packages, creates `SHA256SUMS`, and attaches all
-artifacts to the GitHub release. Tags containing a prerelease suffix are marked
-as prereleases.
+The publish job only runs when every package job and the manifest generation
+succeeded, so a release can never point at a missing asset. Tags containing a
+prerelease suffix are marked as prereleases and are ignored by the stable
+update channel.
+
+## Release assets
+
+Packages are renamed to stable names before upload, and the updater relies on
+exactly these filenames:
+
+```text
+opencode-quota-checker-windows-x86_64.exe
+opencode-quota-checker-linux-x86_64.AppImage
+opencode-quota-checker-linux-x86_64.deb
+opencode-quota-checker-macos-aarch64.dmg
+```
+
+Every release additionally attaches:
+
+- `SHA256SUMS` — one `<sha256>  <filename>` line per asset, sorted by name.
+- `update.json` — the auto-update manifest (see below).
+
+macOS Intel is not built or published.
+
+## update.json
+
+`prepare-release` runs `cargo xtask update-manifest <tag> release-assets`,
+which validates the tag, verifies that every required platform asset exists,
+computes SHA-256 digests, and writes `SHA256SUMS` and `update.json` into the
+asset directory. Missing required assets fail the job.
+
+```json
+{
+  "schema": 1,
+  "version": "0.2.0",
+  "tag": "v0.2.0",
+  "prerelease": false,
+  "release_notes_url": "https://github.com/Jackiechen259/opencode-quota-checker/releases/tag/v0.2.0",
+  "platforms": {
+    "windows-x86_64": {
+      "type": "nsis",
+      "url": "https://github.com/Jackiechen259/opencode-quota-checker/releases/download/v0.2.0/opencode-quota-checker-windows-x86_64.exe",
+      "sha256": "..."
+    },
+    "linux-x86_64-appimage": { "type": "appimage", "url": "...", "sha256": "..." },
+    "linux-x86_64-deb": { "type": "deb", "url": "...", "sha256": "..." },
+    "macos-aarch64": { "type": "dmg", "url": "...", "sha256": "..." }
+  }
+}
+```
+
+The manifest can be generated and inspected locally:
+
+```bash
+cargo xtask update-manifest v0.2.0 release-assets
+```
+
+## Release verification
+
+After publishing, verify the release page contains all four platform packages,
+`SHA256SUMS`, and `update.json`, and that `update.json` is reachable at:
+
+```text
+https://github.com/Jackiechen259/opencode-quota-checker/releases/latest/download/update.json
+```
+
+Then install the previous release and confirm the updater detects the new
+version, downloads, verifies, and offers to install it. Check each platform's
+install path (NSIS, DMG, AppImage, deb) per the client release smoke test.
 
 The workflow produces unsigned packages until platform signing credentials are
-configured. Installed-package smoke tests for launch, tray, notifications, and
-keyring are mandatory release gates on every platform.
+configured. Installed-package smoke tests for launch, tray, notifications,
+keyring, and the updater flow are mandatory release gates on every platform.

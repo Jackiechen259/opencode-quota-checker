@@ -2,7 +2,7 @@ use opencode_core::{OpenCodeError, Thresholds};
 use serde::{Deserialize, Serialize};
 
 /// Current configuration schema version.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Behavior when the main window receives a close request.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -73,6 +73,12 @@ pub struct AppConfig {
     pub float_mode: FloatMode,
     /// Last known floating-window position.
     pub float_position: Option<FloatPosition>,
+    /// Whether to check GitHub Releases for new versions on startup and
+    /// periodically. Non-critical; never blocks quota monitoring.
+    pub update_checks_enabled: bool,
+    /// Whether discovered stable updates download immediately. A user
+    /// confirmation is always required before anything is installed.
+    pub auto_download_updates: bool,
 }
 
 impl Default for AppConfig {
@@ -87,6 +93,8 @@ impl Default for AppConfig {
             float_open: false,
             float_mode: FloatMode::Full,
             float_position: None,
+            update_checks_enabled: true,
+            auto_download_updates: true,
         }
     }
 }

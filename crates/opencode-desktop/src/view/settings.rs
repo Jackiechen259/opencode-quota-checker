@@ -1,10 +1,12 @@
 use crate::config::AppConfig;
 use crate::message::{Message, SensitiveInput, ThresholdField};
-use crate::state::{CredentialState, SettingsState};
+use crate::state::{CredentialState, SettingsState, UpdateState, UpdateStatus};
 use crate::theme;
 use crate::view::components::{icon_button, icons, settings, status_badge};
 use iced::alignment::Horizontal;
-use iced::widget::{button, column, container, row, scrollable, text, text_input, Column};
+use iced::widget::{
+    button, column, container, progress_bar, row, scrollable, text, text_input, toggler, Column,
+};
 use iced::{Element, Fill, Length};
 
 /// Settings page: manage the OpenCode connection and quota-monitoring rules.
@@ -15,11 +17,13 @@ pub fn view<'a>(
     state: &'a SettingsState,
     config: &AppConfig,
     credentials: &'a CredentialState,
+    updater: &'a UpdateState,
 ) -> Element<'a, Message> {
     let mut children: Vec<Element<'a, Message>> = vec![
         header(),
         account_card(credentials),
         monitor_card(state, config),
+        update_card(config, updater),
         settings::danger_zone(!credentials.mutating),
     ];
 
@@ -204,4 +208,191 @@ fn monitor_card<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a,
         .spacing(14),
     )
     .into()
+}
+
+/// Application update card: current version, check/download toggles, manual
+/// check, and the per-status install actions.
+fn update_card(config: &AppConfig, updater: &UpdateState) -> Element<'static, Message> {
+    let status = match updater.status {
+        UpdateStatus::Checking => status_badge::view("检查中…", status_badge::Tone::Primary),
+        UpdateStatus::Downloading => status_badge::view("下载中…", status_badge::Tone::Primary),
+        UpdateStatus::UpToDate => status_badge::view("已是最新", status_badge::Tone::Success),
+        UpdateStatus::Error => status_badge::view("检查失败", status_badge::Tone::Danger),
+        _ => status_badge::view("未检查", status_badge::Tone::Neutral),
+    };
+
+    let mut content = column![
+        settings::card_header(
+            icons::REFRESH,
+            "应用更新",
+            "从 GitHub Releases 自动发现并安装新版本",
+            Some(status),
+        ),
+        settings::form_field(
+            "当前版本",
+            text(format!("v{}", env!("CARGO_PKG_VERSION")))
+                .size(theme::typography::BODY)
+                .color(theme::palette::TEXT_PRIMARY)
+                .into(),
+            None,
+        ),
+        toggle_row(
+            "自动检查更新",
+            config.update_checks_enabled,
+            |enabled| { Message::UpdateChecksEnabledChanged(enabled) }
+        ),
+        toggle_row(
+            "自动下载更新",
+            config.auto_download_updates,
+            |enabled| { Message::AutoDownloadUpdatesChanged(enabled) }
+        ),
+        settings::form_field(
+            "上次检查",
+            text(last_checked_text(updater.last_checked_at))
+                .size(theme::typography::BODY)
+                .color(theme::palette::TEXT_SECONDARY)
+                .into(),
+            None,
+        ),
+        row![
+            row![].width(Fill),
+            button("检查更新")
+                .on_press(Message::CheckForUpdate)
+                .style(theme::secondary_button)
+                .padding([8, 16]),
+        ]
+        .align_y(iced::Alignment::Center),
+    ]
+    .spacing(14);
+
+    if let Some(status_content) = update_status_content(updater) {
+        content = content.push(status_content);
+    }
+
+    settings::settings_card(content).into()
+}
+
+/// Label on the left, toggle on the right, matching the settings aesthetic.
+fn toggle_row<'a>(
+    label: &'static str,
+    value: bool,
+    on_toggle: impl Fn(bool) -> Message + 'a,
+) -> Element<'a, Message> {
+    row![
+        text(label)
+            .size(theme::typography::BODY)
+            .color(theme::palette::TEXT_SECONDARY),
+        row![].width(Fill),
+        toggler(value).on_toggle(on_toggle),
+    ]
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// Status-specific block rendered under the update card controls.
+fn update_status_content(updater: &UpdateState) -> Option<Element<'static, Message>> {
+    match updater.status {
+        UpdateStatus::Checking => Some(
+            text("正在检查更新…")
+                .size(theme::typography::BODY)
+                .color(theme::palette::TEXT_SECONDARY)
+                .into(),
+        ),
+        UpdateStatus::Available => {
+            let tag = updater
+                .available
+                .as_ref()
+                .map_or("新版本".to_owned(), |info| info.tag.clone());
+            Some(
+                row![
+                    text(format!("新版本 {tag} 可用"))
+                        .size(theme::typography::BODY)
+                        .color(theme::palette::TEXT_PRIMARY),
+                    row![].width(Fill),
+                    button("查看更新说明")
+                        .on_press(Message::OpenReleaseNotes)
+                        .style(theme::soft_button)
+                        .padding([8, 16]),
+                    button("下载更新")
+                        .on_press(Message::DownloadUpdate)
+                        .style(button::primary)
+                        .padding([8, 16]),
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center)
+                .into(),
+            )
+        }
+        UpdateStatus::Downloading => {
+            let tag = updater
+                .available
+                .as_ref()
+                .map_or("更新".to_owned(), |info| info.tag.clone());
+            let progress = updater
+                .progress
+                .and_then(|progress| {
+                    progress
+                        .total
+                        .map(|total| progress.downloaded as f32 / total as f32)
+                })
+                .unwrap_or(0.0);
+            Some(
+                column![
+                    text(format!("正在下载 {tag}…"))
+                        .size(theme::typography::BODY)
+                        .color(theme::palette::TEXT_SECONDARY),
+                    progress_bar(0.0..=1.0, progress.clamp(0.0, 1.0))
+                        .girth(6)
+                        .style(move |_| theme::progress_style(theme::palette::PRIMARY)),
+                ]
+                .spacing(8)
+                .into(),
+            )
+        }
+        UpdateStatus::ReadyToInstall => {
+            let version = updater
+                .downloaded
+                .as_ref()
+                .map_or_else(|| "v".to_owned(), |package| format!("v{}", package.version));
+            let install_label = if cfg!(target_os = "macos") {
+                "打开安装包"
+            } else {
+                "安装并重启"
+            };
+            Some(
+                row![
+                    text(format!("{version} 已准备好"))
+                        .size(theme::typography::BODY)
+                        .color(theme::palette::TEXT_PRIMARY),
+                    row![].width(Fill),
+                    button(install_label)
+                        .on_press(Message::InstallUpdate)
+                        .style(button::primary)
+                        .padding([8, 16]),
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center)
+                .into(),
+            )
+        }
+        UpdateStatus::Error => updater
+            .error
+            .as_ref()
+            .map(|error| settings::notice(settings::NoticeKind::Error, &error.user)),
+        _ => None,
+    }
+}
+
+/// Relative "last checked" label from an epoch-milliseconds timestamp.
+fn last_checked_text(timestamp: Option<i64>) -> String {
+    let Some(millis) = timestamp else {
+        return "从未".to_owned();
+    };
+    let seconds = (chrono::Utc::now().timestamp_millis() - millis).max(0) / 1000;
+    match seconds {
+        0..=59 => "刚刚".to_owned(),
+        60..=3_599 => format!("{} 分钟前", seconds / 60),
+        3_600..=86_399 => format!("{} 小时前", seconds / 3_600),
+        _ => format!("{} 天前", seconds / 86_400),
+    }
 }
