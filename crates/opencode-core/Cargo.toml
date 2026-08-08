@@ -1,0 +1,24 @@
+[package]
+name = "opencode-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Platform-independent OpenCode Go quota client and domain model"
+
+[dependencies]
+chrono.workspace = true
+keyring.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+url.workspace = true
+urlencoding.workspace = true
+
+[dev-dependencies]
+pretty_assertions = "1"
+tokio.workspace = true
+wiremock = "0.6"
+

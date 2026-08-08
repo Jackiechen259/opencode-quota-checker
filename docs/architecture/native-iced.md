@@ -2,11 +2,11 @@
 
 ## Boundaries
 
-`volc-core` contains the reusable domain layer: credentials, keyring access,
-Volcano Ark request signing and HTTP calls, wire models, display reports, and
-pure threshold evaluation. It has no dependency on the desktop UI.
+`opencode-core` contains the reusable domain layer: the OpenCode dashboard
+HTTP client, quota parser, display models, keyring credential access, and pure
+threshold evaluation. It has no dependency on the desktop UI.
 
-`volc-desktop` owns the process lifecycle and presentation:
+`opencode-desktop` owns the process lifecycle and presentation:
 
 - `app`, `message`, and `state` implement the single Iced update loop.
 - `subscription` translates timers, tray events, keyboard events, and monitor
@@ -44,13 +44,12 @@ avoid an unreachable background process. See ADR 0001 for the decision record.
 ## Persistence and security
 
 Preferences are validated and stored as JSON below the platform-standard user
-configuration directory. Saves use a same-directory temporary file, flush,
-sync, and rename. Compatible earlier preference files are imported once and
-left in place.
+configuration directory at `opencode-quota-checker/config.json`. Saves use a
+same-directory temporary file, flush, sync, and rename.
 
-Credentials use the system keyring service `volc-status` and account
-`volcengine-ak-sk`. They are redacted from `Debug` and are never serialized to
-the preferences file.
+The OpenCode `auth` cookie uses the system keyring service
+`opencode-quota-checker` and account `opencode-auth`. It is redacted from
+`Debug` and is never serialized to the preferences file.
 
 ## Cross-platform boundary
 

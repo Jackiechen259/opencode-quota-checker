@@ -30,7 +30,7 @@ AppImage packaging additionally needs `squashfs-tools`.
 ## Commands
 
 ```bash
-cargo run -p volc-desktop
+cargo run -p opencode-desktop
 cargo test --workspace
 cargo build --workspace --release
 ```
@@ -39,7 +39,7 @@ To produce the current platform's default install format:
 
 ```bash
 cargo install cargo-packager --locked
-cargo packager --release --config crates/volc-desktop/packager.json
+cargo packager --release --config crates/opencode-desktop/packager.json
 ```
 
 Packages are written to `target/packages`.

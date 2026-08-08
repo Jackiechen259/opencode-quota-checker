@@ -5,7 +5,7 @@
 
 ## Context
 
-VOLC Status must remain alive after all Iced windows are closed and must be
+OpenCode Quota Checker must remain alive after all Iced windows are closed and must be
 recoverable from a native system tray. `tray-icon` has platform event-loop and
 main-thread requirements, while Iced owns its `winit` event loop.
 

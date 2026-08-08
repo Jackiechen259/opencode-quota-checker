@@ -1,0 +1,50 @@
+{
+  "$schema": "https://raw.githubusercontent.com/crabnebula-dev/cargo-packager/main/schema.json",
+  "name": "opencode-quota-checker",
+  "productName": "OpenCode Quota Checker",
+  "identifier": "io.github.jackiechen259.opencode-quota-checker",
+  "version": "0.1.0",
+  "description": "Native desktop quota monitor for OpenCode Go",
+  "longDescription": "Monitor OpenCode Go quota windows, alerts, and reset times from a native Rust desktop application.",
+  "authors": ["Jackie Chen"],
+  "publisher": "Jackie Chen",
+  "homepage": "https://github.com/Jackiechen259/opencode-quota-checker",
+  "licenseFile": "../../LICENSE",
+  "category": "Utility",
+  "outDir": "../../target/packages",
+  "binariesDir": "../../target/release",
+  "binaries": [
+    {
+      "path": "opencode-quota-checker",
+      "main": true
+    }
+  ],
+  "icons": [
+    "../../assets/icons/32x32.png",
+    "../../assets/icons/128x128.png",
+    "../../assets/icons/128x128@2x.png",
+    "../../assets/icons/icon.png",
+    "../../assets/icons/icon.ico",
+    "../../assets/icons/icon.icns"
+  ],
+  "formats": ["default"],
+  "beforePackagingCommand": {
+    "script": "cargo build --release -p opencode-desktop",
+    "dir": "../.."
+  },
+  "linux": {
+    "generateDesktopEntry": true
+  },
+  "deb": {
+    "depends": [
+      "libgtk-3-0",
+      "libayatana-appindicator3-1",
+      "libsecret-1-0",
+      "libnotify-bin"
+    ]
+  },
+  "nsis": {
+    "installMode": "currentUser",
+    "languages": ["English", "SimpChinese"]
+  }
+}

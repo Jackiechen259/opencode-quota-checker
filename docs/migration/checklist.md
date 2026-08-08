@@ -1,5 +1,10 @@
 # Iced native migration checklist
 
+> **Historical record.** This checklist tracked the Iced native-UI migration
+> that was completed in the original `volc_status` repository. It is retained
+> for architectural context only; the OpenCode Quota Checker is an independent
+> application and its current status lives in the code and CI.
+
 This checklist tracks the implementation described in
 `volc_status_iced_refactor_plan.md`. Platform smoke tests that cannot be run on
 the current host remain explicit release gates instead of being recorded as

@@ -1,5 +1,10 @@
 # Phase 0 baseline
 
+> **Historical record.** This snapshot was captured during the Iced native-UI
+> migration in the original `volc_status` repository and is retained for
+> architectural context. The OpenCode Quota Checker is an independent,
+> OpenCode-only application.
+
 Captured on 2026-07-24 from commit `509516a`.
 
 The recoverable source baseline is the annotated Git tag
