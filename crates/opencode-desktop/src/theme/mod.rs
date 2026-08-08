@@ -1,6 +1,6 @@
 use iced::border;
 use iced::theme::Palette;
-use iced::widget::{button, container, progress_bar};
+use iced::widget::{button, container, progress_bar, text_input};
 use iced::{Background, Border, Color, Shadow, Theme, Vector};
 
 pub mod colors;
@@ -52,20 +52,6 @@ pub fn card() -> container::Style {
         },
         shadow: CARD_SHADOW,
         snap: false,
-    }
-}
-
-/// Flat inset panel: muted surface, hairline border, no shadow.
-pub fn panel() -> container::Style {
-    container::Style {
-        background: Some(Background::Color(palette::SURFACE_HOVER)),
-        text_color: Some(palette::TEXT_PRIMARY),
-        border: Border {
-            color: palette::BORDER,
-            width: 1.0,
-            radius: radius::CARD.into(),
-        },
-        ..container::Style::default()
     }
 }
 
@@ -331,5 +317,166 @@ pub fn logo() -> container::Style {
             radius: radius::LABEL.into(),
         },
         ..container::Style::default()
+    }
+}
+
+/// Blue icon tile used by settings card headers.
+pub fn settings_icon_tile() -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::PRIMARY_LIGHT)),
+        text_color: Some(palette::PRIMARY),
+        border: Border {
+            color: palette::PRIMARY_BORDER,
+            width: 1.0,
+            radius: radius::LABEL.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Danger zone surface: plain white card with a translucent red border.
+pub fn danger_zone() -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::SURFACE)),
+        text_color: Some(palette::TEXT_PRIMARY),
+        border: Border {
+            color: palette::DANGER_BORDER,
+            width: 1.0,
+            radius: radius::CARD.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Success-tinted notice box.
+pub fn success_box() -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::SUCCESS_LIGHT)),
+        text_color: Some(palette::TEXT_PRIMARY),
+        border: Border {
+            color: palette::SUCCESS_BORDER,
+            width: 1.0,
+            radius: radius::CARD.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Settings form input: white surface, hairline border, primary focus.
+pub fn settings_input(_theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let active = text_input::Style {
+        background: Background::Color(palette::SURFACE),
+        border: Border {
+            color: palette::BORDER,
+            width: 1.0,
+            radius: radius::LABEL.into(),
+        },
+        icon: palette::TEXT_MUTED,
+        placeholder: palette::TEXT_MUTED,
+        value: palette::TEXT_PRIMARY,
+        selection: palette::PRIMARY_PRESSED,
+    };
+    match status {
+        text_input::Status::Active => active,
+        text_input::Status::Hovered => text_input::Style {
+            border: Border {
+                color: palette::TEXT_SECONDARY,
+                ..active.border
+            },
+            ..active
+        },
+        text_input::Status::Focused { .. } => text_input::Style {
+            border: Border {
+                color: palette::PRIMARY,
+                width: 1.5,
+                ..active.border
+            },
+            ..active
+        },
+        text_input::Status::Disabled => text_input::Style {
+            background: Background::Color(palette::SURFACE_HOVER),
+            value: palette::TEXT_MUTED,
+            ..active
+        },
+    }
+}
+
+/// Neutral secondary button (e.g. "停止监控").
+pub fn secondary_button(_theme: &Theme, status: button::Status) -> button::Style {
+    let base = button::Style {
+        background: Some(Background::Color(palette::SURFACE_HOVER)),
+        text_color: palette::TEXT_SECONDARY,
+        border: Border {
+            color: palette::BORDER,
+            width: 1.0,
+            radius: radius::BUTTON.into(),
+        },
+        shadow: Shadow::default(),
+        snap: false,
+    };
+    match status {
+        button::Status::Hovered => button::Style {
+            background: Some(Background::Color(palette::PRIMARY_LIGHT)),
+            text_color: palette::PRIMARY,
+            border: Border {
+                color: palette::PRIMARY_BORDER,
+                ..base.border
+            },
+            ..base
+        },
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(palette::PRIMARY_PRESSED)),
+            text_color: palette::PRIMARY_HOVER,
+            ..base
+        },
+        button::Status::Disabled => button::Style {
+            background: Some(Background::Color(palette::SURFACE_HOVER)),
+            text_color: palette::TEXT_MUTED,
+            border: Border {
+                color: palette::BORDER,
+                ..base.border
+            },
+            ..base
+        },
+        _ => base,
+    }
+}
+
+/// Outline danger button for destructive secondary actions.
+pub fn danger_outline_button(_theme: &Theme, status: button::Status) -> button::Style {
+    let base = button::Style {
+        background: Some(Background::Color(palette::SURFACE)),
+        text_color: palette::DANGER,
+        border: Border {
+            color: palette::DANGER_BORDER,
+            width: 1.0,
+            radius: radius::BUTTON.into(),
+        },
+        shadow: Shadow::default(),
+        snap: false,
+    };
+    match status {
+        button::Status::Hovered => button::Style {
+            background: Some(Background::Color(palette::DANGER_LIGHT)),
+            border: Border {
+                color: palette::DANGER,
+                ..base.border
+            },
+            ..base
+        },
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(Color::from_rgba8(239, 68, 68, 0.16))),
+            ..base
+        },
+        button::Status::Disabled => button::Style {
+            background: Some(Background::Color(palette::SURFACE_HOVER)),
+            text_color: palette::TEXT_MUTED,
+            border: Border {
+                color: palette::BORDER,
+                ..base.border
+            },
+            ..base
+        },
+        _ => base,
     }
 }

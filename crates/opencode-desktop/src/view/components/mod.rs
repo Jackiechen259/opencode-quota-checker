@@ -8,6 +8,7 @@ pub mod progress_bar;
 pub mod quota_card;
 pub mod quota_ring;
 pub mod section_header;
+pub mod settings;
 pub mod status_badge;
 
 /// Font family name used for headings and numerals. Falls back to the system
