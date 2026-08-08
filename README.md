@@ -57,9 +57,10 @@ Linux 桌面需支持 AppIndicator；部分 GNOME 环境需要启用对应扩展
 
 1. 启动后在设置中选择数据源：Volc ArK 或 OpenCode Go。
 2. 火山方舟：输入 Access Key 和 Secret Key，点击保存；凭据写入系统钥匙串。
-3. OpenCode Go：登录 opencode.ai 后打开目标工作区，从地址栏复制
-   Workspace ID，并在浏览器开发者工具中找到 `auth` Cookie 值后填入保存。
-   Workspace ID 写入普通配置，auth Cookie 仅写入系统钥匙串。
+3. OpenCode Go：点击「在浏览器中登录」，在系统浏览器中完成 GitHub /
+   Google 登录；随后在地址栏复制 Workspace ID，并在浏览器开发者工具中
+   复制 `auth` Cookie 填入表单保存。Workspace ID 写入普通配置，auth
+   Cookie 仅写入系统钥匙串。
 4. 刷新配额，按需打开后台监控、告警和悬浮窗。
 5. 调试时可打开原始响应浮层；其中可能包含服务端元数据，分享前请检查。
 

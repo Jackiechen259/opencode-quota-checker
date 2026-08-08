@@ -75,14 +75,28 @@ fn opencode_form(state: &CredentialState) -> Element<'_, Message> {
         Message::SaveOpenCodeCredentials,
     );
 
-    column![
+    let login_button = button(text("在浏览器中登录").size(14))
+        .on_press(Message::StartOpenCodeLogin)
+        .style(button::primary)
+        .padding([10, 20]);
+
+    let status: Element<'_, Message> = match &state.login_notice {
+        Some(notice) => text(notice)
+            .size(12)
+            .color(theme::palette::TEXT_MUTED)
+            .into(),
+        None => text("").into(),
+    };
+
+    let mut content = column![
         text("尚未配置 OpenCode Go")
             .size(22)
             .color(theme::palette::TEXT_PRIMARY),
         text("OpenCode Go 尚无公开的配额 API，配额数据来自登录后的工作区面板。Workspace ID 保存在普通配置中，Auth Cookie 仅保存到系统钥匙串。")
             .size(13)
             .color(theme::palette::TEXT_MUTED),
-        text("获取方式：登录 opencode.ai → 打开 OpenCode Go 工作区 → 从地址栏复制 Workspace ID → 在浏览器开发者工具中找到 opencode.ai 的 auth Cookie 值。")
+        login_button,
+        text("或手动填写：")
             .size(12)
             .color(theme::palette::TEXT_MUTED),
         workspace,
@@ -91,9 +105,17 @@ fn opencode_form(state: &CredentialState) -> Element<'_, Message> {
             .size(12)
             .color(theme::palette::WARNING),
         save,
+        text("手动获取方式：登录 opencode.ai → 打开 OpenCode Go 工作区 → 从地址栏复制 Workspace ID → 在浏览器开发者工具中找到 opencode.ai 的 auth Cookie 值。")
+            .size(12)
+            .color(theme::palette::TEXT_MUTED),
     ]
-    .spacing(14)
-    .into()
+    .spacing(14);
+
+    if state.login_notice.is_some() {
+        content = content.push(status);
+    }
+
+    content.into()
 }
 
 fn save_button(
