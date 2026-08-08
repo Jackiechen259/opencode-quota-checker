@@ -2,179 +2,206 @@ use crate::config::AppConfig;
 use crate::message::{Message, SensitiveInput, ThresholdField};
 use crate::state::{CredentialState, SettingsState};
 use crate::theme;
-use iced::widget::{button, column, container, row, text, text_input};
-use iced::{Element, Fill};
+use crate::view::components::{icon_button, icons, settings, status_badge};
+use iced::alignment::Horizontal;
+use iced::widget::{button, column, container, row, scrollable, text, text_input, Column};
+use iced::{Element, Fill, Length};
 
-/// Renders the OpenCode Go data source, monitor configuration and start/stop controls.
+/// Settings page: manage the OpenCode connection and quota-monitoring rules.
+///
+/// The page is a centered, fixed-width column so it reads as a focused
+/// settings dialog rather than a full-bleed form.
 pub fn view<'a>(
     state: &'a SettingsState,
     config: &AppConfig,
     credentials: &'a CredentialState,
 ) -> Element<'a, Message> {
-    let mut content = column![
+    let mut children: Vec<Element<'a, Message>> = vec![
         header(),
-        opencode_section(credentials),
-        monitor_section(state, config)
-    ]
-    .spacing(16);
+        account_card(credentials),
+        monitor_card(state, config),
+        settings::danger_zone(!credentials.mutating),
+    ];
 
+    // Page-level feedback appears right under the header so it stays in view.
     if let Some(error) = &state.error {
-        content = content.push(notice_box(error.user.as_str(), true));
+        children.insert(
+            1,
+            settings::notice(settings::NoticeKind::Error, &error.user),
+        );
+    } else if let Some(notice) = &state.notice {
+        children.insert(1, settings::notice(settings::NoticeKind::Success, notice));
     }
-    if let Some(notice) = &state.notice {
-        content = content.push(notice_box(notice.as_str(), false));
-    }
-    content.into()
-}
 
-fn header() -> Element<'static, Message> {
-    row![
-        text("设置").size(24).color(theme::palette::TEXT_PRIMARY),
-        text("数据源：OpenCode Go")
-            .size(13)
-            .color(theme::palette::TEXT_MUTED),
-        row![].width(Fill),
-        button("关闭")
-            .on_press(Message::CloseSettings)
-            .style(theme::soft_button)
-            .padding([8, 16]),
-    ]
-    .spacing(16)
-    .align_y(iced::Alignment::Center)
+    scrollable(
+        container(
+            Column::with_children(children)
+                .spacing(16)
+                .width(Fill)
+                .max_width(680.0),
+        )
+        .width(Fill)
+        .padding(28)
+        .align_x(Horizontal::Center),
+    )
+    .width(Fill)
+    .height(Fill)
     .into()
 }
 
-/// Editable OpenCode Go data source (workspace ID + auth cookie).
-fn opencode_section<'a>(state: &'a CredentialState) -> Element<'a, Message> {
-    let workspace = field(
-        "Workspace ID",
-        &state.opencode_workspace,
-        Message::OpenCodeWorkspaceChanged,
-    );
-    let cookie = column![
-        text("Auth Cookie")
-            .size(12)
-            .color(theme::palette::TEXT_MUTED),
-        text_input("", &state.opencode_cookie)
-            .on_input(|value| Message::OpenCodeCookieChanged(SensitiveInput(value)))
-            .secure(true)
-            .padding(10),
-        text("请将 Auth Cookie 视为密码保管；它仅保存在系统钥匙串，随请求发送到 opencode.ai。")
-            .size(11)
-            .color(theme::palette::WARNING),
-    ]
-    .spacing(5);
+/// Settings page header: title, subtitle and a ghost close button.
+fn header() -> Element<'static, Message> {
+    container(
+        column![
+            row![
+                text("设置").size(24).color(theme::palette::TEXT_PRIMARY),
+                row![].width(Fill),
+                icon_button::view(icons::CLOSE, "关闭", Message::CloseSettings, false),
+            ]
+            .spacing(16)
+            .align_y(iced::Alignment::Center),
+            text("管理 OpenCode 连接和额度监控规则")
+                .size(13)
+                .color(theme::palette::TEXT_MUTED),
+        ]
+        .spacing(4),
+    )
+    .width(Fill)
+    .padding(iced::Padding::default().bottom(8.0))
+    .into()
+}
 
-    let can_save = !state.mutating
-        && !state.opencode_workspace.trim().is_empty()
-        && !state.opencode_cookie.trim().is_empty();
+/// OpenCode Go connection card: workspace ID + auth cookie + security hint.
+fn account_card<'a>(credentials: &'a CredentialState) -> Element<'a, Message> {
+    let workspace = text_input("ws_xxxxxxxxxxxxx", &credentials.opencode_workspace)
+        .on_input(Message::OpenCodeWorkspaceChanged)
+        .padding([10, 12])
+        .style(theme::settings_input);
+    let cookie = text_input("粘贴 auth Cookie", &credentials.opencode_cookie)
+        .on_input(|value| Message::OpenCodeCookieChanged(SensitiveInput(value)))
+        .secure(true)
+        .padding([10, 12])
+        .style(theme::settings_input);
+
+    let security_hint = column![
+        text("🔒 凭证安全保存在系统钥匙串中")
+            .size(theme::typography::BODY)
+            .color(theme::palette::TEXT_SECONDARY),
+        text("仅在请求 OpenCode API 时使用。")
+            .size(theme::typography::CAPTION)
+            .color(theme::palette::TEXT_MUTED),
+    ]
+    .spacing(2);
+
+    let can_save = !credentials.mutating
+        && !credentials.opencode_workspace.trim().is_empty()
+        && !credentials.opencode_cookie.trim().is_empty();
     let save = if can_save {
-        button("保存 OpenCode 配置")
+        button("保存连接")
             .on_press(Message::SaveOpenCodeCredentials)
             .style(button::primary)
             .padding([10, 20])
     } else {
-        button("保存 OpenCode 配置").padding([10, 20])
+        button(if credentials.mutating {
+            "保存中…"
+        } else {
+            "保存连接"
+        })
+        .padding([10, 20])
     };
 
-    container(
-        column![
-            text("OpenCode Go 数据源")
-                .size(16)
-                .color(theme::palette::TEXT_PRIMARY),
-            workspace,
-            cookie,
-            save,
-        ]
-        .spacing(14),
-    )
-    .width(Fill)
-    .padding(18)
-    .style(move |_| theme::panel())
-    .into()
-}
-
-fn monitor_section<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a, Message> {
-    let fields = column![
-        field(
-            "轮询间隔（30–3600 秒）",
-            &state.interval,
-            Message::IntervalChanged
-        ),
-        field("5 小时阈值（0–100%）", &state.five_hour, |value| {
-            Message::ThresholdChanged(ThresholdField::FiveHour, value)
-        }),
-        field("近一周阈值（0–100%）", &state.weekly, |value| {
-            Message::ThresholdChanged(ThresholdField::Weekly, value)
-        }),
-        field("近一月阈值（0–100%）", &state.monthly, |value| {
-            Message::ThresholdChanged(ThresholdField::Monthly, value)
-        }),
+    let mut card_content = column![
+        settings::card_header(icons::GLOBE, "OpenCode Go", "OpenCode 账户连接", None),
+        settings::form_field("Workspace ID", workspace.into(), None),
+        settings::form_field("Auth Cookie", cookie.into(), None),
+        security_hint,
+        container(save).width(Fill).align_x(Horizontal::Right),
     ]
     .spacing(14);
 
-    let monitor_button = if state.saving {
+    if let Some(error) = &credentials.error {
+        card_content =
+            card_content.push(settings::notice(settings::NoticeKind::Error, &error.user));
+    }
+
+    settings::settings_card(card_content).into()
+}
+
+/// Monitor card: status badge, polling interval, thresholds and action button.
+fn monitor_card<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a, Message> {
+    let badge = if config.monitor_enabled {
+        status_badge::view("● 运行中", status_badge::Tone::Success)
+    } else {
+        status_badge::view("● 已停止", status_badge::Tone::Neutral)
+    };
+
+    let interval = settings::form_field(
+        "检查间隔",
+        row![
+            text("每")
+                .size(theme::typography::BODY)
+                .color(theme::palette::TEXT_SECONDARY),
+            text_input("", &state.interval)
+                .on_input(Message::IntervalChanged)
+                .padding([10, 12])
+                .style(theme::settings_input)
+                .width(Length::Fixed(84.0)),
+            text("秒")
+                .size(theme::typography::BODY)
+                .color(theme::palette::TEXT_SECONDARY),
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center)
+        .into(),
+        Some("允许范围 30–3600 秒"),
+    );
+
+    let thresholds = column![
+        text("通知阈值")
+            .size(theme::typography::BODY)
+            .color(theme::palette::TEXT_SECONDARY),
+        row![
+            settings::threshold_field("5 小时", &state.five_hour, |value| {
+                Message::ThresholdChanged(ThresholdField::FiveHour, value)
+            }),
+            settings::threshold_field("近一周", &state.weekly, |value| {
+                Message::ThresholdChanged(ThresholdField::Weekly, value)
+            }),
+            settings::threshold_field("近一月", &state.monthly, |value| {
+                Message::ThresholdChanged(ThresholdField::Monthly, value)
+            }),
+        ]
+        .spacing(12),
+    ]
+    .spacing(6);
+
+    let action = if state.saving {
         button("保存中…").padding([10, 20])
     } else if config.monitor_enabled {
         button("停止监控")
             .on_press(Message::StopMonitor)
-            .style(button::danger)
+            .style(theme::secondary_button)
             .padding([10, 20])
     } else {
-        button("保存并启动监控")
+        button("保存并启动")
             .on_press(Message::StartMonitor)
             .style(button::primary)
             .padding([10, 20])
     };
 
-    let status_label = if config.monitor_enabled {
-        "状态：监控运行中"
-    } else {
-        "状态：监控已停止"
-    };
-
-    column![
-        text(status_label)
-            .size(13)
-            .color(theme::palette::TEXT_MUTED),
-        container(fields)
-            .width(Fill)
-            .padding(18)
-            .style(move |_| theme::panel()),
-        monitor_button,
-        button("删除访问凭证")
-            .on_press(Message::ClearCredentials)
-            .style(button::danger)
-            .padding([10, 20]),
-    ]
-    .spacing(16)
+    settings::settings_card(
+        column![
+            settings::card_header(
+                icons::ACTIVITY,
+                "额度监控",
+                "配置自动检查频率和通知阈值",
+                Some(badge),
+            ),
+            interval,
+            thresholds,
+            container(action).width(Fill).align_x(Horizontal::Right),
+        ]
+        .spacing(14),
+    )
     .into()
-}
-
-fn field<'a>(
-    label: &'static str,
-    value: &'a str,
-    on_input: impl Fn(String) -> Message + 'a,
-) -> Element<'a, Message> {
-    column![
-        text(label).size(12).color(theme::palette::TEXT_MUTED),
-        text_input("", value).on_input(on_input).padding(10),
-    ]
-    .spacing(5)
-    .into()
-}
-
-/// A small notice row: danger-tinted for errors, neutral panel otherwise.
-fn notice_box(message: &str, is_error: bool) -> Element<'_, Message> {
-    container(text(message.to_owned()).color(theme::palette::TEXT_PRIMARY))
-        .width(Fill)
-        .padding([10, 14])
-        .style(move |_| {
-            if is_error {
-                theme::danger_box()
-            } else {
-                theme::panel()
-            }
-        })
-        .into()
 }
