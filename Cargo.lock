@@ -3562,6 +3562,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "opencode-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "hmac",
+ "keyring",
+ "pretty_assertions",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+ "urlencoding",
+ "wiremock",
+]
+
+[[package]]
+name = "opencode-desktop"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "directories",
+ "iced",
+ "opencode-core",
+ "raw-window-handle",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tray-icon",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5615,45 +5654,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
-name = "volc-core"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "hex",
- "hmac",
- "keyring",
- "pretty_assertions",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 2.0.19",
- "tokio",
- "url",
- "urlencoding",
- "wiremock",
-]
-
-[[package]]
-name = "volc-desktop"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "directories",
- "iced",
- "raw-window-handle",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "tray-icon",
- "volc-core",
- "windows 0.61.3",
-]
-
-[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6725,7 +6725,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.1.0"
 
 [[package]]
 name = "y4m"

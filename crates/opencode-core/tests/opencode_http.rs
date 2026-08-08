@@ -1,8 +1,8 @@
 use std::net::TcpListener;
 use std::time::Duration;
 use url::Url;
-use volc_core::opencode::{OpenCodeGoClient, OpenCodeGoProvider};
-use volc_core::{Provider, VolcError};
+use opencode_core::opencode::{OpenCodeGoClient, OpenCodeGoProvider};
+use opencode_core::{Provider, VolcError};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -55,7 +55,7 @@ async fn returns_login_html_and_parser_classifies_it() {
         .fetch_dashboard(WORKSPACE_ID, AUTH_COOKIE)
         .await
         .expect("200 login HTML is still a successful fetch");
-    let error = volc_core::opencode::parser::parse_open_code_go_quota(
+    let error = opencode_core::opencode::parser::parse_open_code_go_quota(
         &body,
         chrono::Utc::now().timestamp_millis(),
     )

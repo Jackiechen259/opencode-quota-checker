@@ -8,7 +8,7 @@ use crate::view::components::quota_card::QuotaHealth;
 use crate::view::format;
 use iced::widget::{button, column, container, mouse_area, progress_bar, row, text, Column};
 use iced::{Alignment, Element, Fill, Font, Length};
-use volc_core::{Provider, UsageReport, WindowReport};
+use opencode_core::{Provider, UsageReport, WindowReport};
 
 /// Renders the floating window from the shared usage state.
 pub fn view(state: &UsageState, mode: FloatMode) -> Element<'_, Message> {

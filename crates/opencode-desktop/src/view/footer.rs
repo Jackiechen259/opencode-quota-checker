@@ -3,7 +3,7 @@ use crate::theme;
 use crate::view::format;
 use iced::widget::{column, container, rule, text};
 use iced::{Element, Fill, Length};
-use volc_core::UsageReport;
+use opencode_core::UsageReport;
 
 pub fn view(report: Option<&UsageReport>, now_ms: i64, loading: bool) -> Element<'static, Message> {
     let label = report.map_or_else(

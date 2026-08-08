@@ -1,11 +1,11 @@
 [package]
-name = "volc-core"
+name = "opencode-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Platform-independent Volcano Ark usage client and domain model"
+description = "Platform-independent OpenCode Go quota client and domain model"
 
 [dependencies]
 chrono.workspace = true

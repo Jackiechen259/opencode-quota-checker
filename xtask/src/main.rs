@@ -94,7 +94,7 @@ fn release(root: &Path, bump: &str, push: bool) -> Result<(), String> {
             "add",
             "Cargo.toml",
             "Cargo.lock",
-            "crates/volc-desktop/packager.json",
+            "crates/opencode-desktop/packager.json",
         ],
     )?;
     run_command(
@@ -169,7 +169,7 @@ fn workspace_version(root: &Path) -> Result<Version, String> {
 }
 
 fn packager_version(root: &Path) -> Result<Version, String> {
-    let config = read(root.join("crates/volc-desktop/packager.json"))?;
+    let config = read(root.join("crates/opencode-desktop/packager.json"))?;
     let value = config
         .find(PACKAGER_VERSION_KEY)
         .map(|start| &config[start + PACKAGER_VERSION_KEY.len()..])
@@ -191,7 +191,7 @@ fn update_workspace_version(root: &Path, version: &Version) -> Result<(), String
 }
 
 fn update_packager_version(root: &Path, version: &Version) -> Result<(), String> {
-    let path = root.join("crates/volc-desktop/packager.json");
+    let path = root.join("crates/opencode-desktop/packager.json");
     let config = read(&path)?;
     let start = config
         .find(PACKAGER_VERSION_KEY)

@@ -1,5 +1,5 @@
 use std::time::Duration;
-use volc_core::{ArkClient, Credentials, VolcError};
+use opencode_core::{ArkClient, Credentials, VolcError};
 use wiremock::matchers::{header_exists, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 

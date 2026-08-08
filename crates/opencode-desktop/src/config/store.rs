@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use volc_core::{Thresholds, VolcError};
+use opencode_core::{Thresholds, VolcError};
 
 /// JSON configuration store in the platform-standard user config directory.
 #[derive(Debug, Clone)]
@@ -155,7 +155,7 @@ fn legacy_to_config(value: &Value) -> Result<AppConfig, VolcError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use volc_core::Provider;
+    use opencode_core::Provider;
 
     #[test]
     fn saves_and_loads_without_sensitive_fields() {

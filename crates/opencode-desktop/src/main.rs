@@ -15,7 +15,7 @@ fn main() -> iced::Result {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "volc_desktop=info,volc_core=info".into()),
+                .unwrap_or_else(|_| "opencode_desktop=info,opencode_core=info".into()),
         )
         .init();
 

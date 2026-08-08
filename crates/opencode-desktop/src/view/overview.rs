@@ -9,7 +9,7 @@ use crate::view::components::status_badge::{self, Tone};
 use crate::view::format;
 use iced::widget::{column, container, row, text, Column, Row};
 use iced::{Color, Element, Fill, FillPortion, Font, Length};
-use volc_core::UsageReport;
+use opencode_core::UsageReport;
 
 /// Badge text for the report provider, including the Ark plan type when known.
 fn provider_badge(report: &UsageReport) -> String {

@@ -23,7 +23,7 @@ pub fn main(app: &App) -> Element<'_, Message> {
         app.usage().loading,
         app.tray_error(),
         app.ui().header_focus,
-        app.config().provider == volc_core::Provider::VolcArkV,
+        app.config().provider == opencode_core::Provider::VolcArkV,
     );
 
     let dashboard_open = !app.ui().debug_open

@@ -1,17 +1,17 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/volc-core",
-  "crates/volc-desktop",
+  "crates/opencode-core",
+  "crates/opencode-desktop",
   "xtask",
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
 license = "Apache-2.0"
-repository = "https://github.com/Jackiechen259/volc_status"
+repository = "https://github.com/Jackiechen259/opencode-quota-checker"
 
 [workspace.dependencies]
 anyhow = "1"

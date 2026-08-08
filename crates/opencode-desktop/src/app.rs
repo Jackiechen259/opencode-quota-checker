@@ -10,7 +10,7 @@ use crate::state::{
 use crate::{subscription, theme, view, window as app_window};
 use iced::keyboard::{key::Named, Key};
 use iced::{clipboard, keyboard, window, Element, Subscription, Task, Theme};
-use volc_core::{
+use opencode_core::{
     evaluate_alerts, opencode::OpenCodeGoProvider, ArkClient, CredentialStore, Credentials,
     KeyringCredentialStore, OpenCodeAuthStore, Provider, Thresholds, UsageReport, VolcError,
 };

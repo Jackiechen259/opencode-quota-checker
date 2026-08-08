@@ -4,7 +4,7 @@ use crate::state::{CredentialState, SettingsState};
 use crate::theme;
 use iced::widget::{button, column, container, row, text, text_input};
 use iced::{Element, Fill};
-use volc_core::Provider;
+use opencode_core::Provider;
 
 /// Renders data-source selection, monitor configuration and start/stop controls.
 pub fn view<'a>(

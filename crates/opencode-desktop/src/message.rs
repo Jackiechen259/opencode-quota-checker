@@ -5,7 +5,7 @@ use crate::state::{ProviderAvailability, UiError};
 use iced::Size;
 use iced::{keyboard, window};
 use std::fmt;
-use volc_core::{Provider, UsageReport};
+use opencode_core::{Provider, UsageReport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderAction {

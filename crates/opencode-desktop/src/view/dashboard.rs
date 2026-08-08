@@ -8,7 +8,7 @@ use crate::view::overview;
 use iced::alignment::Horizontal;
 use iced::widget::{column, container, responsive, text, Column, Row};
 use iced::{Element, Fill, Length};
-use volc_core::{UsageReport, WindowReport};
+use opencode_core::{UsageReport, WindowReport};
 
 pub fn view(state: &UsageState) -> Element<'_, Message> {
     let report = state.report.clone();

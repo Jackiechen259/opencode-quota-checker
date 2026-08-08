@@ -1,5 +1,5 @@
 use crate::state::UiError;
-use volc_core::{AlertDecision, VolcError};
+use opencode_core::{AlertDecision, VolcError};
 
 /// Delivers threshold decisions using the platform notification service.
 pub fn deliver(decisions: Vec<AlertDecision>) -> Result<(), UiError> {

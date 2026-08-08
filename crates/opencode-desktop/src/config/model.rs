@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use volc_core::{Provider, Thresholds, VolcError};
+use opencode_core::{Provider, Thresholds, VolcError};
 
 /// Current configuration schema version.
 pub const SCHEMA_VERSION: u32 = 1;

@@ -6,7 +6,7 @@ use crate::view::components::status_badge::{self, Tone};
 use crate::view::format;
 use iced::widget::{canvas, column, container, row, rule, text};
 use iced::{Color, Element, Fill, Font, Length};
-use volc_core::WindowReport;
+use opencode_core::WindowReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QuotaHealth {

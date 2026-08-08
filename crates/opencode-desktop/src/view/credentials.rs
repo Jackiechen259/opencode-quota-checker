@@ -3,7 +3,7 @@ use crate::state::CredentialState;
 use crate::theme;
 use iced::widget::{button, column, container, text, text_input};
 use iced::{Element, Fill};
-use volc_core::Provider;
+use opencode_core::Provider;
 
 /// Renders the no-credential empty state for the active provider.
 pub fn view(state: &CredentialState, provider: Provider) -> Element<'_, Message> {

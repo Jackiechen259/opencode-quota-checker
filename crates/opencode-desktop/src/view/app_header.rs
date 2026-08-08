@@ -4,7 +4,7 @@ use crate::view::components::{icon_button, icons};
 use crate::view::format;
 use iced::widget::{column, container, responsive, row, space, text};
 use iced::{Element, Fill, Length};
-use volc_core::UsageReport;
+use opencode_core::UsageReport;
 
 pub fn view(
     report: Option<&UsageReport>,
