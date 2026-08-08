@@ -1,9 +1,7 @@
 //! Keyring-backed storage for the OpenCode Go `auth` cookie.
 //!
-//! The cookie is a session secret: it is never persisted to the plaintext
-//! configuration file and is never printed in logs or diagnostics. The keyring
-//! namespace is isolated from the VOLC Status application so both applications
-//! can be installed at the same time.
+//! The cookie is a session secret and is never persisted to the
+//! plaintext configuration file or written to logs.
 
 use crate::OpenCodeError;
 
@@ -63,7 +61,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn keyring_namespace_is_isolated_from_volc_status() {
+    fn keyring_namespace_uses_opencode_identifiers() {
         assert_eq!(SERVICE, "opencode-quota-checker");
         assert_eq!(ACCOUNT, "opencode-auth");
     }
