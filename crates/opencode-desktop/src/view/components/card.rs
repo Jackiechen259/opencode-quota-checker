@@ -1,3 +1,7 @@
+//! Card surfaces. `standard` is the shared page surface; the fixed-size
+//! variants are library helpers not all used by the current pages.
+#![allow(dead_code)]
+
 use crate::message::Message;
 use crate::theme;
 use iced::widget::{container, Container};
@@ -22,4 +26,12 @@ pub fn sized<'a>(
     standard(content)
         .width(Length::Fixed(width))
         .height(Length::Fixed(height))
+}
+
+/// Fixed width only; height shrinks to content.
+pub fn sized_width<'a>(
+    content: impl Into<Element<'a, Message>>,
+    width: f32,
+) -> Container<'a, Message> {
+    standard(content).width(Length::Fixed(width))
 }

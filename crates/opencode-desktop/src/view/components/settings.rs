@@ -8,12 +8,15 @@ use iced::widget::svg;
 use iced::widget::{button, column, container, row, text, text_input, Container};
 use iced::{Element, Fill, FillPortion, Length};
 
+/// Re-exported inline notice so settings call sites keep `settings::notice`.
+pub use super::notice::{view as notice, NoticeKind};
+
 /// Card surface shared by the settings cards: white, hairline border,
 /// light shadow and a consistent 20px padding.
 pub fn settings_card<'a>(content: impl Into<Element<'a, Message>>) -> Container<'a, Message> {
     container(content)
         .width(Fill)
-        .padding(20)
+        .padding(theme::spacing::CARD_PADDING)
         .style(move |_| theme::card())
 }
 
@@ -98,35 +101,6 @@ pub fn threshold_field<'a>(
     .into()
 }
 
-/// Inline success/error feedback strip, not a third card.
-pub fn notice(kind: NoticeKind, message: &str) -> Element<'static, Message> {
-    let mark_color = match kind {
-        NoticeKind::Success => theme::palette::SUCCESS,
-        NoticeKind::Error => theme::palette::DANGER,
-    };
-    let mark = match kind {
-        NoticeKind::Success => "✓",
-        NoticeKind::Error => "!",
-    };
-    container(
-        row![
-            text(mark).size(14).color(mark_color),
-            text(message.to_owned())
-                .size(theme::typography::BODY)
-                .color(theme::palette::TEXT_PRIMARY),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center),
-    )
-    .width(Fill)
-    .padding([10, 14])
-    .style(move |_| match kind {
-        NoticeKind::Success => theme::success_box(),
-        NoticeKind::Error => theme::danger_box(),
-    })
-    .into()
-}
-
 /// The isolated destructive-actions card.
 pub fn danger_zone(can_delete: bool) -> Element<'static, Message> {
     let delete = if can_delete {
@@ -157,16 +131,9 @@ pub fn danger_zone(can_delete: bool) -> Element<'static, Message> {
     .into()
 }
 
-/// Tone of an inline notice.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NoticeKind {
-    /// Positive confirmation.
-    Success,
-    /// Something went wrong.
-    Error,
-}
-
-fn icon_tile(icon: &'static [u8]) -> Element<'static, Message> {
+/// Blue icon brick used by card headers (shared with the main page's section
+/// headers so both pages render the identical tile).
+pub fn icon_tile(icon: &'static [u8]) -> Element<'static, Message> {
     container(
         svg(icons::handle(icon))
             .style(move |_theme, _status| svg::Style {

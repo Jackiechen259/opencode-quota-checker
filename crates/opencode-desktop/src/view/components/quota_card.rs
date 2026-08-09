@@ -1,11 +1,10 @@
 use crate::message::Message;
 use crate::theme;
-use crate::view::components::card;
-use crate::view::components::quota_ring::QuotaRing;
 use crate::view::components::status_badge::{self, Tone};
+use crate::view::components::{card, dot, quota_ring::QuotaRing};
 use crate::view::format;
 use iced::widget::{canvas, column, container, row, rule, text};
-use iced::{Color, Element, Fill, Font, Length};
+use iced::{Color, Element, Fill, FillPortion, Length};
 use opencode_core::WindowReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +33,7 @@ impl QuotaHealth {
         }
     }
 
-    fn badge_tone(self) -> Tone {
+    pub fn badge_tone(self) -> Tone {
         match self {
             Self::Healthy => Tone::Success,
             Self::Warning => Tone::Warning,
@@ -77,21 +76,7 @@ pub enum CardLayout {
     Stacked,
 }
 
-impl CardLayout {
-    pub fn height(self) -> f32 {
-        match self {
-            Self::Horizontal => 240.0,
-            Self::Stacked => 342.0,
-        }
-    }
-}
-
-pub fn view(
-    window: WindowReport,
-    now_ms: i64,
-    layout: CardLayout,
-    width: f32,
-) -> Element<'static, Message> {
+pub fn view(window: WindowReport, now_ms: i64, layout: CardLayout) -> Element<'static, Message> {
     let health = QuotaHealth::from_percent(window.percent);
     let reset_seconds = window.reset_time.saturating_sub(now_ms) / 1_000;
 
@@ -114,15 +99,10 @@ pub fn view(
     .width(Length::Shrink)
     .align_x(iced::alignment::Horizontal::Center);
 
-    let metric_size = if width < 520.0 {
-        16.0
-    } else {
-        theme::typography::METRIC_VALUE
-    };
     let metrics = row![
-        metric("已用", format::number(window.used), metric_size),
-        metric("总额", format::number(window.quota), metric_size),
-        metric("剩余", format::number(window.remaining), metric_size),
+        metric("已用", format::number(window.used)),
+        metric("总额", format::number(window.quota)),
+        metric("剩余", format::number(window.remaining)),
     ]
     .spacing(theme::spacing::MD)
     .width(Fill);
@@ -151,18 +131,17 @@ pub fn view(
     ]
     .align_y(iced::Alignment::Center);
 
-    card::sized(
+    card::standard(
         column![header, body, rule::horizontal(1).style(rule_style), reset]
             .spacing(theme::spacing::MD),
-        width,
-        layout.height(),
     )
+    .width(FillPortion(1))
     .into()
 }
 
 fn status(health: QuotaHealth) -> Element<'static, Message> {
     row![
-        text("●").size(10).color(health.status_color()),
+        dot::view(health.status_color(), 9.0),
         text(health.status_label())
             .size(theme::typography::LABEL)
             .color(theme::palette::TEXT_SECONDARY),
@@ -172,14 +151,14 @@ fn status(health: QuotaHealth) -> Element<'static, Message> {
     .into()
 }
 
-fn metric(label: &'static str, value: String, value_size: f32) -> Element<'static, Message> {
+fn metric(label: &'static str, value: String) -> Element<'static, Message> {
     column![
         text(label)
             .size(theme::typography::LABEL)
             .color(theme::palette::TEXT_MUTED),
         text(value)
-            .font(Font::MONOSPACE)
-            .size(value_size)
+            .font(theme::typography::ui_semibold())
+            .size(theme::typography::METRIC_VALUE)
             .color(theme::palette::TEXT_PRIMARY),
     ]
     .spacing(theme::spacing::XS)

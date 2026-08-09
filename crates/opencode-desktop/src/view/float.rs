@@ -2,12 +2,13 @@ use crate::config::FloatMode;
 use crate::message::Message;
 use crate::state::UsageState;
 use crate::theme;
+use crate::view::components::dot;
 use crate::view::components::icon_button;
 use crate::view::components::icons;
 use crate::view::components::quota_card::QuotaHealth;
 use crate::view::format;
 use iced::widget::{button, column, container, mouse_area, progress_bar, row, text, Column};
-use iced::{Alignment, Element, Fill, Font, Length};
+use iced::{Alignment, Element, Fill, Length};
 use opencode_core::{UsageReport, WindowReport};
 
 /// Renders the floating window from the shared usage state.
@@ -104,7 +105,7 @@ fn compact(state: &UsageState) -> Element<'_, Message> {
                         .size(12)
                         .color(theme::palette::TEXT_SECONDARY),
                     text(format!("{:.1}%", window.percent))
-                        .font(Font::MONOSPACE)
+                        .font(theme::typography::ui_semibold())
                         .size(23)
                         .color(health.color()),
                 ]
@@ -113,7 +114,7 @@ fn compact(state: &UsageState) -> Element<'_, Message> {
                 column![
                     text("剩余额度").size(10).color(theme::palette::TEXT_MUTED),
                     text(format::number(window.remaining))
-                        .font(Font::MONOSPACE)
+                        .font(theme::typography::ui_semibold())
                         .size(15)
                         .color(theme::palette::TEXT_PRIMARY),
                 ]
@@ -149,7 +150,7 @@ fn docked(state: &UsageState) -> Element<'_, Message> {
     let status: Element<'_, Message> = highest(state).map_or_else(
         || {
             row![
-                text("●").size(9).color(theme::palette::TEXT_MUTED),
+                dot::view(theme::palette::TEXT_MUTED, 9.0),
                 text(if state.loading {
                     "正在同步用量…"
                 } else {
@@ -168,12 +169,12 @@ fn docked(state: &UsageState) -> Element<'_, Message> {
             let progress_color = health.progress_color();
             column![
                 row![
-                    text("●").size(9).color(health.status_color()),
+                    dot::view(health.status_color(), 9.0),
                     text(&window.label)
                         .size(11)
                         .color(theme::palette::TEXT_SECONDARY),
                     text(format!("{:.1}%", window.percent))
-                        .font(Font::MONOSPACE)
+                        .font(theme::typography::ui_semibold())
                         .size(13)
                         .color(health.color()),
                     text(format!("余 {}", format::number(window.remaining)))
@@ -235,7 +236,7 @@ fn header(state: &UsageState, mode: FloatMode) -> Element<'_, Message> {
                     .size(13)
                     .color(theme::palette::TEXT_PRIMARY),
                 row![
-                    text("●").size(8).color(status_color),
+                    dot::view(status_color, 8.0),
                     text(status).size(9).color(theme::palette::TEXT_MUTED),
                 ]
                 .spacing(4)
@@ -288,7 +289,7 @@ fn window_card(window: &WindowReport, now_ms: i64) -> Element<'static, Message> 
             .push(
                 row![
                     row![
-                        text("●").size(9).color(accent),
+                        dot::view(accent, 9.0),
                         text(window.label.clone())
                             .size(12)
                             .color(theme::palette::TEXT_PRIMARY),
@@ -297,7 +298,7 @@ fn window_card(window: &WindowReport, now_ms: i64) -> Element<'static, Message> 
                     .align_y(Alignment::Center)
                     .width(Fill),
                     text(format!("{:.1}%", window.percent))
-                        .font(Font::MONOSPACE)
+                        .font(theme::typography::ui_semibold())
                         .size(14)
                         .color(accent),
                 ]
@@ -355,7 +356,7 @@ fn empty_state(state: &UsageState) -> Element<'_, Message> {
 
     container(
         column![
-            text("●").size(13).color(color),
+            dot::view(color, 13.0),
             text(title).size(13).color(theme::palette::TEXT_PRIMARY),
             text(detail).size(10).color(theme::palette::TEXT_MUTED),
         ]
@@ -379,9 +380,9 @@ fn highest(state: &UsageState) -> Option<&WindowReport> {
 
 fn health_label(health: QuotaHealth) -> &'static str {
     match health {
-        QuotaHealth::Healthy => "● 状态健康",
-        QuotaHealth::Warning => "● 接近阈值",
-        QuotaHealth::Critical => "● 已达危险阈值",
+        QuotaHealth::Healthy => "状态健康",
+        QuotaHealth::Warning => "接近阈值",
+        QuotaHealth::Critical => "已达危险阈值",
     }
 }
 
