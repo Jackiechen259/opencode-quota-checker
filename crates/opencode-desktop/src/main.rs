@@ -24,6 +24,8 @@ fn main() -> iced::Result {
         .title(App::title)
         .subscription(App::subscription)
         .theme(App::theme)
+        .font(include_bytes!("../assets/fonts/NotoSansSC[wght].ttf").as_slice())
+        .default_font(theme::typography::ui())
         .antialiasing(true)
         .run()
 }

@@ -7,4 +7,4 @@ pub const XL: f32 = 24.0;
 pub const PAGE_PADDING: f32 = XL;
 pub const SECTION_GAP: f32 = XL;
 pub const CARD_GAP: f32 = BASE;
-pub const CARD_PADDING: f32 = XL;
+pub const CARD_PADDING: f32 = LG;

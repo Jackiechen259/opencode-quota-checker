@@ -2,12 +2,11 @@
 
 use iced::mouse;
 use iced::widget::canvas::{self, Cache, Frame, Geometry, Path, Stroke};
-use iced::{Color, Font, Point, Rectangle, Renderer, Theme};
+use iced::{Color, Point, Rectangle, Renderer, Theme};
 use std::f32::consts::FRAC_PI_2;
 
 use crate::theme;
 use crate::view::components::quota_card::QuotaHealth;
-use crate::view::components::TEXT_FONT;
 
 /// Visual configuration for a [`QuotaRing`].
 #[derive(Debug, Clone)]
@@ -117,7 +116,7 @@ fn draw_ring(frame: &mut Frame, spec: &RingSpec) {
         position: center,
         color: spec.text_color,
         size: iced::Pixels(theme::typography::RING_VALUE),
-        font: Font::with_name(TEXT_FONT),
+        font: crate::theme::typography::ui_semibold(),
         align_x: iced::alignment::Horizontal::Center.into(),
         align_y: iced::alignment::Vertical::Center,
         ..canvas::Text::default()

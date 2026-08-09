@@ -2,7 +2,7 @@ use crate::config::AppConfig;
 use crate::message::{Message, SensitiveInput, ThresholdField};
 use crate::state::{CredentialState, SettingsState, UpdateState, UpdateStatus};
 use crate::theme;
-use crate::view::components::{icon_button, icons, settings, status_badge};
+use crate::view::components::{dot, icon_button, icons, settings, status_badge};
 use iced::alignment::Horizontal;
 use iced::widget::{
     button, column, container, progress_bar, row, scrollable, text, text_input, toggler, Column,
@@ -134,9 +134,23 @@ fn account_card<'a>(credentials: &'a CredentialState) -> Element<'a, Message> {
 /// Monitor card: status badge, polling interval, thresholds and action button.
 fn monitor_card<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a, Message> {
     let badge = if config.monitor_enabled {
-        status_badge::view("● 运行中", status_badge::Tone::Success)
+        row![
+            dot::view(theme::palette::SUCCESS, 8.0),
+            text("运行中")
+                .size(theme::typography::LABEL)
+                .color(theme::palette::SUCCESS),
+        ]
+        .spacing(theme::spacing::XS)
+        .align_y(iced::Alignment::Center)
     } else {
-        status_badge::view("● 已停止", status_badge::Tone::Neutral)
+        row![
+            dot::view(theme::palette::TEXT_MUTED, 8.0),
+            text("已停止")
+                .size(theme::typography::LABEL)
+                .color(theme::palette::TEXT_SECONDARY),
+        ]
+        .spacing(theme::spacing::XS)
+        .align_y(iced::Alignment::Center)
     };
 
     let interval = settings::form_field(
@@ -199,7 +213,7 @@ fn monitor_card<'a>(state: &'a SettingsState, config: &AppConfig) -> Element<'a,
                 icons::ACTIVITY,
                 "额度监控",
                 "配置自动检查频率和通知阈值",
-                Some(badge),
+                Some(badge.into()),
             ),
             interval,
             thresholds,
