@@ -28,10 +28,6 @@
     "../../assets/icons/icon.icns"
   ],
   "formats": ["default"],
-  "beforePackagingCommand": {
-    "script": "cargo build --release -p opencode-desktop",
-    "dir": "../.."
-  },
   "linux": {
     "generateDesktopEntry": true
   },

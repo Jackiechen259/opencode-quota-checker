@@ -34,6 +34,22 @@ succeeded, so a release can never point at a missing asset. Tags containing a
 prerelease suffix are marked as prereleases and are ignored by the stable
 update channel.
 
+## Packaging
+
+`packager.json` deliberately has no `beforePackagingCommand`: cargo-packager
+runs that hook through `cmd /S /C` on Windows with an extended-length working
+directory, which CMD.EXE rejects, so the build never finds `Cargo.toml`. The
+release workflow builds and stages the binary itself, and a local package run
+must do the same first:
+
+```bash
+cargo build -p opencode-desktop --release
+cargo packager --release --config crates/opencode-desktop/packager.json
+```
+
+`binariesDir` points at `target/release`, so a cross-compiled binary has to be
+copied there before packaging, exactly as the workflow's staging step does.
+
 ## Release assets
 
 Packages are renamed to stable names before upload, and the updater relies on
