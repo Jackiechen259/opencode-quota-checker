@@ -8,7 +8,8 @@ use raw_window_handle::RawWindowHandle;
 use windows::Win32::Foundation::{HWND, POINT, RECT};
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    CreateRoundRectRgn, DeleteObject, GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow,
+    SetWindowRgn, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
@@ -54,7 +55,10 @@ pub fn open(mode: FloatMode, position: Option<FloatPosition>) -> (window::Id, Ta
         size: mode.size(),
         min_size: Some(Size::new(200.0, 40.0)),
         decorations: false,
-        transparent: true,
+        // The DX12 swapchain only advertises `CompositeAlphaMode::Opaque`, so a
+        // transparent surface renders as opaque black on Windows. The window is
+        // painted edge to edge with the card color instead and DWM rounds it.
+        transparent: cfg!(not(target_os = "windows")),
         resizable: false,
         level: window::Level::AlwaysOnTop,
         position,
@@ -108,6 +112,60 @@ pub fn restore_position(
             native_set_position(hwnd, position)?;
         }
         native_geometry(window)
+    })
+}
+
+/// Corner radius of the floating card, in logical pixels.
+#[cfg(target_os = "windows")]
+const CORNER_RADIUS: f32 = 16.0;
+
+/// Clips the undecorated floating window to a rounded rectangle.
+///
+/// The window surface is opaque on Windows, so the renderer cannot draw the
+/// rounded shape itself. `DWMWA_WINDOW_CORNER_PREFERENCE` is no help either:
+/// DWM ignores it for a borderless popup like this one, even with non-client
+/// rendering forced on. A window region is what remains, and unlike a DWM
+/// frame it rounds the window without also giving it a drop shadow.
+///
+/// The region lives in window coordinates and does not follow a resize, so it
+/// has to be reapplied whenever the window changes size or DPI.
+#[cfg(target_os = "windows")]
+pub fn round_corners(id: window::Id) -> Task<()> {
+    window::run(id, |window| {
+        let Some(hwnd) = native_hwnd(window) else {
+            return;
+        };
+        let mut rect = RECT::default();
+        // SAFETY: `hwnd` is a valid live window handle and the pointer refers
+        // to an initialized stack value.
+        if unsafe { GetWindowRect(hwnd, &mut rect) }.is_err() {
+            return;
+        }
+        // SAFETY: `hwnd` is a valid live window handle.
+        let dpi = unsafe { GetDpiForWindow(hwnd) };
+        let scale = if dpi == 0 { 1.0 } else { dpi as f32 / 96.0 };
+        // The region bounds are exclusive, and `CreateRoundRectRgn` takes the
+        // size of the ellipse its corners are cut from rather than a radius.
+        let ellipse = (CORNER_RADIUS * scale * 2.0).round() as i32;
+        // SAFETY: plain value arguments; the returned handle is checked below.
+        let region = unsafe {
+            CreateRoundRectRgn(
+                0,
+                0,
+                rect.right - rect.left + 1,
+                rect.bottom - rect.top + 1,
+                ellipse,
+                ellipse,
+            )
+        };
+        if region.is_invalid() {
+            return;
+        }
+        // SAFETY: the window takes ownership of the region once the call
+        // succeeds, so it is only deleted here when it was rejected.
+        if unsafe { SetWindowRgn(hwnd, Some(region), true) } == 0 {
+            let _ = unsafe { DeleteObject(region.into()) };
+        }
     })
 }
 

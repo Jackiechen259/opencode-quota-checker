@@ -13,10 +13,22 @@ use opencode_core::{UsageReport, WindowReport};
 
 /// Renders the floating window from the shared usage state.
 pub fn view(state: &UsageState, mode: FloatMode) -> Element<'_, Message> {
-    let (margin, padding) = match mode {
-        FloatMode::Full => (7.0, [12.0, 13.0]),
-        FloatMode::Compact => (6.0, [9.0, 11.0]),
-        FloatMode::Docked => (4.0, [5.0, 8.0]),
+    let padding = match mode {
+        FloatMode::Full => [12.0, 13.0],
+        FloatMode::Compact => [9.0, 11.0],
+        FloatMode::Docked => [5.0, 8.0],
+    };
+    // The margin gives the card's drop shadow room over a transparent window.
+    // Windows paints the window opaque and rounds it with a window region
+    // instead, so the card fills it edge to edge and casts no shadow there.
+    let margin = if cfg!(target_os = "windows") {
+        0.0
+    } else {
+        match mode {
+            FloatMode::Full => 7.0,
+            FloatMode::Compact => 6.0,
+            FloatMode::Docked => 4.0,
+        }
     };
     let content = match mode {
         FloatMode::Full => full(state),

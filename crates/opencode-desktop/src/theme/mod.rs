@@ -1,5 +1,5 @@
 use iced::border;
-use iced::theme::Palette;
+use iced::theme::{Base, Palette};
 use iced::widget::{button, container, progress_bar, text_input};
 use iced::{Background, Border, Color, Shadow, Theme, Vector};
 
@@ -9,19 +9,50 @@ pub mod typography;
 
 pub use colors as palette;
 
+const APPLICATION_NAME: &str = "OpenCode Quota Checker";
+const FLOATING_NAME: &str = "OpenCode Quota Checker Float";
+
+/// Shared color palette behind both application themes.
+const PALETTE: Palette = Palette {
+    background: palette::BACKGROUND,
+    text: palette::TEXT_PRIMARY,
+    primary: palette::PRIMARY,
+    success: palette::SUCCESS,
+    warning: palette::WARNING,
+    danger: palette::DANGER,
+};
+
 /// Builds the modern, bright "OpenCode Quota Checker" theme with a white base tone.
 pub fn application() -> Theme {
-    Theme::custom(
-        "OpenCode Quota Checker",
-        Palette {
-            background: palette::BACKGROUND,
-            text: palette::TEXT_PRIMARY,
-            primary: palette::PRIMARY,
-            success: palette::SUCCESS,
-            warning: palette::WARNING,
-            danger: palette::DANGER,
-        },
-    )
+    Theme::custom(APPLICATION_NAME, PALETTE)
+}
+
+/// Theme of the floating window. It shares the application palette and only
+/// differs by name so [`window_style`] can tell both windows apart.
+pub fn floating() -> Theme {
+    Theme::custom(FLOATING_NAME, PALETTE)
+}
+
+/// Base style each window is cleared with before its widgets are drawn.
+///
+/// The floating window is borderless and shows nothing but its card, so
+/// clearing it to the page background would frame that card in a rectangle.
+/// Windows cannot composite a transparent surface (its DX12 swapchain only
+/// offers `CompositeAlphaMode::Opaque`, which turns a transparent clear color
+/// into black), so the card color is used there instead.
+pub fn window_style(theme: &Theme) -> iced::theme::Style {
+    if theme.name() == FLOATING_NAME {
+        iced::theme::Style {
+            background_color: if cfg!(target_os = "windows") {
+                palette::SURFACE
+            } else {
+                Color::TRANSPARENT
+            },
+            text_color: palette::TEXT_PRIMARY,
+        }
+    } else {
+        iced::theme::default(theme)
+    }
 }
 
 /// Radius scale (small label 8, button 10, card 16, large card 18).
@@ -83,19 +114,32 @@ pub fn page_background() -> container::Style {
 }
 
 /// Floating-window surface: white with a crisp border.
+///
+/// On Windows the window itself is the card and a window region rounds it, so
+/// the radius drawn here would only carve a wedge out of each corner for the
+/// shadow to smear into. Both are left to the platform there.
 pub fn float_card() -> container::Style {
+    let native_frame = cfg!(target_os = "windows");
     container::Style {
         background: Some(Background::Color(palette::SURFACE)),
         text_color: Some(palette::TEXT_PRIMARY),
         border: Border {
             color: Color::TRANSPARENT,
             width: 0.0,
-            radius: 16.0.into(),
+            radius: if native_frame {
+                0.0.into()
+            } else {
+                16.0.into()
+            },
         },
-        shadow: Shadow {
-            color: Color::from_rgba8(15, 23, 42, 0.18),
-            offset: Vector::new(0.0, 3.0),
-            blur_radius: 12.0,
+        shadow: if native_frame {
+            Shadow::default()
+        } else {
+            Shadow {
+                color: Color::from_rgba8(15, 23, 42, 0.18),
+                offset: Vector::new(0.0, 3.0),
+                blur_radius: 12.0,
+            }
         },
         snap: false,
     }

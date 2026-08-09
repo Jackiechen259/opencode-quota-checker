@@ -85,8 +85,11 @@ impl App {
                 self.windows.set_floating(id);
                 #[cfg(target_os = "windows")]
                 {
-                    app_window::float_window::restore_position(id, self.config.float_position)
-                        .map(move |geometry| Message::FloatWindowGeometry(id, geometry))
+                    Task::batch([
+                        app_window::float_window::round_corners(id).discard(),
+                        app_window::float_window::restore_position(id, self.config.float_position)
+                            .map(move |geometry| Message::FloatWindowGeometry(id, geometry)),
+                    ])
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
@@ -104,6 +107,14 @@ impl App {
                 self.close_float()
             }
             Message::CloseRequested(_) => Task::none(),
+            // The window region does not follow a resize, so it is rebuilt for
+            // every new size: float-mode switches and DPI changes both land here.
+            #[cfg(target_os = "windows")]
+            Message::WindowEvent(id, window::Event::Resized(_))
+                if self.windows.floating() == Some(id) =>
+            {
+                app_window::float_window::round_corners(id).discard()
+            }
             #[cfg(target_os = "windows")]
             Message::WindowEvent(id, window::Event::Moved(_))
                 if self.windows.floating() == Some(id) =>
@@ -624,8 +635,16 @@ impl App {
         subscription::subscription(self)
     }
 
-    pub fn theme(&self, _id: window::Id) -> Option<Theme> {
-        Some(theme::application())
+    pub fn theme(&self, id: window::Id) -> Option<Theme> {
+        if self.windows.floating() == Some(id) {
+            Some(theme::floating())
+        } else {
+            Some(theme::application())
+        }
+    }
+
+    pub fn window_style(&self, theme: &Theme) -> iced::theme::Style {
+        theme::window_style(theme)
     }
 
     pub fn tray_available(&self) -> bool {
