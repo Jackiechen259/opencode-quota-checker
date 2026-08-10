@@ -69,16 +69,7 @@ fn brand(tray_online: bool) -> Element<'static, Message> {
     } else {
         "托盘不可用"
     };
-    let logo = container(
-        text("OC")
-            .size(theme::typography::CARD_TITLE)
-            .color(theme::palette::SURFACE),
-    )
-    .width(Length::Fixed(40.0))
-    .height(Length::Fixed(40.0))
-    .align_x(iced::alignment::Horizontal::Center)
-    .align_y(iced::alignment::Vertical::Center)
-    .style(move |_| theme::logo());
+    let logo = crate::view::components::app_icon::view(48.0);
 
     let meta = row![
         text("OpenCode Go · 配额监控")

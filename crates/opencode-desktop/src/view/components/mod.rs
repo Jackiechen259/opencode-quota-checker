@@ -1,3 +1,4 @@
+pub mod app_icon;
 pub mod card;
 pub mod confirm_dialog;
 pub mod divider;

@@ -113,6 +113,28 @@ pub fn page_background() -> container::Style {
     }
 }
 
+/// Title bar surface: white with a bottom hairline and no card shadow.
+///
+/// Deliberately calmer than `header_surface` — the title bar is chrome, not
+/// content.
+pub fn title_bar_surface() -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::SURFACE)),
+        text_color: Some(palette::TEXT_PRIMARY),
+        border: Border {
+            color: palette::BORDER,
+            width: 0.0,
+            radius: 0.0.into(),
+        },
+        shadow: Shadow {
+            color: Color::from_rgba8(15, 23, 42, 0.05),
+            offset: Vector::new(0.0, 1.0),
+            blur_radius: 1.0,
+        },
+        snap: false,
+    }
+}
+
 /// Floating-window surface: white with a crisp border.
 ///
 /// On Windows the window itself is the card and a window region rounds it, so
@@ -345,23 +367,66 @@ pub fn icon_button_with_focus(
     style
 }
 
+/// Window-control button (minimize / maximize-restore): transparent until
+/// hovered, then a subtle neutral gray. Square hit area, no pill rounding —
+/// the app header's rounded icon buttons are deliberately not reused here.
+pub fn title_bar_button(_theme: &Theme, status: button::Status) -> button::Style {
+    let base = button::Style {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        text_color: palette::TEXT_SECONDARY,
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 0.0.into(),
+        },
+        shadow: Shadow::default(),
+        ..button::Style::default()
+    };
+    match status {
+        button::Status::Hovered => button::Style {
+            background: Some(Background::Color(palette::TITLE_BAR_HOVER)),
+            ..base
+        },
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(palette::TITLE_BAR_PRESSED)),
+            ..base
+        },
+        _ => base,
+    }
+}
+
+/// Close button: transparent until hovered, then Windows-style red with a
+/// white glyph (the glyph is a plain `text` inheriting `text_color`).
+pub fn title_bar_close_button(_theme: &Theme, status: button::Status) -> button::Style {
+    let base = button::Style {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        text_color: palette::TEXT_SECONDARY,
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 0.0.into(),
+        },
+        shadow: Shadow::default(),
+        ..button::Style::default()
+    };
+    match status {
+        button::Status::Hovered => button::Style {
+            background: Some(Background::Color(palette::TITLE_BAR_CLOSE_HOVER)),
+            text_color: palette::SURFACE,
+            ..base
+        },
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(palette::TITLE_BAR_CLOSE_PRESSED)),
+            text_color: palette::SURFACE,
+            ..base
+        },
+        _ => base,
+    }
+}
+
 /// Soft secondary button (e.g. text nav actions).
 pub fn soft_button(_theme: &Theme, status: button::Status) -> button::Style {
     icon_button(_theme, status)
-}
-
-/// The blue rounded logo block content color.
-pub fn logo() -> container::Style {
-    container::Style {
-        background: Some(Background::Color(palette::PRIMARY)),
-        text_color: Some(palette::SURFACE),
-        border: Border {
-            color: palette::PRIMARY,
-            width: 0.0,
-            radius: radius::LABEL.into(),
-        },
-        ..container::Style::default()
-    }
 }
 
 /// Blue icon tile used by settings card headers.

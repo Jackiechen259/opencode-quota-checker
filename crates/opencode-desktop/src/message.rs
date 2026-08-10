@@ -71,6 +71,16 @@ pub enum Message {
     CloseFloat,
     FloatModeChanged(FloatMode),
     DragFloat,
+    /// Begin moving the main window with the title bar.
+    DragMainWindow,
+    /// Minimize the main window.
+    MinimizeMainWindow,
+    /// Toggle the main window between maximized and restored.
+    ToggleMaximizeMainWindow,
+    /// Close the main window through the normal close-to-tray / exit path.
+    CloseMainWindow,
+    /// True window-maximized state reported by the platform.
+    MainWindowMaximized(bool),
     #[cfg(target_os = "windows")]
     FloatWindowGeometry(
         window::Id,

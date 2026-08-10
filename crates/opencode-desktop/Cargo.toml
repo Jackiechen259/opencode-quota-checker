@@ -31,5 +31,8 @@ opencode-core = { path = "../opencode-core" }
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
 
+[target.'cfg(windows)'.build-dependencies]
+winresource = { version = "0.1.31", default-features = false }
+
 [dev-dependencies]
 tempfile = "3"

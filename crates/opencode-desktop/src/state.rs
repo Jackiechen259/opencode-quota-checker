@@ -8,6 +8,11 @@ use std::collections::HashMap;
 pub struct WindowState {
     main: Option<window::Id>,
     floating: Option<window::Id>,
+    /// Last platform-reported maximized state of the main window.
+    ///
+    /// `None` until the platform answers the first query; the title bar shows
+    /// the maximize glyph until then.
+    main_maximized: Option<bool>,
 }
 
 impl WindowState {
@@ -23,7 +28,18 @@ impl WindowState {
 
     /// Removes and returns the main-window ID.
     pub fn take_main(&mut self) -> Option<window::Id> {
+        self.main_maximized = None;
         self.main.take()
+    }
+
+    /// Returns the last known maximized state of the main window.
+    pub fn main_maximized(&self) -> Option<bool> {
+        self.main_maximized
+    }
+
+    /// Records the platform-reported maximized state of the main window.
+    pub fn set_main_maximized(&mut self, maximized: bool) {
+        self.main_maximized = Some(maximized);
     }
 
     /// Returns the current floating-window ID.

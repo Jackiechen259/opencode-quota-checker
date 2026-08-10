@@ -28,3 +28,12 @@ pub const DANGER_LIGHT: Color = Color::from_rgba8(239, 68, 68, 0.08);
 pub const DANGER_BORDER: Color = Color::from_rgba8(239, 68, 68, 0.22);
 
 pub const TRACK: Color = Color::from_rgb8(226, 232, 240);
+
+/// Title-bar window-control button hover background (neutral gray).
+pub const TITLE_BAR_HOVER: Color = Color::from_rgb8(228, 232, 238);
+/// Title-bar window-control button pressed background (darker gray).
+pub const TITLE_BAR_PRESSED: Color = Color::from_rgb8(210, 216, 226);
+/// Title-bar close button hover background (Windows-style red).
+pub const TITLE_BAR_CLOSE_HOVER: Color = Color::from_rgb8(196, 43, 28);
+/// Title-bar close button pressed background (deeper red).
+pub const TITLE_BAR_CLOSE_PRESSED: Color = Color::from_rgb8(158, 31, 19);

@@ -1,3 +1,11 @@
+// Release builds on Windows are GUI applications: launching them must not
+// open a console window. Debug builds keep the console so development logs
+// from `tracing_subscriber` remain visible under `cargo run`.
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 mod app;
 mod config;
 mod message;

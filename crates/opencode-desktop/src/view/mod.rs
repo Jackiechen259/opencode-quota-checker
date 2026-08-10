@@ -8,6 +8,7 @@ pub mod footer;
 pub mod format;
 pub mod overview;
 pub mod settings;
+pub mod title_bar;
 
 use crate::message::Message;
 use crate::state::UpdateStatus;
@@ -57,7 +58,8 @@ pub fn main(app: &App) -> Element<'_, Message> {
     };
 
     let content: Element<'_, Message> = if dashboard_open {
-        let mut items: Vec<Element<'_, Message>> = vec![header];
+        let mut items: Vec<Element<'_, Message>> = vec![title_bar::view(app.main_maximized())];
+        items.push(header);
         if let Some(banner) = update_banner(app) {
             items.push(banner);
         }
@@ -69,7 +71,9 @@ pub fn main(app: &App) -> Element<'_, Message> {
         ));
         column(items).spacing(0).into()
     } else {
-        column![header, body].spacing(0).into()
+        column![title_bar::view(app.main_maximized()), header, body,]
+            .spacing(0)
+            .into()
     };
 
     let mut layers = stack![container(content)

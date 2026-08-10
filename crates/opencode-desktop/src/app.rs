@@ -79,7 +79,21 @@ impl App {
         match message {
             Message::MainWindowOpened(id) => {
                 self.windows.set_main(id);
-                Task::none()
+                // Borderless windows lose their native resize frame, so the
+                // resize hit-test is reinstalled for every fresh window. The
+                // initial maximized state is also queried right away so the
+                // title bar shows the correct glyph from the first frame.
+                #[cfg(target_os = "windows")]
+                {
+                    Task::batch([
+                        app_window::main_window::install_native_resize(id).discard(),
+                        window::is_maximized(id).map(Message::MainWindowMaximized),
+                    ])
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    window::is_maximized(id).map(Message::MainWindowMaximized)
+                }
             }
             Message::FloatWindowOpened(id) => {
                 self.windows.set_floating(id);
@@ -153,6 +167,21 @@ impl App {
                     )
                 }
             }
+            // The main window has no native title bar, so its maximized state
+            // can change without a button press: Windows Snap, Win+Arrow
+            // shortcuts and external window management all land here as
+            // moved/resized events. Re-query the platform so the maximize /
+            // restore glyph always reflects the real state.
+            Message::WindowEvent(id, window::Event::Moved(_))
+                if self.windows.main() == Some(id) =>
+            {
+                window::is_maximized(id).map(Message::MainWindowMaximized)
+            }
+            Message::WindowEvent(id, window::Event::Resized(_))
+                if self.windows.main() == Some(id) =>
+            {
+                window::is_maximized(id).map(Message::MainWindowMaximized)
+            }
             Message::WindowEvent(_, _) => Task::none(),
             Message::HeaderPressed(action) => {
                 self.ui.header_focus = Some(action);
@@ -202,6 +231,36 @@ impl App {
                 .windows
                 .floating()
                 .map_or_else(Task::none, window::drag),
+            Message::DragMainWindow => self.windows.main().map_or_else(Task::none, window::drag),
+            Message::MinimizeMainWindow => self
+                .windows
+                .main()
+                .map_or_else(Task::none, |id| window::minimize(id, true)),
+            Message::ToggleMaximizeMainWindow => {
+                let Some(id) = self.windows.main() else {
+                    return Task::none();
+                };
+                // The toggle is an effect task; the follow-up query runs
+                // after it and reports the true resulting state.
+                Task::batch([
+                    window::toggle_maximize(id),
+                    window::is_maximized(id).map(Message::MainWindowMaximized),
+                ])
+            }
+            Message::CloseMainWindow => {
+                let Some(id) = self.windows.main() else {
+                    return Task::none();
+                };
+                // Route through the existing close request path so tray /
+                // close-behavior semantics stay identical to the native ×.
+                self.update(Message::CloseRequested(id))
+            }
+            Message::MainWindowMaximized(maximized) => {
+                if self.windows.main_maximized() != Some(maximized) {
+                    self.windows.set_main_maximized(maximized);
+                }
+                Task::none()
+            }
             #[cfg(target_os = "windows")]
             Message::FloatWindowGeometry(id, Some(geometry))
                 if self.windows.floating() == Some(id) =>
@@ -669,6 +728,11 @@ impl App {
 
     pub fn config(&self) -> &AppConfig {
         &self.config
+    }
+
+    /// Last platform-reported maximized state of the main window.
+    pub fn main_maximized(&self) -> Option<bool> {
+        self.windows.main_maximized()
     }
 
     pub fn float_mode(&self) -> FloatMode {
