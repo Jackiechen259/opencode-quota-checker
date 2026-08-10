@@ -86,6 +86,69 @@ The manifest can be generated and inspected locally:
 cargo xtask update-manifest v0.2.0 release-assets
 ```
 
+## Windows installer
+
+Windows users download a single per-user NSIS setup executable:
+
+```text
+opencode-quota-checker-windows-x86_64.exe
+```
+
+Installing it (no administrator rights required) places the application under
+`%LOCALAPPDATA%\OpenCode Quota Checker`, registers it in **Settings → Installed
+apps**, and adds an **OpenCode Quota Checker** Start Menu entry. Running a newer
+installer over an older release upgrades it in place. User configuration
+(`%APPDATA%\opencode-quota-checker`), cached update downloads
+(`%LOCALAPPDATA%\...\opencode-quota-checker\update`), and the keyring credential
+survive both upgrades and uninstall; uninstalling removes only the installed
+program and shortcuts.
+
+The same executable is the package the built-in auto-updater downloads for
+Windows, so every release must keep the exact filename above and keep the
+`update.json` `windows-x86_64` → `nsis` entry in sync. `cargo xtask
+update-manifest` and `verify-version` fail the build on any drift.
+
+Installers are unsigned until code signing is configured (below); Windows
+SmartScreen may warn on first run.
+
+## Code signing
+
+Packages are currently unsigned. Releases work without a certificate, but
+Windows SmartScreen shows a warning for unsigned downloads and macOS Gatekeeper
+requires extra steps for unsigned packages.
+
+Add an optional signing stage that only runs when signing credentials are
+configured, so unsigned builds keep working. Never commit a private key, `.pfx`
+file, or password.
+
+For Windows Authenticode signing, store the base64-encoded certificate and its
+password as repository secrets:
+
+```text
+WINDOWS_CERTIFICATE
+WINDOWS_CERTIFICATE_PASSWORD
+```
+
+A suggested CI step between packaging and upload:
+
+```yaml
+- name: Sign Windows installer
+  if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE != ''
+  shell: bash
+  env:
+    WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+    WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+  run: |
+    # Decode WINDOWS_CERTIFICATE to a .pfx, then:
+    #   signtool sign /f <certificate>.pfx /p "$WINDOWS_CERTIFICATE_PASSWORD" \
+    #     /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 <package>.exe
+    # Verify with: signtool verify /pa /v <package>.exe
+```
+
+Until signing is configured, the workflow publishes unsigned packages and the
+documentation must say so. Do not add self-signed or fake signatures to
+production releases.
+
 ## Release verification
 
 After publishing, verify the release page contains all four platform packages,

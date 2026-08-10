@@ -28,10 +28,6 @@
     "../../assets/icons/icon.icns"
   ],
   "formats": ["default"],
-  "beforePackagingCommand": {
-    "script": "cargo build --release -p opencode-desktop",
-    "dir": "../.."
-  },
   "linux": {
     "generateDesktopEntry": true
   },
@@ -45,6 +41,12 @@
   },
   "nsis": {
     "installMode": "currentUser",
-    "languages": ["English", "SimpChinese"]
+    "languages": ["English", "SimpChinese"],
+    "template": "nsis/installer.nsi",
+    "installerIcon": "../../assets/icons/icon.ico",
+    "appdataPaths": [
+      "$$APPDATA\\opencode-quota-checker",
+      "$$LOCALAPPDATA\\opencode-quota-checker"
+    ]
   }
 }

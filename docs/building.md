@@ -44,6 +44,30 @@ cargo packager --release --config crates/opencode-desktop/packager.json
 
 Packages are written to `target/packages`.
 
+### Windows
+
+Build the release binary and package it as a per-user NSIS installer:
+
+```powershell
+cargo build -p opencode-desktop --release --locked
+cargo packager --release --config crates/opencode-desktop/packager.json --formats nsis
+```
+
+The staged binary must live at `target\release\opencode-quota-checker.exe`
+(`packager.json` points `binariesDir` there; CI copies it from the
+`--target x86_64-pc-windows-msvc` build directory). The output installer is:
+
+```text
+target\packages\opencode-quota-checker-windows-x86_64.exe
+```
+
+`cargo-packager` downloads its own NSIS toolchain on first run, so no separate
+NSIS install is needed. The installer requires no administrator rights, shows
+up under **Settings → Installed apps**, and creates a Start Menu entry.
+Installers are unsigned; SmartScreen may warn. See [release.md](release.md) for
+the optional code-signing stage and the upgrade/uninstall data-preservation
+behavior.
+
 Compilation is not a substitute for installed-package smoke tests. Verify
 launch, window recreation from the tray, process exit, notifications, keyring,
 and all floating-window modes on each supported platform.
