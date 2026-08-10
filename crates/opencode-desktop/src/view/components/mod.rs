@@ -3,6 +3,7 @@ pub mod card;
 pub mod confirm_dialog;
 pub mod divider;
 pub mod dot;
+pub mod header_menu;
 pub mod icon_button;
 pub mod icons;
 pub mod loading_spinner;

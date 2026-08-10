@@ -185,15 +185,31 @@ impl App {
             Message::WindowEvent(_, _) => Task::none(),
             Message::HeaderPressed(action) => {
                 self.ui.header_focus = Some(action);
+                // Selecting a menu item dismisses the menu; `More` itself is a
+                // bar action and keeps its toggle semantics.
+                if HeaderAction::MENU.contains(&action) {
+                    self.ui.header_menu_open = false;
+                }
                 self.update(action.message())
+            }
+            Message::ToggleHeaderMenu => {
+                self.ui.header_menu_open = !self.ui.header_menu_open;
+                Task::none()
+            }
+            Message::CloseHeaderMenu => {
+                self.ui.header_menu_open = false;
+                Task::none()
             }
             Message::Keyboard(keyboard::Event::KeyPressed {
                 key: Key::Named(Named::Tab),
                 modifiers,
                 ..
             }) if self.dashboard_open() => {
-                self.ui.header_focus =
-                    Some(next_header_focus(self.ui.header_focus, modifiers.shift()));
+                self.ui.header_focus = next_header_focus(
+                    self.ui.header_focus,
+                    modifiers.shift(),
+                    HeaderAction::focus_order(self.ui.header_menu_open),
+                );
                 Task::none()
             }
             Message::Keyboard(keyboard::Event::KeyPressed {
@@ -206,8 +222,12 @@ impl App {
                 key: Key::Named(Named::Escape),
                 ..
             }) => {
-                self.ui.debug_open = false;
-                self.settings.open = false;
+                if self.ui.header_menu_open {
+                    self.ui.header_menu_open = false;
+                } else {
+                    self.ui.debug_open = false;
+                    self.settings.open = false;
+                }
                 Task::none()
             }
             Message::Keyboard(_) => Task::none(),
@@ -947,17 +967,26 @@ impl App {
     }
 }
 
-fn next_header_focus(current: Option<HeaderAction>, reverse: bool) -> HeaderAction {
-    let actions = HeaderAction::ALL.to_vec();
+/// Advances keyboard focus within a header action sequence. `current` need
+/// not belong to `order` (e.g. the focus can rest on `More` while the menu is
+/// open); an empty order yields no focus at all.
+fn next_header_focus(
+    current: Option<HeaderAction>,
+    reverse: bool,
+    order: &[HeaderAction],
+) -> Option<HeaderAction> {
+    if order.is_empty() {
+        return None;
+    }
     let current_index =
-        current.and_then(|action| actions.iter().position(|candidate| *candidate == action));
+        current.and_then(|action| order.iter().position(|candidate| *candidate == action));
     let next_index = match (current_index, reverse) {
-        (Some(0), true) | (None, true) => actions.len() - 1,
+        (Some(0), true) | (None, true) => order.len() - 1,
         (Some(index), true) => index - 1,
-        (Some(index), false) => (index + 1) % actions.len(),
+        (Some(index), false) => (index + 1) % order.len(),
         (None, false) => 0,
     };
-    actions[next_index]
+    Some(order[next_index])
 }
 
 fn parse_u64(value: &str, label: &str) -> Result<u64, UiError> {
@@ -1039,5 +1068,74 @@ mod tests {
     fn settings_validation_rejects_text() {
         assert!(parse_u64("later", "interval").is_err());
         assert!(parse_f64("high", "threshold").is_err());
+    }
+
+    #[test]
+    fn header_focus_cycles_bar_actions() {
+        let order = HeaderAction::BAR;
+        assert_eq!(
+            next_header_focus(None, false, order),
+            Some(HeaderAction::Refresh)
+        );
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::Refresh), false, order),
+            Some(HeaderAction::Settings)
+        );
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::Settings), false, order),
+            Some(HeaderAction::Float)
+        );
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::Float), false, order),
+            Some(HeaderAction::More)
+        );
+        // Forward wraps around.
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::More), false, order),
+            Some(HeaderAction::Refresh)
+        );
+        // Reverse wraps the other way.
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::More), true, order),
+            Some(HeaderAction::Float)
+        );
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::Refresh), true, order),
+            Some(HeaderAction::More)
+        );
+        // An empty focus sequence yields no focus.
+        assert_eq!(next_header_focus(None, false, &[]), None);
+    }
+
+    #[test]
+    fn header_focus_enters_menu_when_open() {
+        let order = HeaderAction::MENU;
+        // More is not part of the menu sequence: forward lands on the first
+        // item, reverse on the last.
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::More), false, order),
+            Some(HeaderAction::Details)
+        );
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::More), true, order),
+            Some(HeaderAction::Exit)
+        );
+        // Cycling within the menu.
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::Details), false, order),
+            Some(HeaderAction::Hide)
+        );
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::Hide), false, order),
+            Some(HeaderAction::Exit)
+        );
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::Exit), false, order),
+            Some(HeaderAction::Details)
+        );
+        assert_eq!(
+            next_header_focus(Some(HeaderAction::Details), true, order),
+            Some(HeaderAction::Exit)
+        );
     }
 }

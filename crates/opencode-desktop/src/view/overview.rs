@@ -17,26 +17,12 @@ fn provider_badge(report: &UsageReport) -> String {
     }
 }
 
-pub fn view(report: UsageReport, now_ms: i64) -> Element<'static, Message> {
-    let trailing = row![
-        status_badge::view(provider_badge(&report), Tone::Primary),
-        text("·")
-            .size(theme::typography::LABEL)
-            .color(theme::palette::TEXT_MUTED),
-        text(format!(
-            "{}更新",
-            format::relative(report.fetched_at, now_ms)
-        ))
-        .size(theme::typography::LABEL)
-        .color(theme::palette::TEXT_MUTED),
-    ]
-    .spacing(6)
-    .align_y(iced::Alignment::Center);
+pub fn view(report: UsageReport) -> Element<'static, Message> {
     let header = section_header::with_icon(
         icons::ACTIVITY,
         "用量概览",
         "当前额度窗口的整体负载",
-        trailing.into(),
+        status_badge::view(provider_badge(&report), Tone::Primary),
     );
 
     let highest = report.windows.iter().max_by(|a, b| {

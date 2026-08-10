@@ -22,7 +22,7 @@ pub fn view(state: &UsageState) -> Element<'_, Message> {
         let mut content = column![].spacing(theme::spacing::SECTION_GAP);
 
         if let Some(report) = report.clone() {
-            content = content.push(overview::view(report.clone(), now_ms));
+            content = content.push(overview::view(report.clone()));
             content = content.push(details(report, now_ms, size.width));
         } else if loading {
             content = content.push(skeleton(now_ms));

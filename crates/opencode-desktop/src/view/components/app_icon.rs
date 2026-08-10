@@ -1,7 +1,7 @@
 //! Single source of truth for the application icon rendered inside the UI.
 //!
-//! The title bar, the app header and any future about page all load the icon
-//! through this component, so the brand asset is embedded exactly once.
+//! The title bar loads the icon through this component, so the brand asset
+//! is embedded exactly once.
 
 use crate::message::Message;
 use iced::widget::image::{self, Handle, Image};

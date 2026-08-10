@@ -367,6 +367,106 @@ pub fn icon_button_with_focus(
     style
 }
 
+/// Shadow for the header overflow menu: heavier than `CARD_SHADOW` so the
+/// floating panel detaches from the page.
+pub const MENU_SHADOW: Shadow = Shadow {
+    color: Color::from_rgba8(15, 23, 42, 0.12),
+    offset: Vector::new(0.0, 8.0),
+    blur_radius: 24.0,
+};
+
+/// Header overflow menu surface: white card that floats above the page.
+pub fn menu_surface() -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::SURFACE)),
+        text_color: Some(palette::TEXT_PRIMARY),
+        border: Border {
+            color: palette::BORDER,
+            width: 1.0,
+            radius: radius::CARD.into(),
+        },
+        shadow: MENU_SHADOW,
+        snap: false,
+    }
+}
+
+/// Base style shared by overflow-menu items.
+fn menu_item_base() -> button::Style {
+    button::Style {
+        background: Some(Background::Color(Color::TRANSPARENT)),
+        text_color: palette::TEXT_SECONDARY,
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 1.0,
+            radius: radius::BUTTON.into(),
+        },
+        shadow: Shadow::default(),
+        snap: false,
+    }
+}
+
+/// Overflow-menu item: transparent until hovered, then a soft primary tint.
+pub fn menu_item(_theme: &Theme, status: button::Status, focused: bool) -> button::Style {
+    let mut style = menu_item_base();
+    style = match status {
+        button::Status::Hovered => button::Style {
+            background: Some(Background::Color(palette::PRIMARY_LIGHT)),
+            text_color: palette::TEXT_PRIMARY,
+            ..style
+        },
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(palette::PRIMARY_PRESSED)),
+            text_color: palette::PRIMARY_HOVER,
+            ..style
+        },
+        button::Status::Disabled => button::Style {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: palette::TEXT_MUTED,
+            ..style
+        },
+        _ => style,
+    };
+    if focused {
+        style.border = Border {
+            color: palette::PRIMARY,
+            width: 2.0,
+            radius: radius::BUTTON.into(),
+        };
+    }
+    style
+}
+
+/// Danger overflow-menu item (退出): hover tints red instead of primary.
+pub fn menu_item_danger(_theme: &Theme, status: button::Status, focused: bool) -> button::Style {
+    let mut style = menu_item_base();
+    style = match status {
+        button::Status::Hovered => button::Style {
+            background: Some(Background::Color(palette::DANGER_LIGHT)),
+            text_color: palette::DANGER,
+            ..style
+        },
+        button::Status::Pressed => button::Style {
+            background: Some(Background::Color(Color::from_rgba8(239, 68, 68, 0.16))),
+            text_color: palette::DANGER,
+            ..style
+        },
+        button::Status::Disabled => button::Style {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: palette::TEXT_MUTED,
+            ..style
+        },
+        _ => style,
+    };
+    if focused {
+        style.border = Border {
+            color: palette::DANGER,
+            width: 2.0,
+            radius: radius::BUTTON.into(),
+        };
+    }
+    style
+}
+
 /// Window-control button (minimize / maximize-restore): transparent until
 /// hovered, then a subtle neutral gray. Square hit area, no pill rounding —
 /// the app header's rounded icon buttons are deliberately not reused here.

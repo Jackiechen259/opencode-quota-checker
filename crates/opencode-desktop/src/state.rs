@@ -195,6 +195,8 @@ pub struct UiState {
     pub confirm_clear_credentials: bool,
     /// Keyboard focus used by the compact header action group.
     pub header_focus: Option<HeaderAction>,
+    /// Whether the header overflow menu is open.
+    pub header_menu_open: bool,
 }
 
 /// Lifecycle of the updater state machine.

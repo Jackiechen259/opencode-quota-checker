@@ -16,17 +16,24 @@ pub enum HeaderAction {
     Float,
     Hide,
     Exit,
+    More,
 }
 
 impl HeaderAction {
-    pub const ALL: [Self; 6] = [
-        Self::Refresh,
-        Self::Details,
-        Self::Settings,
-        Self::Float,
-        Self::Hide,
-        Self::Exit,
-    ];
+    /// Actions rendered directly in the control bar, in visual order.
+    pub const BAR: &[Self] = &[Self::Refresh, Self::Settings, Self::Float, Self::More];
+    /// Actions rendered in the overflow menu, in visual order.
+    pub const MENU: &[Self] = &[Self::Details, Self::Hide, Self::Exit];
+
+    /// The focusable sequence for the current menu state; when the menu is
+    /// open, Tab cycles through its items.
+    pub fn focus_order(menu_open: bool) -> &'static [Self] {
+        if menu_open {
+            Self::MENU
+        } else {
+            Self::BAR
+        }
+    }
 
     pub fn message(self) -> Message {
         match self {
@@ -36,6 +43,7 @@ impl HeaderAction {
             Self::Float => Message::ToggleFloat,
             Self::Hide => Message::HideMain,
             Self::Exit => Message::Exit,
+            Self::More => Message::ToggleHeaderMenu,
         }
     }
 }
@@ -64,6 +72,10 @@ pub enum Message {
     WindowEvent(window::Id, window::Event),
     Keyboard(keyboard::Event),
     HeaderPressed(HeaderAction),
+    /// Toggle the header overflow menu.
+    ToggleHeaderMenu,
+    /// Close the header overflow menu (outside click or Escape).
+    CloseHeaderMenu,
     PollTray,
     Tray(TrayAction),
     HideMain,

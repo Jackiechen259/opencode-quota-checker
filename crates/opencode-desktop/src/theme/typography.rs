@@ -19,14 +19,6 @@ pub fn ui() -> Font {
     Font::with_name(FAMILY)
 }
 
-/// Card and section titles.
-pub fn ui_medium() -> Font {
-    Font {
-        weight: Weight::Medium,
-        ..Font::with_name(FAMILY)
-    }
-}
-
 /// Hero numerals and ring labels.
 pub fn ui_semibold() -> Font {
     Font {

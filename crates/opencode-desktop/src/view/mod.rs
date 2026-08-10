@@ -13,7 +13,7 @@ pub mod title_bar;
 use crate::message::Message;
 use crate::state::UpdateStatus;
 use crate::theme;
-use crate::view::components::{confirm_dialog, icon_button, icons};
+use crate::view::components::{confirm_dialog, header_menu, icon_button, icons};
 use crate::App;
 use iced::widget::{button, column, container, row, scrollable, stack, text, Row};
 use iced::{Element, Fill};
@@ -25,7 +25,7 @@ pub fn main(app: &App) -> Element<'_, Message> {
         app.usage().loading,
         app.tray_error(),
         app.ui().header_focus,
-        true,
+        app.ui().header_menu_open,
     );
 
     let dashboard_open = !app.ui().debug_open
@@ -64,11 +64,7 @@ pub fn main(app: &App) -> Element<'_, Message> {
             items.push(banner);
         }
         items.push(body);
-        items.push(footer::view(
-            app.usage().report.as_ref(),
-            app.usage().now_ms,
-            app.usage().loading,
-        ));
+        items.push(footer::view(app.usage().report.as_ref()));
         column(items).spacing(0).into()
     } else {
         column![title_bar::view(app.main_maximized()), header, body,]
@@ -94,6 +90,10 @@ pub fn main(app: &App) -> Element<'_, Message> {
             .align_x(iced::alignment::Horizontal::Right)
             .align_y(iced::alignment::Vertical::Bottom),
         );
+    }
+
+    if let Some(menu) = header_menu::view(app.ui().header_menu_open, app.ui().header_focus) {
+        layers = layers.push(menu);
     }
 
     if let Some(dialog) = confirm_dialog::view(app.confirm_clear_credentials()) {
