@@ -71,3 +71,19 @@ behavior.
 Compilation is not a substitute for installed-package smoke tests. Verify
 launch, window recreation from the tray, process exit, notifications, keyring,
 and all floating-window modes on each supported platform.
+
+## Icons
+
+Icon artwork is generated in two steps and needs Pillow (`pip install Pillow`).
+The first script draws `assets/icons/icon-source.png` from the parameters at the
+top of the file; the second derives every packaged format from it.
+
+```bash
+python scripts/generate-icon-source.py
+python scripts/generate-icons.py
+```
+
+`window.rgba` and `tray.rgba` are raw RGBA embedded with `include_bytes!`, so
+rebuild the desktop crate after regenerating. Re-check the 16px `icon.ico` frame
+and `tray.rgba` whenever the artwork changes — the tray renders at those sizes
+and small-scale legibility is what constrains the design.
