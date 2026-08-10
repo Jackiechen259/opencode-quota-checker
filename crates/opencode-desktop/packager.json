@@ -3,7 +3,7 @@
   "name": "opencode-quota-checker",
   "productName": "OpenCode Quota Checker",
   "identifier": "io.github.jackiechen259.opencode-quota-checker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native desktop quota monitor for OpenCode Go",
   "longDescription": "Monitor OpenCode Go quota windows, alerts, and reset times from a native Rust desktop application.",
   "authors": ["Jackie Chen"],
