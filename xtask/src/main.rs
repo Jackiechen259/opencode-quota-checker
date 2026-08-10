@@ -511,6 +511,58 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
+    fn workspace_and_packager_versions_stay_in_sync() {
+        let root = workspace_root();
+        assert_eq!(
+            workspace_version(&root).expect("workspace version"),
+            packager_version(&root).expect("packager version"),
+            "cargo xtask release keeps these in sync; run it after bumping the version"
+        );
+    }
+
+    #[test]
+    fn packager_config_matches_the_release_contract() {
+        let root = workspace_root();
+        let raw = fs::read_to_string(root.join("crates/opencode-desktop/packager.json"))
+            .expect("packager.json is readable");
+        let config: serde_json::Value =
+            serde_json::from_str(&raw).expect("packager.json is valid JSON");
+
+        assert_eq!(config["productName"], "OpenCode Quota Checker");
+        assert_eq!(
+            config["identifier"], "io.github.jackiechen259.opencode-quota-checker",
+            "the application identifier must never change between releases"
+        );
+        assert_eq!(config["nsis"]["installMode"], "currentUser");
+        let languages = config["nsis"]["languages"]
+            .as_array()
+            .expect("languages is an array");
+        let names = languages
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"English"));
+        assert!(names.contains(&"SimpChinese"));
+        let formats = config["formats"]
+            .as_array()
+            .expect("formats is an array")
+            .iter()
+            .filter_map(|value| value.as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            formats.contains(&"default") || formats.contains(&"nsis"),
+            "the Windows package must be NSIS (CI passes --formats nsis explicitly)"
+        );
+        let main = config["binaries"]
+            .as_array()
+            .expect("binaries is an array")
+            .iter()
+            .find(|binary| binary["main"] == true)
+            .expect("a main binary is declared");
+        assert_eq!(main["path"], "opencode-quota-checker");
+    }
+
+    #[test]
     fn parses_stable_and_prerelease_versions() {
         assert_eq!(
             Version::from_str("1.2.3").expect("stable").to_string(),

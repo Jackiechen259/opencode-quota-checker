@@ -67,6 +67,16 @@ Windows 11 24H2 上 winit 0.30 存在跨 DPI 拖拽窗口时的 `WM_DPICHANGED` 
 
 主窗口关闭默认最小化到托盘（托盘不可用时改为退出）。主窗口头部支持 Tab / Shift+Tab 在操作间循环切换、Enter 激活、Esc 关闭调试浮层或设置。
 
+## Windows 安装
+
+1. 从 GitHub Releases 下载 `opencode-quota-checker-windows-x86_64.exe`。
+2. 运行安装程序（不需要管理员权限）。
+3. 完成安装后，从开始菜单启动 **OpenCode Quota Checker**。
+
+安装为当前用户（写入 `%LOCALAPPDATA%\OpenCode Quota Checker`），在「设置 → 应用 → 已安装的应用」中可见，并创建开始菜单快捷方式。用新版本安装程序覆盖旧版本即为就地升级；配置（`%APPDATA%`）、钥匙串凭据与缓存更新包在升级和卸载后都会保留，卸载只删除程序文件与快捷方式。
+
+当前发布包未签名，Windows SmartScreen 首次运行可能提示警告。
+
 ## 自动更新
 
 应用默认自动从官方 GitHub Releases 检查新版本（可在设置中关闭）：
@@ -100,6 +110,13 @@ Windows 11 24H2 上 winit 0.30 存在跨 DPI 拖拽窗口时的 `WM_DPICHANGED` 
 ```bash
 cargo install cargo-packager --locked
 cargo packager --release --config crates/opencode-desktop/packager.json
+```
+
+Windows 上打包 NSIS 安装包并生成 `target/packages` 下的可分发安装程序：
+
+```bash
+cargo build -p opencode-desktop --release --locked
+cargo packager --release --config crates/opencode-desktop/packager.json --formats nsis
 ```
 
 各平台的构建环境见[构建说明](docs/building.md)。

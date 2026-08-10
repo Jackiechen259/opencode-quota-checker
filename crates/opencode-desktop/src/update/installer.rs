@@ -27,7 +27,13 @@ pub fn install_update(package: &VerifiedPackage) -> Result<bool, UiError> {
 fn install_for_platform(path: &Path, kind: PackageType) -> Result<bool, String> {
     match kind {
         PackageType::Nsis => {
+            // `/UPDATE` signals the NSIS installer that this app is exiting on
+            // its own right now, so its custom pre-install logic waits for the
+            // process to terminate instead of prompting the user to close it.
+            // The flag is unknown to stock NSIS command lines and is ignored by
+            // every other installer, so it is safe to always pass.
             Command::new(path)
+                .arg("/UPDATE")
                 .spawn()
                 .map_err(|error| format!("failed to start installer: {error}"))?;
             Ok(true)

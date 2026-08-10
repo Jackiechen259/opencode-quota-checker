@@ -1,5 +1,6 @@
 target/
 node_modules/
+.reasonix/
 dist/
 .DS_Store
 *.tmp
