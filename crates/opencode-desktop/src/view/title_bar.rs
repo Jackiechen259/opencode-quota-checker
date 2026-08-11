@@ -94,7 +94,7 @@ fn window_control(
 /// Close button: a plain `×` glyph that inherits the button text color, so
 /// the hover state flips it to white on the Windows-style red background.
 fn close_control() -> Element<'static, Message> {
-    let button = button(text("×").size(17.0))
+    let button = button(text("×").size(20.0))
         .width(Length::Fixed(CONTROL_WIDTH))
         .height(Length::Fixed(HEIGHT))
         .padding(Padding::ZERO)
