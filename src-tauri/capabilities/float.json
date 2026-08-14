@@ -1,0 +1,15 @@
+{
+  "identifier": "float-capability",
+  "description": "Least-privilege permissions for the floating window: it only reads quota state, listens to quota events, and moves/resizes/closes itself. It cannot touch credentials, the updater, the filesystem, or the shell.",
+  "windows": ["float"],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-close",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus"
+  ]
+}

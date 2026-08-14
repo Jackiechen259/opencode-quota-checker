@@ -4,3 +4,12 @@ node_modules/
 dist/
 .DS_Store
 *.tmp
+*.local
+
+# Tauri generated files
+src-tauri/gen/schemas/
+src-tauri/gen/android/
+src-tauri/gen/apple/
+
+# Secrets — the Tauri updater signing key must never be committed
+*.key

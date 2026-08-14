@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "crates/opencode-core",
   "crates/opencode-desktop",
+  "src-tauri",
   "xtask",
 ]
 
@@ -49,6 +50,8 @@ features = [
 # dragged between mixed-DPI displays on Windows 11 24H2. Keep this narrow
 # downstream patch until an upstream 0.30.x release includes the fix.
 # https://github.com/rust-windowing/winit/issues/4600
+# Only the archived Iced desktop client still depends on winit; the Tauri
+# frontend uses tao. The patch is removed together with `crates/opencode-desktop`.
 [patch.crates-io]
 winit = { path = "vendor/winit-0.30.13" }
 

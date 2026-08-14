@@ -1,0 +1,89 @@
+/* Design tokens ported from the archived Iced theme. */
+
+:root {
+  /* Surfaces */
+  --color-bg: #f6f8fb;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f8fafc;
+
+  /* Text */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  /* Lines */
+  --color-border: #e2e8f0;
+  --color-divider: #e2e8f0;
+
+  /* Brand */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-light: #eff6ff;
+  --color-primary-pressed: #dbeafe;
+  --color-primary-border: rgba(59, 130, 246, 0.24);
+
+  /* Status */
+  --color-success: #22c55e;
+  --color-success-light: rgba(34, 197, 94, 0.08);
+  --color-success-border: rgba(34, 197, 94, 0.22);
+  --color-warning: #f59e0b;
+  --color-warning-light: rgba(245, 158, 11, 0.09);
+  --color-warning-border: rgba(245, 158, 11, 0.24);
+  --color-danger: #ef4444;
+  --color-danger-light: rgba(239, 68, 68, 0.08);
+  --color-danger-border: rgba(239, 68, 68, 0.22);
+  --color-track: #e2e8f0;
+
+  /* Title bar window controls */
+  --color-titlebar-hover: #e4e8ee;
+  --color-titlebar-pressed: #d2d8e2;
+  --color-titlebar-close-hover: #c42b1c;
+  --color-titlebar-close-pressed: #9e1f13;
+
+  /* Radii */
+  --radius-label: 8px;
+  --radius-button: 10px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+
+  /* Spacing (ported `theme/spacing.rs`) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-base: 16px;
+  --space-lg: 20px;
+  --space-xl: 24px;
+  --page-padding: var(--space-xl);
+  --section-gap: var(--space-xl);
+  --card-gap: var(--space-base);
+  --card-padding: var(--space-lg);
+
+  /* Typography scale (ported `theme/typography.rs`) */
+  --text-section-title: 18px;
+  --text-card-title: 16px;
+  --text-hero-value: 52px;
+  --text-ring-value: 32px;
+  --text-metric-value: 17px;
+  --text-body: 13px;
+  --text-label: 12px;
+  --text-caption: 11px;
+
+  /* Fonts */
+  --font-ui:
+    "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC",
+    system-ui, -apple-system, sans-serif;
+  --font-mono:
+    "Cascadia Mono", "JetBrains Mono", Consolas, "SF Mono", Menlo, monospace;
+
+  /* Shadows (ported `theme/mod.rs`) */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 8px rgba(15, 23, 42, 0.04);
+  --shadow-menu: 0 8px 24px rgba(15, 23, 42, 0.14);
+  --shadow-toast: 0 4px 16px rgba(15, 23, 42, 0.16);
+
+  /* Layout */
+  --titlebar-height: 32px;
+  --header-height: 48px;
+  --footer-height: 34px;
+  --main-frame-radius: 11px;
+  --main-frame-inset: 1px;
+}
