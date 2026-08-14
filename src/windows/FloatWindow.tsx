@@ -3,7 +3,7 @@
 // is owned by the Rust backend; this component only renders and sends
 // commands. The whole docked strip is a drag region.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Dot } from "../components/common";
 import { Icons } from "../components/icons";
 import { useQuota } from "../hooks/useApp";
@@ -289,7 +289,7 @@ function DockedView({
   onClose: () => void;
 }) {
   const window = highest(report);
-  let content: React.ReactNode;
+  let content: ReactNode;
   if (!window) {
     content = (
       <span className="float-docked-status">

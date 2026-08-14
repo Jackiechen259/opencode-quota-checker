@@ -1,11 +1,13 @@
 // Inline SVG icon set (stroke-based, currentColor).
 
+import type { ReactNode } from "react";
+
 interface IconProps {
   size?: number;
   className?: string;
 }
 
-function Svg({ size = 16, className, children }: IconProps & { children: React.ReactNode }) {
+function Svg({ size = 16, className, children }: IconProps & { children: ReactNode }) {
   return (
     <svg
       width={size}

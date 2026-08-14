@@ -3,7 +3,7 @@
 // Data flow: React edits local form state → `save_config` command → Rust
 // `AppConfig::validate` (the final authority) → canonical config returned.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ConfirmDialog, Dot, Notice, StatusBadge } from "../components/common";
 import { Icons } from "../components/icons";
 import { bytes, lastCheckedText } from "../lib/format";
@@ -31,11 +31,11 @@ function SettingsCard({
   trailing,
   children,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   subtitle: string;
-  trailing?: React.ReactNode;
-  children: React.ReactNode;
+  trailing?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="settings-card">
@@ -59,7 +59,7 @@ function FormField({
 }: {
   label: string;
   hint?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="settings-field">
@@ -78,8 +78,7 @@ function ToggleRow({
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
-}) {
-  return (
+}) {  return (
     <div className="settings-toggle-row">
       <span className="settings-toggle-label">{label}</span>
       <span style={{ flex: 1 }} />

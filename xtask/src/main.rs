@@ -77,6 +77,8 @@ fn release(root: &Path, bump: &str, push: bool) -> Result<(), String> {
 
     update_workspace_version(root, &next)?;
     update_packager_version(root, &next)?;
+    update_package_json_version(root, &next)?;
+    update_tauri_config_version(root, &next)?;
 
     run_command(root, "cargo", &["fmt", "--all"])?;
     run_command(root, "cargo", &["check", "--workspace"])?;
@@ -104,6 +106,9 @@ fn release(root: &Path, bump: &str, push: bool) -> Result<(), String> {
             "Cargo.toml",
             "Cargo.lock",
             "crates/opencode-desktop/packager.json",
+            "package.json",
+            "pnpm-lock.yaml",
+            "src-tauri/tauri.conf.json",
         ],
     )?;
     run_command(
@@ -129,11 +134,19 @@ fn release(root: &Path, bump: &str, push: bool) -> Result<(), String> {
 fn verify_version(root: &Path, tag: Option<&str>) -> Result<(), String> {
     let workspace = workspace_version(root)?;
     let packager = packager_version(root)?;
+    let package_json = package_json_version(root)?;
+    let tauri_config = tauri_config_version(root)?;
 
-    if workspace != packager {
-        return Err(format!(
-            "version mismatch: workspace={workspace}, packager={packager}"
-        ));
+    for (name, value) in [
+        ("packager", packager),
+        ("package.json", package_json),
+        ("tauri.conf.json", tauri_config),
+    ] {
+        if workspace != value {
+            return Err(format!(
+                "version mismatch: workspace={workspace}, {name}={value}"
+            ));
+        }
     }
 
     if let Some(tag) = tag {
@@ -377,6 +390,54 @@ fn update_packager_version(root: &Path, version: &Version) -> Result<(), String>
     replace_quoted_value(&path, config, start, version)
 }
 
+fn package_json_version(root: &Path) -> Result<Version, String> {
+    let path = root.join("package.json");
+    let raw = read(&path)?;
+    let value: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| format!("invalid package.json: {error}"))?;
+    let version = value
+        .get("version")
+        .and_then(|value| value.as_str())
+        .ok_or("missing package.json version")?;
+    Version::from_str(version)
+}
+
+fn update_package_json_version(root: &Path, version: &Version) -> Result<(), String> {
+    let path = root.join("package.json");
+    let raw = read(&path)?;
+    let mut value: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| format!("invalid package.json: {error}"))?;
+    value["version"] = serde_json::Value::String(version.to_string());
+    let serialized = serde_json::to_string_pretty(&value)
+        .map_err(|error| format!("failed to serialize package.json: {error}"))?;
+    fs::write(&path, format!("{serialized}\n"))
+        .map_err(|error| format!("failed to write {}: {error}", path.display()))
+}
+
+fn tauri_config_version(root: &Path) -> Result<Version, String> {
+    let path = root.join("src-tauri/tauri.conf.json");
+    let raw = read(&path)?;
+    let value: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| format!("invalid tauri.conf.json: {error}"))?;
+    let version = value
+        .get("version")
+        .and_then(|value| value.as_str())
+        .ok_or("missing tauri.conf.json version")?;
+    Version::from_str(version)
+}
+
+fn update_tauri_config_version(root: &Path, version: &Version) -> Result<(), String> {
+    let path = root.join("src-tauri/tauri.conf.json");
+    let raw = read(&path)?;
+    let mut value: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| format!("invalid tauri.conf.json: {error}"))?;
+    value["version"] = serde_json::Value::String(version.to_string());
+    let serialized = serde_json::to_string_pretty(&value)
+        .map_err(|error| format!("failed to serialize tauri.conf.json: {error}"))?;
+    fs::write(&path, format!("{serialized}\n"))
+        .map_err(|error| format!("failed to write {}: {error}", path.display()))
+}
+
 fn replace_quoted_value(
     path: &Path,
     mut contents: String,
@@ -517,6 +578,49 @@ mod tests {
             workspace_version(&root).expect("workspace version"),
             packager_version(&root).expect("packager version"),
             "cargo xtask release keeps these in sync; run it after bumping the version"
+        );
+        assert_eq!(
+            workspace_version(&root).expect("workspace version"),
+            package_json_version(&root).expect("package.json version"),
+            "cargo xtask release keeps these in sync; run it after bumping the version"
+        );
+        assert_eq!(
+            workspace_version(&root).expect("workspace version"),
+            tauri_config_version(&root).expect("tauri.conf.json version"),
+            "cargo xtask release keeps these in sync; run it after bumping the version"
+        );
+    }
+
+    #[test]
+    fn json_version_helpers_round_trip() {
+        let directory = tempfile::tempdir().expect("temporary directory is available");
+        let root = directory.path();
+        let package = root.join("package.json");
+        fs::write(&package, r#"{"name":"app","version":"1.2.3"}"#)
+            .expect("package.json is written");
+        assert_eq!(
+            package_json_version(root).expect("version parses").to_string(),
+            "1.2.3"
+        );
+        update_package_json_version(root, &Version::from_str("2.0.0").expect("version")).expect("updates");
+        assert_eq!(
+            package_json_version(root).expect("version re-parses").to_string(),
+            "2.0.0"
+        );
+
+        let config = root.join("src-tauri/tauri.conf.json");
+        fs::create_dir_all(config.parent().expect("parent")).expect("directory created");
+        fs::write(&config, r#"{"productName":"app","version":"0.1.2"}"#)
+            .expect("tauri.conf.json is written");
+        assert_eq!(
+            tauri_config_version(root).expect("version parses").to_string(),
+            "0.1.2"
+        );
+        update_tauri_config_version(root, &Version::from_str("0.2.0").expect("version"))
+            .expect("updates");
+        assert_eq!(
+            tauri_config_version(root).expect("version re-parses").to_string(),
+            "0.2.0"
         );
     }
 

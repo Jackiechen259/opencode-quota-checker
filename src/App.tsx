@@ -2,7 +2,7 @@
 // One rounded frame around the whole page (like the archived Iced frame);
 // maximized windows go square and flush with the screen edge.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AppHeader, type HeaderPage } from "./components/AppHeader";
 import { Toast } from "./components/common";
@@ -80,7 +80,7 @@ export function MainWindow() {
   const configLoaded = status?.config_loaded ?? false;
   const dashboardOpen = page === "dashboard" && configLoaded && configured;
 
-  let body: React.ReactNode;
+  let body: ReactNode;
   if (page === "debug") {
     body = <Debug onClose={() => setPage("dashboard")} onToast={setToast} />;
   } else if (page === "settings") {

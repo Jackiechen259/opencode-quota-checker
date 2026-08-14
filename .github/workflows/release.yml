@@ -14,6 +14,12 @@ on:
 permissions:
   contents: write
 
+env:
+  # Tauri updater signing. The private key and its password live ONLY in
+  # GitHub Actions Secrets — never in the repository.
+  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
 jobs:
   resolve:
     name: Validate release version
@@ -75,11 +81,14 @@ jobs:
             build-essential \
             libayatana-appindicator3-dev \
             libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            libssl-dev \
             libnotify-bin \
             libsecret-1-dev \
             libxdo-dev \
             pkg-config \
-            squashfs-tools
+            patchelf
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -91,65 +100,45 @@ jobs:
         with:
           key: release-${{ matrix.target }}
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Validate tag and package versions
         run: cargo xtask verify-version ${{ needs.resolve.outputs.tag }}
 
-      - name: Install cargo-packager
-        run: cargo install cargo-packager --locked
+      - name: Build and publish bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ needs.resolve.outputs.tag }}
+          releaseName: OpenCode Quota Checker ${{ needs.resolve.outputs.tag }}
+          releaseDraft: true
+          prerelease: ${{ needs.resolve.outputs.prerelease }}
+          includeUpdaterJson: true
+          args: --target ${{ matrix.target }}
 
-      - name: Build release binary
-        run: cargo build -p opencode-desktop --release --locked --target ${{ matrix.target }}
-
-      - name: Stage target binary for packager
-        shell: bash
-        run: |
-          mkdir -p target/release
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cp "target/${{ matrix.target }}/release/opencode-quota-checker.exe" target/release/
-          else
-            cp "target/${{ matrix.target }}/release/opencode-quota-checker" target/release/
-          fi
-
-      - name: Create native package
-        run: cargo packager --release --config crates/opencode-desktop/packager.json --formats ${{ matrix.formats }}
-
-      - name: Normalize release asset names
-        shell: bash
-        run: |
-          cd target/packages
-          rename_one() {
-            local ext="$1" name="$2"
-            local count
-            count=$(find . -maxdepth 1 -type f -name "$ext" | wc -l)
-            if [[ "$count" -ne 1 ]]; then
-              echo "expected exactly one $ext package, found $count" >&2
-              exit 1
-            fi
-            find . -maxdepth 1 -type f -name "$ext" -exec mv {} "$name" \;
-          }
-          case "${{ matrix.artifact }}" in
-            windows-x86_64)
-              rename_one "*.exe" opencode-quota-checker-windows-x86_64.exe
-              ;;
-            linux-x86_64)
-              rename_one "*.AppImage" opencode-quota-checker-linux-x86_64.AppImage
-              rename_one "*.deb" opencode-quota-checker-linux-x86_64.deb
-              ;;
-            macos-aarch64)
-              rename_one "*.dmg" opencode-quota-checker-macos-aarch64.dmg
-              ;;
-          esac
-          ls -la
-
-      - name: Upload package
+      - name: Upload bundle artifacts for the legacy manifest job
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: target/packages/*
+          name: bundle-${{ matrix.artifact }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/*
           if-no-files-found: error
 
-  prepare-release:
-    name: Prepare release assets
+  prepare-legacy:
+    name: Prepare legacy Iced update bridge
     needs: [resolve, package]
     runs-on: ubuntu-22.04
     steps:
@@ -160,38 +149,54 @@ jobs:
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Download packages
+      - name: Download bundles
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
-      - name: Generate SHA256SUMS and update.json
+      - name: Normalize legacy release asset names
+        shell: bash
+        run: |
+          cd release-assets
+          find . -maxdepth 2 -type f | sort
+          rename_one() {
+            local pattern="$1" name="$2"
+            local file
+            file=$(find . -maxdepth 2 -type f -name "$pattern" | head -n 1)
+            if [[ -z "$file" ]]; then
+              echo "missing asset for $name (pattern $pattern)" >&2
+              exit 1
+            fi
+            mv "$file" "$name"
+          }
+          # The legacy Iced updater (update.json schema 1) expects these exact
+          # names; keep publishing them for one release cycle after the switch.
+          rename_one "*-setup.exe" opencode-quota-checker-windows-x86_64.exe
+          rename_one "*.AppImage" opencode-quota-checker-linux-x86_64.AppImage
+          rename_one "*.deb" opencode-quota-checker-linux-x86_64.deb
+          rename_one "*.dmg" opencode-quota-checker-macos-aarch64.dmg
+          ls -la
+
+      - name: Generate SHA256SUMS and legacy update.json
         run: cargo xtask update-manifest ${{ needs.resolve.outputs.tag }} release-assets
 
-      - name: Upload final release bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-assets
-          path: release-assets/*
-          if-no-files-found: error
-
-  publish:
-    name: Publish GitHub release
-    needs: [resolve, package, prepare-release]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Download release bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: release-assets
-          path: release-assets
-
-      - name: Publish release
+      - name: Attach legacy manifest to the draft release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.resolve.outputs.tag }}
-          name: OpenCode Quota Checker ${{ needs.resolve.outputs.tag }}
-          prerelease: ${{ needs.resolve.outputs.prerelease }}
-          generate_release_notes: true
-          files: release-assets/*
+          files: |
+            release-assets/SHA256SUMS
+            release-assets/update.json
+
+  finalize:
+    name: Publish release
+    needs: [resolve, package, prepare-legacy]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Finalize the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${{ needs.resolve.outputs.tag }}" --draft=false
+          gh release view "${{ needs.resolve.outputs.tag }}" --json assets --jq '.assets[].name' | sort

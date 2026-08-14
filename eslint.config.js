@@ -7,7 +7,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**", "src-tauri/**", "target/**"],
+    ignores: ["dist/**", "node_modules/**", "src-tauri/**", "target/**", "vendor/**"],
   },
   js.configs.recommended,
   {
@@ -32,6 +32,27 @@ export default [
         Math: "readonly",
         Number: "readonly",
         String: "readonly",
+        HTMLElement: "readonly",
+        MouseEvent: "readonly",
+        KeyboardEvent: "readonly",
+        Node: "readonly",
+        Event: "readonly",
+        Blob: "readonly",
+        File: "readonly",
+        FormData: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
+        AbortController: "readonly",
+        performance: "readonly",
+        requestAnimationFrame: "readonly",
+        cancelAnimationFrame: "readonly",
+        HTMLInputElement: "readonly",
+        HTMLDivElement: "readonly",
+        HTMLSpanElement: "readonly",
+        HTMLButtonElement: "readonly",
+        HTMLPreElement: "readonly",
+        SVGElement: "readonly",
+        Text: "readonly",
       },
     },
     plugins: {
