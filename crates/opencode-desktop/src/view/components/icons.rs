@@ -37,6 +37,10 @@ pub const WIN_MAXIMIZE: &[u8] = b"<svg xmlns='http://www.w3.org/2000/svg' width=
 /// Window-control "restore": two overlapping rectangles.
 pub const WIN_RESTORE: &[u8] = b"<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='8' y='8' width='10' height='10' rx='1'/><path d='M5 15v-8a2 2 0 0 1 2-2h8'/></svg>";
 
+/// Window-control "close": an X in the same stroke language as the other
+/// caption glyphs, so it never depends on a font's `×` glyph.
+pub const WIN_CLOSE: &[u8] = b"<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><line x1='6' y1='6' x2='18' y2='18'/><line x1='18' y1='6' x2='6' y2='18'/></svg>";
+
 pub const MINIMIZE: &[u8] = b"<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 3v5H3'/><path d='M16 3v5h5'/><path d='M8 21v-5H3'/><path d='M16 21v-5h5'/></svg>";
 
 pub const EXPAND: &[u8] = b"<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 3H3v5'/><path d='M16 3h5v5'/><path d='M8 21H3v-5'/><path d='M16 21h5v-5'/></svg>";
