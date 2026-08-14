@@ -22,11 +22,7 @@ pub fn view(report: Option<&UsageReport>) -> Element<'static, Message> {
         )
         .width(Fill)
         .height(Length::Fixed(34.0))
-        .padding([9.0, theme::spacing::PAGE_PADDING])
-        .style(move |_| container::Style {
-            background: Some(iced::Background::Color(theme::palette::SURFACE)),
-            ..container::Style::default()
-        }),
+        .padding([9.0, theme::spacing::PAGE_PADDING]),
     ]
     .spacing(0)
     .into()

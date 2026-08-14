@@ -72,9 +72,28 @@ pub fn main(app: &App) -> Element<'_, Message> {
             .into()
     };
 
-    let mut layers = stack![container(content)
+    // One rounded frame around the whole page (title bar, header, banner,
+    // body, footer). The frame owns the surface color; the sections inside
+    // only draw their own separators. Maximized windows go square and flush
+    // with the screen edge, so the radius and the outer inset are dropped.
+    let maximized = app.main_maximized() == Some(true);
+
+    let main_frame = container(content)
         .width(Fill)
         .height(Fill)
+        .clip(true)
+        .style(move |_| theme::main_window_frame(maximized));
+
+    let frame_inset = if maximized {
+        0.0
+    } else {
+        theme::MAIN_FRAME_INSET
+    };
+
+    let mut layers = stack![container(main_frame)
+        .width(Fill)
+        .height(Fill)
+        .padding(frame_inset)
         .style(move |_| theme::page_background())];
 
     if let Some(toast) = &app.ui().toast {
@@ -104,6 +123,9 @@ pub fn main(app: &App) -> Element<'_, Message> {
 }
 
 /// Credential-checking placeholder.
+///
+/// Transparent on purpose: the main window frame owns the surface color, so
+/// this state must not paint its own fill over the frame.
 fn checking_state() -> Element<'static, Message> {
     container(
         text("正在检查系统钥匙串…")
@@ -112,7 +134,6 @@ fn checking_state() -> Element<'static, Message> {
     )
     .width(Fill)
     .padding(48)
-    .style(move |_| theme::page_background())
     .into()
 }
 

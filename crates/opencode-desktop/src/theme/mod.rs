@@ -86,10 +86,14 @@ pub fn card() -> container::Style {
     }
 }
 
-/// Header surface: pure white with a bottom hairline.
+/// Header surface: transparent with a bottom hairline.
+///
+/// The main window frame provides the fill, so this layer must not paint over
+/// the frame's rounded corners or hairline border; only its soft separator
+/// shadow is drawn.
 pub fn header_surface() -> container::Style {
     container::Style {
-        background: Some(Background::Color(palette::SURFACE)),
+        background: None,
         text_color: Some(palette::TEXT_PRIMARY),
         border: Border {
             color: palette::BORDER,
@@ -113,13 +117,47 @@ pub fn page_background() -> container::Style {
     }
 }
 
-/// Title bar surface: white with a bottom hairline and no card shadow.
+/// Corner radius of the main window frame in its normal (non-maximized)
+/// state; the maximized frame is square.
+pub const MAIN_FRAME_RADIUS: f32 = 11.0;
+/// Outer inset (logical px) between the window edge and the main window
+/// frame; dropped while maximized so the frame hugs the work area.
+pub const MAIN_FRAME_INSET: f32 = 1.0;
+
+/// Main window frame: the single rounded surface that contains the whole
+/// page (title bar, header, update banner, body, footer).
 ///
+/// This is window chrome, not a card: a hairline border and a light corner
+/// radius, no shadow. The frame owns the surface color, so the surfaces
+/// stacked inside it stay transparent and only paint their separators.
+/// Maximized windows go square and flush with the screen edge.
+pub fn main_window_frame(maximized: bool) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(palette::SURFACE)),
+        text_color: Some(palette::TEXT_PRIMARY),
+        border: Border {
+            color: palette::BORDER,
+            width: 1.0,
+            radius: if maximized {
+                0.0.into()
+            } else {
+                MAIN_FRAME_RADIUS.into()
+            },
+        },
+        shadow: Shadow::default(),
+        snap: false,
+    }
+}
+
+/// Title bar surface: transparent with a bottom hairline and no card shadow.
+///
+/// The main window frame provides the fill, so this layer must not paint over
+/// the frame's rounded corners; only its soft separator shadow is drawn.
 /// Deliberately calmer than `header_surface` — the title bar is chrome, not
 /// content.
 pub fn title_bar_surface() -> container::Style {
     container::Style {
-        background: Some(Background::Color(palette::SURFACE)),
+        background: None,
         text_color: Some(palette::TEXT_PRIMARY),
         border: Border {
             color: palette::BORDER,
@@ -496,7 +534,7 @@ pub fn title_bar_button(_theme: &Theme, status: button::Status) -> button::Style
 }
 
 /// Close button: transparent until hovered, then Windows-style red with a
-/// white glyph (the glyph is a plain `text` inheriting `text_color`).
+/// white glyph (the caption glyph inherits `text_color`, like `Text`).
 pub fn title_bar_close_button(_theme: &Theme, status: button::Status) -> button::Style {
     let base = button::Style {
         background: Some(Background::Color(Color::TRANSPARENT)),
