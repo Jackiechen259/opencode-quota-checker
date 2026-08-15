@@ -98,3 +98,20 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started · ➖ not applicable
    Tauri releases update through `tauri-plugin-updater`.
 3. Legacy `update.json` generation is kept in `xtask update-manifest` and the
    release workflow for at least one release cycle after the Tauri switch.
+
+## Verified on the live machine (Windows, real user data)
+
+- Real Iced `config.json` (schema 2, workspace id, thresholds, float
+  position) loaded unchanged by the Tauri build.
+- Real Iced keyring credential (`opencode-auth.opencode-quota-checker`)
+  read successfully — `available=true`, `configured=true`.
+- Live quota fetch against opencode.ai succeeded with 3 windows
+  (`quota refresh succeeded windows=3`) through the unchanged
+  `opencode-core` pipeline.
+- Borderless main window (1454×908) renders the React UI with the exact
+  Iced design tokens; window resize works.
+- `cargo test --workspace` green on Windows (opencode-core 19+8, Iced
+  desktop 41 regression, Tauri lib 13, integration 7+1, xtask 9).
+- Notable bugs found by the new tests and fixed: reentrant-Mutex
+  deadlocks in `push_monitor_config`/`status_dto`; Windows test binaries
+  failing to load without the Common-Controls v6 manifest.
