@@ -3,13 +3,13 @@
 import { useMemo } from "react";
 import { DetailsHeader, OverviewCard, QuotaCard } from "../components/quota";
 import { Card, EmptyState, Notice, Spinner } from "../components/common";
-import type { UsageReport } from "../types/models";
+import type { AppError, UsageReport } from "../types/models";
 import { Icons } from "../components/icons";
 
 interface Props {
   report: UsageReport | null;
   loading: boolean;
-  error: { user: string } | null;
+  error: AppError | null;
   nowMs: number;
   onRefresh: () => void;
 }
