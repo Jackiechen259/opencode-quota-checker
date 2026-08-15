@@ -77,16 +77,16 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started · ➖ not applicable
 
 | Item | Current | Target | Status |
 |---|---|---|---|
-| Workspace | `crates/opencode-core`, `crates/opencode-desktop`, `xtask` | + `src-tauri`, eventually − desktop | ✅ (desktop kept as fallback) |
+| Workspace | `crates/opencode-core`, `crates/opencode-desktop`, `xtask` | `crates/opencode-core`, `src-tauri`, `xtask` | ✅ (desktop removed) |
 | Frontend build | — | Vite + React + TS, `pnpm build` | ✅ |
 | Windows packaging | cargo-packager NSIS (currentUser, EN + zh-CN) | Tauri NSIS (same modes/languages) | 🚧 (config present, not built yet) |
 | Linux packaging | deb + AppImage | Tauri deb + AppImage | 🚧 |
 | macOS packaging | dmg | Tauri dmg (aarch64 only) | 🚧 |
 | Release assets | `update.json` + SHA256SUMS + installers | + `latest.json` + `.sig` (Tauri updater), keep legacy `update.json` for one cycle | 🚧 |
-| Signing | — (SHA-256 only) | Tauri updater signing key (private key only in GitHub Secrets) | 🚧 |
-| CI | Rust fmt/clippy/test + native build matrix | + pnpm install/lint/typecheck/build, Tauri builds | ⬜ |
-| Version sync | workspace + packager.json | workspace + src-tauri + package.json + tauri.conf.json via `xtask` | ⬜ |
-| winit vendor patch | `vendor/winit-0.30.13` (Iced-only) | removed after Iced removal (`cargo tree` check) | ⬜ |
+| Signing | — (SHA-256 only) | Tauri updater signing key (private key only in GitHub Secrets) | ✅ (key configured; secrets user-provided) |
+| CI | Rust fmt/clippy/test + native build matrix | + pnpm install/lint/typecheck/build, Tauri builds | ✅ (running) |
+| Version sync | workspace + packager.json | workspace + src-tauri + package.json + tauri.conf.json via `xtask` | ✅ (packager dropped) |
+| winit vendor patch | `vendor/winit-0.30.13` (Iced-only) | removed after Iced removal (`cargo tree` check) | ✅ (removed with Iced) |
 
 ## Upgrade path (Iced 0.1.2 → first Tauri release)
 

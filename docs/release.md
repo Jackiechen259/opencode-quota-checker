@@ -1,9 +1,9 @@
 # Release guide
 
 The root `Cargo.toml` `[workspace.package].version` is the authoritative
-version. `cargo xtask` mirrors it into `packager.json` (legacy Iced packager,
-kept during the migration), `package.json`, and `src-tauri/tauri.conf.json`.
-`src-tauri/Cargo.toml` inherits the workspace version automatically.
+version. `cargo xtask` mirrors it into `package.json` and
+`src-tauri/tauri.conf.json`. `src-tauri/Cargo.toml` inherits the workspace
+version automatically.
 
 Prepare a release from a clean working tree:
 
@@ -17,7 +17,7 @@ cargo xtask release 1.0.0-rc.1
 The command updates every version metadata file and `Cargo.lock`, formats,
 lints, tests, commits, and creates an annotated `vVERSION` tag. It does not
 push by default. Add `--push` to push the current branch and tag.
-`cargo xtask verify-version [vVERSION]` checks all four files (and the tag)
+`cargo xtask verify-version [vVERSION]` checks all three files (and the tag)
 stay in sync and is part of CI.
 
 A pushed `v*` tag runs `.github/workflows/release.yml`:

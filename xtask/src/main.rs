@@ -8,8 +8,6 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
-const PACKAGER_VERSION_KEY: &str = "\"version\": \"";
-
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
@@ -76,7 +74,6 @@ fn release(root: &Path, bump: &str, push: bool) -> Result<(), String> {
     }
 
     update_workspace_version(root, &next)?;
-    update_packager_version(root, &next)?;
     update_package_json_version(root, &next)?;
     update_tauri_config_version(root, &next)?;
 
@@ -105,7 +102,6 @@ fn release(root: &Path, bump: &str, push: bool) -> Result<(), String> {
             "add",
             "Cargo.toml",
             "Cargo.lock",
-            "crates/opencode-desktop/packager.json",
             "package.json",
             "pnpm-lock.yaml",
             "src-tauri/tauri.conf.json",
@@ -133,12 +129,10 @@ fn release(root: &Path, bump: &str, push: bool) -> Result<(), String> {
 
 fn verify_version(root: &Path, tag: Option<&str>) -> Result<(), String> {
     let workspace = workspace_version(root)?;
-    let packager = packager_version(root)?;
     let package_json = package_json_version(root)?;
     let tauri_config = tauri_config_version(root)?;
 
     for (name, value) in [
-        ("packager", packager),
         ("package.json", package_json),
         ("tauri.conf.json", tauri_config),
     ] {
@@ -358,16 +352,6 @@ fn workspace_repository(root: &Path) -> Result<String, String> {
     Ok(quoted_value(line)?.to_owned())
 }
 
-fn packager_version(root: &Path) -> Result<Version, String> {
-    let config = read(root.join("crates/opencode-desktop/packager.json"))?;
-    let value = config
-        .find(PACKAGER_VERSION_KEY)
-        .map(|start| &config[start + PACKAGER_VERSION_KEY.len()..])
-        .ok_or("missing packager version")?;
-    let end = value.find('"').ok_or("unterminated packager version")?;
-    Version::from_str(&value[..end])
-}
-
 fn update_workspace_version(root: &Path, version: &Version) -> Result<(), String> {
     let path = root.join("Cargo.toml");
     let manifest = read(&path)?;
@@ -378,16 +362,6 @@ fn update_workspace_version(root: &Path, version: &Version) -> Result<(), String
         .ok_or("missing workspace version")?;
     let value_start = start + relative + "version = \"".len();
     replace_quoted_value(&path, manifest, value_start, version)
-}
-
-fn update_packager_version(root: &Path, version: &Version) -> Result<(), String> {
-    let path = root.join("crates/opencode-desktop/packager.json");
-    let config = read(&path)?;
-    let start = config
-        .find(PACKAGER_VERSION_KEY)
-        .ok_or("missing packager version")?
-        + PACKAGER_VERSION_KEY.len();
-    replace_quoted_value(&path, config, start, version)
 }
 
 fn package_json_version(root: &Path) -> Result<Version, String> {
@@ -576,11 +550,6 @@ mod tests {
         let root = workspace_root();
         assert_eq!(
             workspace_version(&root).expect("workspace version"),
-            packager_version(&root).expect("packager version"),
-            "cargo xtask release keeps these in sync; run it after bumping the version"
-        );
-        assert_eq!(
-            workspace_version(&root).expect("workspace version"),
             package_json_version(&root).expect("package.json version"),
             "cargo xtask release keeps these in sync; run it after bumping the version"
         );
@@ -631,48 +600,6 @@ mod tests {
                 .to_string(),
             "0.2.0"
         );
-    }
-
-    #[test]
-    fn packager_config_matches_the_release_contract() {
-        let root = workspace_root();
-        let raw = fs::read_to_string(root.join("crates/opencode-desktop/packager.json"))
-            .expect("packager.json is readable");
-        let config: serde_json::Value =
-            serde_json::from_str(&raw).expect("packager.json is valid JSON");
-
-        assert_eq!(config["productName"], "OpenCode Quota Checker");
-        assert_eq!(
-            config["identifier"], "io.github.jackiechen259.opencode-quota-checker",
-            "the application identifier must never change between releases"
-        );
-        assert_eq!(config["nsis"]["installMode"], "currentUser");
-        let languages = config["nsis"]["languages"]
-            .as_array()
-            .expect("languages is an array");
-        let names = languages
-            .iter()
-            .filter_map(|value| value.as_str())
-            .collect::<Vec<_>>();
-        assert!(names.contains(&"English"));
-        assert!(names.contains(&"SimpChinese"));
-        let formats = config["formats"]
-            .as_array()
-            .expect("formats is an array")
-            .iter()
-            .filter_map(|value| value.as_str())
-            .collect::<Vec<_>>();
-        assert!(
-            formats.contains(&"default") || formats.contains(&"nsis"),
-            "the Windows package must be NSIS (CI passes --formats nsis explicitly)"
-        );
-        let main = config["binaries"]
-            .as_array()
-            .expect("binaries is an array")
-            .iter()
-            .find(|binary| binary["main"] == true)
-            .expect("a main binary is declared");
-        assert_eq!(main["path"], "opencode-quota-checker");
     }
 
     #[test]

@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
   "crates/opencode-core",
-  "crates/opencode-desktop",
   "src-tauri",
   "xtask",
 ]
@@ -18,7 +17,6 @@ repository = "https://github.com/Jackiechen259/opencode-quota-checker"
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 directories = "6"
-iced = { version = "0.14", features = ["tokio", "wgpu", "image", "svg", "canvas", "advanced"] }
 keyring = { version = "3", features = ["windows-native", "apple-native", "linux-native"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 raw-window-handle = "0.6"
@@ -30,30 +28,17 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tray-icon = "0.24"
 url = "2"
 urlencoding = "2"
 
 [workspace.dependencies.windows]
 version = "0.61"
 features = [
-  "Data_Xml_Dom",
-  "UI_Notifications",
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
-  "Win32_System_WinRT",
   "Win32_UI_HiDpi",
   "Win32_UI_WindowsAndMessaging",
 ]
-
-# winit 0.30.13 can enter a WM_DPICHANGED feedback loop while a window is
-# dragged between mixed-DPI displays on Windows 11 24H2. Keep this narrow
-# downstream patch until an upstream 0.30.x release includes the fix.
-# https://github.com/rust-windowing/winit/issues/4600
-# Only the archived Iced desktop client still depends on winit; the Tauri
-# frontend uses tao. The patch is removed together with `crates/opencode-desktop`.
-[patch.crates-io]
-winit = { path = "vendor/winit-0.30.13" }
 
 [profile.release]
 panic = "abort"

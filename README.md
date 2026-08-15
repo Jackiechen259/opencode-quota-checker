@@ -5,9 +5,9 @@ OpenCode Go 配额的原生桌面监控工具（Tauri v2 + React）。展示 5 �
 [![CI](https://github.com/Jackiechen259/opencode-quota-checker/actions/workflows/ci.yml/badge.svg)](https://github.com/Jackiechen259/opencode-quota-checker/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-> **迁移状态**：本项目正在从 Iced 迁移到 Tauri v2。当前 `main` 分支已切换为 Tauri
-> 实现；旧 Iced 客户端冻结在 `archive/iced-v0.1.2` 分支，在功能对齐完成前仍保留在
-> workspace 中作为回退。迁移文档见 `docs/tauri-migration/`。
+> **架构说明**：本应用基于 Tauri v2 + React。历史 Iced 客户端已冻结在
+> `archive/iced-v0.1.2` 分支并永久保留（作为回归对比与紧急回退），不再参与构建。
+> 迁移过程文档见 `docs/tauri-migration/`。
 
 ## 功能
 
@@ -131,12 +131,11 @@ pnpm tauri build --bundles nsis
 
 ## 发布
 
-发布版本由以下四处统一管理，`cargo xtask release` 会同步修改并校验：
+发布版本由以下三处统一管理，`cargo xtask release` 会同步修改并校验：
 
 - 根 `Cargo.toml` 的 `[workspace.package].version`
 - `src-tauri/tauri.conf.json` 的 `version`
 - `package.json` 的 `version`
-- `crates/opencode-desktop/packager.json`（旧打包器，迁移期保留）
 
 ```bash
 cargo xtask release patch
