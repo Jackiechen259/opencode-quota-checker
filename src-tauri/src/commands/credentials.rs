@@ -5,19 +5,50 @@
 //! entries the archived Iced client wrote, so existing credentials survive
 //! the upgrade. The cookie is never returned to the frontend and is cleared
 //! from React state right after a successful save.
+//!
+//! Every keyring call goes through `crate::credential_task` (blocking pool +
+//! soft timeout): a wedged Credential Manager can never freeze the main
+//! thread or the webview event loop.
 
+use crate::credential_task::{self, CredentialCheckResult};
 use crate::error::AppError;
 use crate::launcher;
 use crate::persistence::persist_config;
-use crate::state::AppState;
-use opencode_core::OpenCodeAuthStore;
+use crate::state::{AppState, CredentialPhase};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
 /// Reports whether an OpenCode auth cookie is stored in the keyring.
+///
+/// Runs on the blocking pool with the same soft timeout as every other
+/// keyring operation.
 #[tauri::command]
-pub fn has_credentials() -> bool {
-    OpenCodeAuthStore.load().is_ok()
+pub async fn has_credentials() -> Result<bool, AppError> {
+    Ok(credential_task::check_credentials().await == CredentialCheckResult::Available)
+}
+
+/// Re-runs the keyring availability check after an error or timeout.
+///
+/// The check runs in the background; the result arrives via the `app://status`
+/// event. The window shell stays fully operable while it is in flight.
+#[tauri::command]
+pub fn recheck_credentials(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), AppError> {
+    let state = state.inner().clone();
+    {
+        let mut credentials = state.credentials.lock().expect("credential mutex");
+        credentials.phase = CredentialPhase::Checking;
+        credentials.error = None;
+    }
+    let _ = app.emit(crate::events::APP_STATUS, state.status_dto());
+    tauri::async_runtime::spawn(async move {
+        let result = credential_task::check_credentials().await;
+        state.apply_credential_check(result);
+        let _ = app.emit(crate::events::APP_STATUS, state.status_dto());
+    });
+    Ok(())
 }
 
 /// Saves the workspace ID (plain config) and the auth cookie (keyring only).
@@ -25,7 +56,7 @@ pub fn has_credentials() -> bool {
 /// The cookie travels over IPC once, from the password input to this command;
 /// it is never stored in the frontend afterwards and never written to logs.
 #[tauri::command]
-pub fn save_credentials(
+pub async fn save_credentials(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
     workspace_id: String,
@@ -40,13 +71,16 @@ pub fn save_credentials(
             "empty OpenCode workspace id",
         ));
     }
-    OpenCodeAuthStore.save(&auth_cookie)?;
+    // The keyring write runs on the blocking pool with a soft timeout; the
+    // cookie is moved into the worker and never logged.
+    credential_task::save_cookie(auth_cookie).await?;
     {
         let mut config = state.config.lock().expect("config mutex");
         config.opencode_workspace_id = Some(workspace_id);
     }
     {
         let mut credentials = state.credentials.lock().expect("credential mutex");
+        credentials.phase = CredentialPhase::Available;
         credentials.available = true;
         credentials.error = None;
     }
@@ -58,9 +92,12 @@ pub fn save_credentials(
 
 /// Clears the keyring cookie and the persisted workspace ID.
 #[tauri::command]
-pub fn clear_credentials(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), AppError> {
+pub async fn clear_credentials(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), AppError> {
     let state = state.inner().clone();
-    OpenCodeAuthStore.clear()?;
+    credential_task::clear_cookie().await?;
     {
         let mut config = state.config.lock().expect("config mutex");
         config.opencode_workspace_id = None;
@@ -68,6 +105,7 @@ pub fn clear_credentials(app: AppHandle, state: State<'_, Arc<AppState>>) -> Res
     }
     {
         let mut credentials = state.credentials.lock().expect("credential mutex");
+        credentials.phase = CredentialPhase::Missing;
         credentials.available = false;
         credentials.error = None;
     }

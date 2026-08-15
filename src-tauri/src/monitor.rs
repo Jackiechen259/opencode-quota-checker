@@ -6,10 +6,11 @@
 //! per subscription cycle, delivers notifications, and emits `quota://*` /
 //! `monitor://status` events. The React frontend only listens.
 
+use crate::credential_task;
 use crate::error::AppError;
 use crate::events;
 use crate::state::{AppState, MonitorConfig};
-use opencode_core::{evaluate_alerts, OpenCodeAuthStore, QuotaService};
+use opencode_core::{evaluate_alerts, QuotaService};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -73,7 +74,7 @@ pub async fn run_once(app: &AppHandle) {
     let now_ms = chrono::Utc::now().timestamp_millis();
 
     let result = async {
-        let cookie = OpenCodeAuthStore.load()?;
+        let cookie = credential_task::load_cookie().await?;
         service
             .fetch_quota(&workspace, &cookie)
             .await

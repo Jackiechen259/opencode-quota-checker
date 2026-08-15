@@ -650,6 +650,10 @@
   align-self: flex-end;
 }
 
+.credentials-recheck {
+  align-self: flex-start;
+}
+
 .credentials-help {
   font-size: var(--text-label);
   color: var(--color-text-muted);

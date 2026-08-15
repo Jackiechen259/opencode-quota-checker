@@ -6,6 +6,7 @@
 //! events.
 
 use crate::config::{AppConfig, FloatMode, FloatPosition};
+use crate::credential_task::CredentialCheckResult;
 use crate::error::AppError;
 use opencode_core::{QuotaService, UsageReport};
 use serde::Serialize;
@@ -22,10 +23,31 @@ pub struct MonitorConfig {
     pub interval_secs: u64,
 }
 
+/// Lifecycle of the system-keyring availability check.
+///
+/// A check either completes into a terminal phase or times out; no error path
+/// may leave the state machine on [`CredentialPhase::Checking`], so the UI
+/// can never be stuck on "正在检查系统钥匙串…" forever.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CredentialPhase {
+    /// The initial or retried keyring check is in flight.
+    #[default]
+    Checking,
+    /// A cookie is stored and readable.
+    Available,
+    /// No cookie is stored (normal first-run state).
+    Missing,
+    /// The keyring failed; `error` carries the details.
+    Error,
+    /// The keyring did not answer within the soft deadline.
+    Timeout,
+}
+
 /// Keyring availability reported during startup.
 #[derive(Debug, Default)]
 pub struct CredentialStatus {
-    pub checking: bool,
+    pub phase: CredentialPhase,
     pub available: bool,
     pub error: Option<AppError>,
 }
@@ -141,10 +163,9 @@ impl AppState {
             monitor: Mutex::new(MonitorState::default()),
             floating: Mutex::new(FloatState::default()),
             updater: Mutex::new(UpdateState::default()),
-            credentials: Mutex::new(CredentialStatus {
-                checking: true,
-                ..CredentialStatus::default()
-            }),
+            // The initial keyring check starts in the Checking phase; the
+            // background check task applies the terminal outcome.
+            credentials: Mutex::new(CredentialStatus::default()),
             tray: Mutex::new(None),
             tray_error: RwLock::new(None),
             config_error: RwLock::new(None),
@@ -181,6 +202,36 @@ impl AppState {
             floating.open = config.float_open;
         }
         self.push_monitor_config();
+    }
+
+    /// Applies one keyring-check outcome to the credential state.
+    ///
+    /// Every terminal outcome leaves [`CredentialPhase::Checking`]; the only
+    /// way back into `Checking` is a new check (startup or explicit retry).
+    pub fn apply_credential_check(&self, result: CredentialCheckResult) {
+        let mut credentials = self.credentials.lock().expect("credential mutex");
+        match result {
+            CredentialCheckResult::Available => {
+                credentials.phase = CredentialPhase::Available;
+                credentials.available = true;
+                credentials.error = None;
+            }
+            CredentialCheckResult::Missing => {
+                credentials.phase = CredentialPhase::Missing;
+                credentials.available = false;
+                credentials.error = None;
+            }
+            CredentialCheckResult::Error(error) => {
+                credentials.phase = CredentialPhase::Error;
+                credentials.available = false;
+                credentials.error = Some(error);
+            }
+            CredentialCheckResult::Timeout => {
+                credentials.phase = CredentialPhase::Timeout;
+                credentials.available = false;
+                credentials.error = Some(crate::credential_task::timeout_error("读取"));
+            }
+        }
     }
 
     /// Pushes the current monitor configuration to the background task.
@@ -221,7 +272,7 @@ pub struct AppStatusDto {
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CredentialStatusDto {
-    pub checking: bool,
+    pub phase: CredentialPhase,
     pub available: bool,
     pub error: Option<AppError>,
 }
@@ -347,7 +398,7 @@ impl AppState {
                 .expect("config error rwlock")
                 .clone(),
             credentials: CredentialStatusDto {
-                checking: credentials.checking,
+                phase: credentials.phase,
                 available: credentials.available,
                 error: credentials.error.clone(),
             },

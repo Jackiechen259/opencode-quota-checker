@@ -1,13 +1,14 @@
 //! Quota usage commands.
 //!
 //! The `auth` cookie never crosses the IPC boundary: it is read from the
-//! keyring inside the Rust backend and only ever transmitted as a request
-//! header by `opencode-core`.
+//! keyring inside the Rust backend (through the blocking credential layer,
+//! so a wedged Credential Manager can never stall a refresh) and only ever
+//! transmitted as a request header by `opencode-core`.
 
+use crate::credential_task;
 use crate::error::AppError;
 use crate::monitor;
 use crate::state::{AppState, UsageDto};
-use opencode_core::OpenCodeAuthStore;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
@@ -72,7 +73,7 @@ pub async fn get_raw_dashboard(
 
     let service = state.service.clone();
     let result = async {
-        let cookie = OpenCodeAuthStore.load()?;
+        let cookie = credential_task::load_cookie().await?;
         service
             .fetch_raw_dashboard(&workspace, &cookie)
             .await

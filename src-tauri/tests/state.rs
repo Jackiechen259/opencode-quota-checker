@@ -8,7 +8,9 @@
 
 use opencode_core::QuotaService;
 use opencode_quota_checker_lib::config::{AppConfig, FloatMode};
-use opencode_quota_checker_lib::state::{AppState, UpdateStatus};
+use opencode_quota_checker_lib::credential_task::CredentialCheckResult;
+use opencode_quota_checker_lib::error::AppError;
+use opencode_quota_checker_lib::state::{AppState, CredentialPhase, UpdateStatus};
 use std::sync::Arc;
 use tokio::sync::watch;
 
@@ -118,4 +120,80 @@ fn status_dto_carries_version_and_configured_flag() {
     assert_eq!(dto.version, env!("CARGO_PKG_VERSION"));
     assert!(!dto.configured);
     assert!(!dto.tray_available);
+}
+
+#[test]
+fn credential_check_never_leaves_checking() {
+    let state = state();
+    let results = [
+        CredentialCheckResult::Available,
+        CredentialCheckResult::Missing,
+        CredentialCheckResult::Error(AppError::new(
+            "keyring_error",
+            "无法访问系统钥匙串。",
+            "keyring failed",
+        )),
+        CredentialCheckResult::Timeout,
+    ];
+    for result in results {
+        state.apply_credential_check(result);
+        let credentials = state.credentials.lock().expect("credential mutex");
+        assert_ne!(
+            credentials.phase,
+            CredentialPhase::Checking,
+            "every terminal credential outcome must leave the Checking phase"
+        );
+    }
+}
+
+#[test]
+fn credential_missing_is_not_available() {
+    let state = state();
+    state.apply_credential_check(CredentialCheckResult::Missing);
+    let credentials = state.credentials.lock().expect("credential mutex");
+    assert_eq!(credentials.phase, CredentialPhase::Missing);
+    assert!(!credentials.available);
+    assert!(credentials.error.is_none());
+}
+
+#[test]
+fn credential_timeout_is_recoverable() {
+    let state = state();
+    state.apply_credential_check(CredentialCheckResult::Timeout);
+    let credentials = state.credentials.lock().expect("credential mutex");
+    assert_eq!(credentials.phase, CredentialPhase::Timeout);
+    assert!(!credentials.available);
+    let error = credentials.error.as_ref().expect("timeout error is set");
+    assert!(
+        error.user.contains("超时"),
+        "timeout must produce a user-facing message, got: {}",
+        error.user
+    );
+}
+
+#[test]
+fn credential_available_enables_configured() {
+    let state = state();
+    state.apply_credential_check(CredentialCheckResult::Available);
+    {
+        let credentials = state.credentials.lock().expect("credential mutex");
+        assert_eq!(credentials.phase, CredentialPhase::Available);
+        assert!(credentials.available);
+    }
+    {
+        let mut config = state.config.lock().expect("config mutex");
+        config.opencode_workspace_id = Some("ws-test".to_owned());
+    }
+    assert!(state.configured());
+}
+
+#[test]
+fn status_dto_serializes_credential_phase() {
+    let state = state();
+    state.apply_credential_check(CredentialCheckResult::Timeout);
+    let json = serde_json::to_string(&state.status_dto()).expect("dto serializes");
+    assert!(
+        json.contains("\"phase\":\"timeout\""),
+        "the credential phase must cross the IPC boundary, got: {json}"
+    );
 }
