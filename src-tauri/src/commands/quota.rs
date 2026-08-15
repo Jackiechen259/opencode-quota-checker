@@ -65,7 +65,9 @@ pub async fn get_raw_dashboard(
     if workspace.trim().is_empty() {
         let mut usage = state.usage.lock().expect("usage mutex");
         usage.raw_loading = false;
-        return Err(AppError::from(opencode_core::OpenCodeError::CredentialsMissing));
+        return Err(AppError::from(
+            opencode_core::OpenCodeError::CredentialsMissing,
+        ));
     }
 
     let service = state.service.clone();

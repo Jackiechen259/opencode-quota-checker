@@ -58,10 +58,7 @@ pub fn save_credentials(
 
 /// Clears the keyring cookie and the persisted workspace ID.
 #[tauri::command]
-pub fn clear_credentials(
-    app: AppHandle,
-    state: State<'_, Arc<AppState>>,
-) -> Result<(), AppError> {
+pub fn clear_credentials(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), AppError> {
     let state = state.inner().clone();
     OpenCodeAuthStore.clear()?;
     {
@@ -96,6 +93,11 @@ pub fn clear_credentials(
 /// Opens the OpenCode login page in the system browser.
 #[tauri::command]
 pub fn open_login_page() -> Result<(), AppError> {
-    launcher::open_url(launcher::LOGIN_URL)
-        .map_err(|detail| AppError::new("browser_launch_failed", "无法打开浏览器，请手动访问 opencode.ai/auth 完成登录。", detail))
+    launcher::open_url(launcher::LOGIN_URL).map_err(|detail| {
+        AppError::new(
+            "browser_launch_failed",
+            "无法打开浏览器，请手动访问 opencode.ai/auth 完成登录。",
+            detail,
+        )
+    })
 }

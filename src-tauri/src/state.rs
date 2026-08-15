@@ -156,10 +156,7 @@ impl AppState {
 
     /// Reports whether the OpenCode workspace and auth cookie are configured.
     pub fn configured(&self) -> bool {
-        self.credentials
-            .lock()
-            .expect("credential mutex")
-            .available
+        self.credentials.lock().expect("credential mutex").available
             && self
                 .config
                 .lock()
@@ -187,13 +184,16 @@ impl AppState {
     }
 
     /// Pushes the current monitor configuration to the background task.
+    ///
+    /// Never holds a lock while calling `configured()`: `std::sync::Mutex`
+    /// is not reentrant, and doing so deadlocks the caller thread.
     pub fn push_monitor_config(&self) {
-        let config = self.config.lock().expect("config mutex");
         let configured = self.configured();
-        let payload = (configured && config.monitor_enabled)
-            .then_some(MonitorConfig {
-                interval_secs: config.monitor_interval_secs,
-            });
+        let (enabled, interval_secs) = {
+            let config = self.config.lock().expect("config mutex");
+            (config.monitor_enabled, config.monitor_interval_secs)
+        };
+        let payload = (configured && enabled).then_some(MonitorConfig { interval_secs });
         let _ = self.monitor_tx.send(payload);
     }
 }
@@ -333,12 +333,19 @@ impl AppState {
 
     /// Builds the full application status snapshot.
     pub fn status_dto(&self) -> AppStatusDto {
+        // `configured()` acquires the credentials mutex itself; it must run
+        // before we take that mutex here (std Mutex is not reentrant).
+        let configured = self.configured();
         let credentials = self.credentials.lock().expect("credential mutex");
         AppStatusDto {
             version: env!("CARGO_PKG_VERSION").to_owned(),
-            configured: self.configured(),
+            configured,
             config_loaded: self.config_loaded.load(Ordering::SeqCst),
-            config_error: self.config_error.read().expect("config error rwlock").clone(),
+            config_error: self
+                .config_error
+                .read()
+                .expect("config error rwlock")
+                .clone(),
             credentials: CredentialStatusDto {
                 checking: credentials.checking,
                 available: credentials.available,

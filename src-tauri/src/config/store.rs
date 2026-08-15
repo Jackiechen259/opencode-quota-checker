@@ -205,9 +205,15 @@ mod tests {
             config.opencode_workspace_id.as_deref(),
             Some("workspace-test-123")
         );
-        assert_eq!(config.close_behavior, crate::config::CloseBehavior::MinimizeToTray);
+        assert_eq!(
+            config.close_behavior,
+            crate::config::CloseBehavior::MinimizeToTray
+        );
         assert!(config.float_open);
-        assert_eq!(config.float_position, Some(crate::config::FloatPosition { x: 100, y: 200 }));
+        assert_eq!(
+            config.float_position,
+            Some(crate::config::FloatPosition { x: 100, y: 200 })
+        );
         assert!(!config.update_checks_enabled);
         assert!(!config.auto_download_updates);
     }

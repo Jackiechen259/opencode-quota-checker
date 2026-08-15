@@ -2,15 +2,17 @@
 
 ## Toolchain
 
-The project supports the latest stable Rust toolchain. Install it with rustup
-and ensure `cargo`, `rustfmt`, and `clippy` are available.
+The project requires the latest stable Rust toolchain plus Node.js 22+ and
+pnpm 11+ for the React frontend. Ensure `cargo`, `rustfmt`, `clippy`, `node`,
+and `pnpm` are available.
 
 ## Platform dependencies
 
 ### Windows
 
 Install the Visual Studio C++ build tools and the Windows SDK. The
-`x86_64-pc-windows-msvc` target is used by CI.
+`x86_64-pc-windows-msvc` target is used by CI. WebView2 Runtime is preinstalled
+on Windows 10/11.
 
 ### macOS
 
@@ -22,55 +24,75 @@ Apple Silicon runner.
 ```bash
 sudo apt-get update
 sudo apt-get install -y build-essential pkg-config libgtk-3-dev \
+  libwebkit2gtk-4.1-dev librsvg2-dev libssl-dev \
   libayatana-appindicator3-dev libxdo-dev libsecret-1-dev libnotify-bin
 ```
 
-AppImage packaging additionally needs `squashfs-tools`.
+AppImage packaging additionally needs `patchelf` (the Tauri bundler downloads
+its own AppImage tooling).
 
 ## Commands
 
 ```bash
-cargo run -p opencode-desktop
+pnpm install
+pnpm tauri dev             # dev mode: Vite HMR + Rust rebuilds
+pnpm tauri build           # release bundle for the current platform
+
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
-cargo build --workspace --release
 ```
 
-To produce the current platform's default install format:
-
-```bash
-cargo install cargo-packager --locked
-cargo packager --release --config crates/opencode-desktop/packager.json
-```
-
-Packages are written to `target/packages`.
+Bundles are written to `src-tauri/target/<target>/release/bundle/`.
 
 ### Windows
 
-Build the release binary and package it as a per-user NSIS installer:
+Build the per-user NSIS installer:
 
 ```powershell
-cargo build -p opencode-desktop --release --locked
-cargo packager --release --config crates/opencode-desktop/packager.json --formats nsis
+pnpm tauri build --bundles nsis
 ```
 
-The staged binary must live at `target\release\opencode-quota-checker.exe`
-(`packager.json` points `binariesDir` there; CI copies it from the
-`--target x86_64-pc-windows-msvc` build directory). The output installer is:
+The installer requires no administrator rights, shows up under **Settings →
+Installed apps**, and creates a Start Menu entry. Installers are unsigned;
+SmartScreen may warn.
 
-```text
-target\packages\opencode-quota-checker-windows-x86_64.exe
+### Linux
+
+```bash
+pnpm tauri build --bundles deb,appimage
 ```
 
-`cargo-packager` downloads its own NSIS toolchain on first run, so no separate
-NSIS install is needed. The installer requires no administrator rights, shows
-up under **Settings → Installed apps**, and creates a Start Menu entry.
-Installers are unsigned; SmartScreen may warn. See [release.md](release.md) for
-the optional code-signing stage and the upgrade/uninstall data-preservation
-behavior.
+### macOS (Apple Silicon)
+
+```bash
+pnpm tauri build --bundles dmg
+```
+
+### Updater signing
+
+Release bundles are signed for the built-in updater. Signing happens inside
+`.github/workflows/release.yml` using the `TAURI_SIGNING_PRIVATE_KEY` and
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets. For a local signed build:
+
+```bash
+pnpm tauri signer generate -w ~/.tauri/opencode-quota-checker.key
+TAURI_SIGNING_PRIVATE_KEY_PATH=~/.tauri/opencode-quota-checker.key \
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<password> \
+pnpm tauri build
+```
+
+The private key must never be committed; the matching public key is stored in
+`src-tauri/tauri.conf.json` (`plugins.updater.pubkey`).
 
 Compilation is not a substitute for installed-package smoke tests. Verify
-launch, window recreation from the tray, process exit, notifications, keyring,
-and all floating-window modes on each supported platform.
+launch, tray, close-to-tray, notifications, keyring, the floating-window modes
+and top docking, and the updater flow on each supported platform — see
+[docs/tauri-migration/smoke-test.md](tauri-migration/smoke-test.md).
 
 ## Icons
 
@@ -83,7 +105,6 @@ python scripts/generate-icon-source.py
 python scripts/generate-icons.py
 ```
 
-`window.rgba` and `tray.rgba` are raw RGBA embedded with `include_bytes!`, so
-rebuild the desktop crate after regenerating. Re-check the 16px `icon.ico` frame
-and `tray.rgba` whenever the artwork changes — the tray renders at those sizes
-and small-scale legibility is what constrains the design.
+Tauri consumes the PNG/ICO/ICNS files from `src-tauri/icons` (copied from
+`assets/icons`); the tray uses `32x32.png` and windows use `icon.png`. After
+regenerating, copy the new files into `src-tauri/icons` and rebuild.

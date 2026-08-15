@@ -599,12 +599,17 @@ mod tests {
         fs::write(&package, r#"{"name":"app","version":"1.2.3"}"#)
             .expect("package.json is written");
         assert_eq!(
-            package_json_version(root).expect("version parses").to_string(),
+            package_json_version(root)
+                .expect("version parses")
+                .to_string(),
             "1.2.3"
         );
-        update_package_json_version(root, &Version::from_str("2.0.0").expect("version")).expect("updates");
+        update_package_json_version(root, &Version::from_str("2.0.0").expect("version"))
+            .expect("updates");
         assert_eq!(
-            package_json_version(root).expect("version re-parses").to_string(),
+            package_json_version(root)
+                .expect("version re-parses")
+                .to_string(),
             "2.0.0"
         );
 
@@ -613,13 +618,17 @@ mod tests {
         fs::write(&config, r#"{"productName":"app","version":"0.1.2"}"#)
             .expect("tauri.conf.json is written");
         assert_eq!(
-            tauri_config_version(root).expect("version parses").to_string(),
+            tauri_config_version(root)
+                .expect("version parses")
+                .to_string(),
             "0.1.2"
         );
         update_tauri_config_version(root, &Version::from_str("0.2.0").expect("version"))
             .expect("updates");
         assert_eq!(
-            tauri_config_version(root).expect("version re-parses").to_string(),
+            tauri_config_version(root)
+                .expect("version re-parses")
+                .to_string(),
             "0.2.0"
         );
     }

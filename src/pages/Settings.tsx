@@ -168,6 +168,31 @@ function UpdateStatusBlock({ update }: { update: UpdateStateDto }) {
   }
 }
 
+/** Frontend UX validation; the Rust `AppConfig::validate` remains the final
+ * authority and runs again on every save. */
+export function validateMonitorForm(
+  interval: string,
+  fiveHour: string,
+  weekly: string,
+  monthly: string,
+): string | null {
+  const intervalNumber = Number(interval.trim());
+  if (!Number.isInteger(intervalNumber) || intervalNumber < 30 || intervalNumber > 3600) {
+    return "检查间隔必须是 30–3600 之间的整数。";
+  }
+  for (const [label, value] of [
+    ["5 小时阈值", fiveHour],
+    ["近一周阈值", weekly],
+    ["近一月阈值", monthly],
+  ] as const) {
+    const parsed = Number(value.trim());
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+      return `${label}必须是 0–100 之间的数字。`;
+    }
+  }
+  return null;
+}
+
 export function Settings({
   status,
   config,
@@ -215,6 +240,11 @@ export function Settings({
   };
 
   const startMonitor = async () => {
+    const validationError = validateMonitorForm(interval, fiveHour, weekly, monthly);
+    if (validationError) {
+      setError({ code: "settings_invalid", user: validationError, detail: validationError });
+      return;
+    }
     const saved = await persist((config) => ({
       ...config,
       monitor_enabled: true,
@@ -283,7 +313,6 @@ export function Settings({
   if (!config) return null;
   const credentials = status?.credentials;
   const monitorEnabled = status?.monitor.enabled ?? config.monitor_enabled;
-
   return (
     <div className="settings-page">
       <div className="settings-header">

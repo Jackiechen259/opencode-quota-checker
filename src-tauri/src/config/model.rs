@@ -166,6 +166,9 @@ mod tests {
             float_mode: FloatMode::Docked,
             ..AppConfig::default()
         };
-        assert_eq!(config.validate().expect("valid").float_mode, FloatMode::Compact);
+        assert_eq!(
+            config.validate().expect("valid").float_mode,
+            FloatMode::Compact
+        );
     }
 }

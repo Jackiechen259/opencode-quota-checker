@@ -68,10 +68,7 @@ pub async fn run_once(app: &AppHandle) {
     emit_monitor_status(app);
 
     let config = state.config.lock().expect("config mutex").clone();
-    let workspace = config
-        .opencode_workspace_id
-        .clone()
-        .unwrap_or_default();
+    let workspace = config.opencode_workspace_id.clone().unwrap_or_default();
     let service = state.service.clone();
     let now_ms = chrono::Utc::now().timestamp_millis();
 
@@ -86,9 +83,11 @@ pub async fn run_once(app: &AppHandle) {
 
     match result {
         Ok(report) => {
+            tracing::info!(windows = report.windows.len(), "quota refresh succeeded");
             let decisions = if config.monitor_enabled {
                 let mut monitor = state.monitor.lock().expect("monitor mutex");
-                let evaluation = evaluate_alerts(&report, &config.thresholds, &monitor.last_alerted);
+                let evaluation =
+                    evaluate_alerts(&report, &config.thresholds, &monitor.last_alerted);
                 monitor.last_alerted = evaluation.next_alerted;
                 evaluation.decisions
             } else {
@@ -113,6 +112,7 @@ pub async fn run_once(app: &AppHandle) {
             let _ = app.emit(events::QUOTA_UPDATED, &report);
         }
         Err(error) => {
+            tracing::warn!(%error, "quota refresh failed");
             {
                 let mut usage = state.usage.lock().expect("usage mutex");
                 usage.loading = false;

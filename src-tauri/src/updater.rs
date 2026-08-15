@@ -75,7 +75,11 @@ pub async fn check(app: &AppHandle) {
             Ok(Some(update)) => {
                 updater.available = Some(update);
                 updater.status = UpdateStatus::Available;
-                state.config.lock().expect("config mutex").auto_download_updates
+                state
+                    .config
+                    .lock()
+                    .expect("config mutex")
+                    .auto_download_updates
             }
             Ok(None) => {
                 updater.status = UpdateStatus::UpToDate;
@@ -220,7 +224,11 @@ pub async fn install(app: &AppHandle) -> Result<(), AppError> {
 /// Marks the dashboard update banner as dismissed for this run.
 pub fn dismiss(app: &AppHandle) {
     let state = app.state::<Arc<AppState>>().inner().clone();
-    state.updater.lock().expect("updater mutex").banner_dismissed = true;
+    state
+        .updater
+        .lock()
+        .expect("updater mutex")
+        .banner_dismissed = true;
     emit(app);
 }
 

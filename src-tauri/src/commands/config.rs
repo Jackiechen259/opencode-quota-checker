@@ -34,11 +34,7 @@ pub async fn save_config(
     let write = tauri::async_runtime::spawn_blocking(move || store.save(&canonical))
         .await
         .map_err(|error| {
-            AppError::new(
-                "config_write_failed",
-                "无法保存配置。",
-                error.to_string(),
-            )
+            AppError::new("config_write_failed", "无法保存配置。", error.to_string())
         })?;
     write.map_err(AppError::from)?;
 

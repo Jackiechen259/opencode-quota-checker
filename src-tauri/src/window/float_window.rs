@@ -83,7 +83,8 @@ pub fn open(app: &AppHandle, state: &AppState) -> Result<(), String> {
         tauri::WindowEvent::Moved(position) => {
             handle_moved(&handle, position);
         }
-        tauri::WindowEvent::Resized(_) => {
+        tauri::WindowEvent::Resized(_) =>
+        {
             #[cfg(target_os = "windows")]
             if let Some(window) = handle.get_webview_window("float") {
                 crate::window::win::round_corners(&window);
@@ -176,11 +177,7 @@ fn restore_saved_position(window: &WebviewWindow, position: FloatPosition) {
         let _ = window.set_position(PhysicalPosition::new(position.x, position.y));
         if let (Ok(Some(monitor)), Ok(size)) = (window.current_monitor(), window.outer_size()) {
             if let Ok(position) = window.outer_position() {
-                let clamped = clamp_position(
-                    position,
-                    &monitor,
-                    (size.width, size.height),
-                );
+                let clamped = clamp_position(position, &monitor, (size.width, size.height));
                 let _ = window.set_position(clamped);
             }
         }

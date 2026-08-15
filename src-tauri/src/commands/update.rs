@@ -51,7 +51,6 @@ pub fn open_release_notes(app: AppHandle) -> Result<(), AppError> {
     let Some(info) = dto.available else {
         return Ok(());
     };
-    crate::launcher::open_url(&info.release_notes_url).map_err(|detail| {
-        AppError::new("browser_launch_failed", "无法打开更新说明。", detail)
-    })
+    crate::launcher::open_url(&info.release_notes_url)
+        .map_err(|detail| AppError::new("browser_launch_failed", "无法打开更新说明。", detail))
 }

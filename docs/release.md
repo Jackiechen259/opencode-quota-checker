@@ -1,8 +1,9 @@
 # Release guide
 
-`[workspace.package].version` in the root `Cargo.toml` is the authoritative
-version. `cargo xtask` mirrors it into `packager.json` because cargo-packager
-requires an explicit package version.
+The root `Cargo.toml` `[workspace.package].version` is the authoritative
+version. `cargo xtask` mirrors it into `packager.json` (legacy Iced packager,
+kept during the migration), `package.json`, and `src-tauri/tauri.conf.json`.
+`src-tauri/Cargo.toml` inherits the workspace version automatically.
 
 Prepare a release from a clean working tree:
 
@@ -13,47 +14,50 @@ cargo xtask release major
 cargo xtask release 1.0.0-rc.1
 ```
 
-The command updates version metadata and `Cargo.lock`, formats, lints, tests,
-commits, and creates an annotated `vVERSION` tag. It does not push by default.
-Add `--push` to push the current branch and tag.
+The command updates every version metadata file and `Cargo.lock`, formats,
+lints, tests, commits, and creates an annotated `vVERSION` tag. It does not
+push by default. Add `--push` to push the current branch and tag.
+`cargo xtask verify-version [vVERSION]` checks all four files (and the tag)
+stay in sync and is part of CI.
 
 A pushed `v*` tag runs `.github/workflows/release.yml`:
 
 ```text
 resolve
    ↓
-package (Windows x64 / Linux x64 / macOS Apple Silicon)
+package (Windows x64 NSIS / Linux x64 deb+AppImage / macOS ARM dmg)
+   │     └ tauri-action: bundles + updater signatures + merged latest.json,
+   │       published to a draft GitHub release
    ↓
-prepare-release (normalize assets, SHA256SUMS, update.json)
+prepare-legacy (normalize legacy asset names, SHA256SUMS, update.json)
    ↓
-publish (GitHub release)
+finalize (un-draft the release)
 ```
-
-The publish job only runs when every package job and the manifest generation
-succeeded, so a release can never point at a missing asset. Tags containing a
-prerelease suffix are marked as prereleases and are ignored by the stable
-update channel.
 
 ## Packaging
 
-`packager.json` deliberately has no `beforePackagingCommand`: cargo-packager
-runs that hook through `cmd /S /C` on Windows with an extended-length working
-directory, which CMD.EXE rejects, so the build never finds `Cargo.toml`. The
-release workflow builds and stages the binary itself, and a local package run
-must do the same first:
+`package` jobs build through `tauri-action` with updater signing enabled:
+
+- `TAURI_SIGNING_PRIVATE_KEY` — the private key contents (secret)
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the key password (secret)
+
+Both live only in GitHub Actions Secrets. The public key is in
+`src-tauri/tauri.conf.json` under `plugins.updater.pubkey`.
+
+Local packaging uses the Tauri bundler:
 
 ```bash
-cargo build -p opencode-desktop --release
-cargo packager --release --config crates/opencode-desktop/packager.json
+pnpm tauri build --bundles nsis        # Windows per-user NSIS
+pnpm tauri build --bundles deb,appimage
+pnpm tauri build --bundles dmg
 ```
-
-`binariesDir` points at `target/release`, so a cross-compiled binary has to be
-copied there before packaging, exactly as the workflow's staging step does.
 
 ## Release assets
 
-Packages are renamed to stable names before upload, and the updater relies on
-exactly these filenames:
+Tauri bundles keep their default names (e.g. `OpenCode Quota Checker_0.1.2_x64-setup.exe`,
+`opencode-quota-checker_0.1.2_amd64.deb`, `..._aarch64.dmg`). The
+`prepare-legacy` job additionally attaches the legacy updater bridge with the
+exact names the old Iced client (0.1.2) downloads:
 
 ```text
 opencode-quota-checker-windows-x86_64.exe
@@ -65,119 +69,45 @@ opencode-quota-checker-macos-aarch64.dmg
 Every release additionally attaches:
 
 - `SHA256SUMS` — one `<sha256>  <filename>` line per asset, sorted by name.
-- `update.json` — the auto-update manifest (see below).
+- `update.json` — the legacy Iced auto-update manifest (schema 1).
+- `latest.json` + per-bundle `.sig` files — the Tauri updater artifacts,
+  published by `tauri-action`.
 
 macOS Intel is not built or published.
 
-## update.json
+## Legacy update.json (Iced → Tauri bridge)
 
-`prepare-release` runs `cargo xtask update-manifest <tag> release-assets`,
-which validates the tag, verifies that every required platform asset exists,
-computes SHA-256 digests, and writes `SHA256SUMS` and `update.json` into the
-asset directory. Missing required assets fail the job.
+`prepare-legacy` runs `cargo xtask update-manifest <tag> release-assets`, which
+validates the tag, verifies that every required platform asset exists,
+computes SHA-256 digests, and writes `SHA256SUMS` and `update.json`. Missing
+required assets fail the job.
 
-```json
-{
-  "schema": 1,
-  "version": "0.2.0",
-  "tag": "v0.2.0",
-  "prerelease": false,
-  "release_notes_url": "https://github.com/Jackiechen259/opencode-quota-checker/releases/tag/v0.2.0",
-  "platforms": {
-    "windows-x86_64": {
-      "type": "nsis",
-      "url": "https://github.com/Jackiechen259/opencode-quota-checker/releases/download/v0.2.0/opencode-quota-checker-windows-x86_64.exe",
-      "sha256": "..."
-    },
-    "linux-x86_64-appimage": { "type": "appimage", "url": "...", "sha256": "..." },
-    "linux-x86_64-deb": { "type": "deb", "url": "...", "sha256": "..." },
-    "macos-aarch64": { "type": "dmg", "url": "...", "sha256": "..." }
-  }
-}
-```
+The bridge exists so installed Iced 0.1.2 clients discover the first Tauri
+release through their built-in updater and install the Tauri NSIS/DMG/AppImage
+over their current version (config and keyring credential survive, as both use
+the same paths/entries). Keep publishing the legacy manifest for at least one
+release cycle after the switch.
 
-The manifest can be generated and inspected locally:
+## Updater verification
 
-```bash
-cargo xtask update-manifest v0.2.0 release-assets
-```
-
-## Windows installer
-
-Windows users download a single per-user NSIS setup executable:
+After publishing, verify the release page contains all platform bundles,
+signatures, `latest.json`, `update.json`, and `SHA256SUMS`, and that the
+updater manifests are reachable at:
 
 ```text
-opencode-quota-checker-windows-x86_64.exe
-```
-
-Installing it (no administrator rights required) places the application under
-`%LOCALAPPDATA%\OpenCode Quota Checker`, registers it in **Settings → Installed
-apps**, and adds an **OpenCode Quota Checker** Start Menu entry. Running a newer
-installer over an older release upgrades it in place. User configuration
-(`%APPDATA%\opencode-quota-checker`), cached update downloads
-(`%LOCALAPPDATA%\...\opencode-quota-checker\update`), and the keyring credential
-survive both upgrades and uninstall; uninstalling removes only the installed
-program and shortcuts.
-
-The same executable is the package the built-in auto-updater downloads for
-Windows, so every release must keep the exact filename above and keep the
-`update.json` `windows-x86_64` → `nsis` entry in sync. `cargo xtask
-update-manifest` and `verify-version` fail the build on any drift.
-
-Installers are unsigned until code signing is configured (below); Windows
-SmartScreen may warn on first run.
-
-## Code signing
-
-Packages are currently unsigned. Releases work without a certificate, but
-Windows SmartScreen shows a warning for unsigned downloads and macOS Gatekeeper
-requires extra steps for unsigned packages.
-
-Add an optional signing stage that only runs when signing credentials are
-configured, so unsigned builds keep working. Never commit a private key, `.pfx`
-file, or password.
-
-For Windows Authenticode signing, store the base64-encoded certificate and its
-password as repository secrets:
-
-```text
-WINDOWS_CERTIFICATE
-WINDOWS_CERTIFICATE_PASSWORD
-```
-
-A suggested CI step between packaging and upload:
-
-```yaml
-- name: Sign Windows installer
-  if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE != ''
-  shell: bash
-  env:
-    WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-    WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-  run: |
-    # Decode WINDOWS_CERTIFICATE to a .pfx, then:
-    #   signtool sign /f <certificate>.pfx /p "$WINDOWS_CERTIFICATE_PASSWORD" \
-    #     /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 <package>.exe
-    # Verify with: signtool verify /pa /v <package>.exe
-```
-
-Until signing is configured, the workflow publishes unsigned packages and the
-documentation must say so. Do not add self-signed or fake signatures to
-production releases.
-
-## Release verification
-
-After publishing, verify the release page contains all four platform packages,
-`SHA256SUMS`, and `update.json`, and that `update.json` is reachable at:
-
-```text
+https://github.com/Jackiechen259/opencode-quota-checker/releases/latest/download/latest.json
 https://github.com/Jackiechen259/opencode-quota-checker/releases/latest/download/update.json
 ```
 
 Then install the previous release and confirm the updater detects the new
-version, downloads, verifies, and offers to install it. Check each platform's
-install path (NSIS, DMG, AppImage, deb) per the client release smoke test.
+version, downloads, verifies the signature, and offers to install it after
+explicit user confirmation. Check each platform's install path (NSIS, DMG,
+AppImage, deb) per the release smoke test.
 
-The workflow produces unsigned packages until platform signing credentials are
-configured. Installed-package smoke tests for launch, tray, notifications,
-keyring, and the updater flow are mandatory release gates on every platform.
+## Code signing
+
+The updater packages are Ed25519-signed (Tauri updater), which is independent
+of platform code signing. The platform installers themselves remain unsigned
+until Windows Authenticode / macOS Developer ID credentials are configured;
+SmartScreen and Gatekeeper may warn on first run. Never commit a private key,
+`.pfx` file, or password.

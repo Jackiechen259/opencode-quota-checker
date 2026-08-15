@@ -29,10 +29,7 @@ pub async fn deliver(app: &AppHandle, decisions: Vec<AlertDecision>) {
                 error.to_string(),
             ));
             drop(monitor);
-            let _ = app.emit(
-                crate::events::MONITOR_STATUS,
-                state.monitor_dto(),
-            );
+            let _ = app.emit(crate::events::MONITOR_STATUS, state.monitor_dto());
         }
     }
 }

@@ -10,6 +10,5 @@ pub fn window() -> Image<'static> {
 
 /// Small PNG tray icon (32x32, from `assets/icons/32x32.png`).
 pub fn tray() -> Result<Image<'static>, String> {
-    Image::from_bytes(include_bytes!("../icons/32x32.png"))
-        .map_err(|error| error.to_string())
+    Image::from_bytes(include_bytes!("../icons/32x32.png")).map_err(|error| error.to_string())
 }

@@ -22,7 +22,11 @@ pub struct AppError {
 
 impl AppError {
     /// Wraps a message without leaking internals into the user-facing text.
-    pub fn new(code: impl Into<String>, user: impl Into<String>, detail: impl Into<String>) -> Self {
+    pub fn new(
+        code: impl Into<String>,
+        user: impl Into<String>,
+        detail: impl Into<String>,
+    ) -> Self {
         Self {
             code: code.into(),
             user: user.into(),

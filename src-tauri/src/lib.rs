@@ -3,18 +3,21 @@
 
 mod actions;
 mod commands;
-mod config;
-mod error;
+// `state`, `config`, `window` and `error` are public so the integration
+// tests in `src-tauri/tests/` can exercise the shared state machines. The
+// crate is a desktop binary; nothing else consumes this API surface.
+pub mod config;
+pub mod error;
 mod events;
 mod icons;
 mod launcher;
 mod monitor;
 mod notifications;
 mod persistence;
-mod state;
+pub mod state;
 mod tray;
 mod updater;
-mod window;
+pub mod window;
 
 use crate::config::{AppConfig, CloseBehavior, ConfigStore};
 use crate::state::AppState;
@@ -67,9 +70,8 @@ pub fn run() {
 fn init_logging() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                "opencode_quota_checker_lib=info,opencode_core=info".into()
-            }),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "opencode_quota_checker_lib=info,opencode_core=info".into()),
         )
         .init();
 }
@@ -78,19 +80,16 @@ fn init_logging() {
 fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Shared state: config, credentials, quota service.
     let (monitor_tx, monitor_rx) = watch::channel(None);
-    let state = Arc::new(AppState::new(
-        monitor::service()?,
-        monitor_tx,
-    ));
+    let state = Arc::new(AppState::new(monitor::service()?, monitor_tx));
 
-    let (config, config_error) = match ConfigStore::discover().and_then(|store| store.load_or_default())
-    {
-        Ok(config) => (config, None),
-        Err(error) => {
-            tracing::error!(%error, "failed to load configuration; using defaults");
-            (AppConfig::default(), Some(error.into()))
-        }
-    };
+    let (config, config_error) =
+        match ConfigStore::discover().and_then(|store| store.load_or_default()) {
+            Ok(config) => (config, None),
+            Err(error) => {
+                tracing::error!(%error, "failed to load configuration; using defaults");
+                (AppConfig::default(), Some(error.into()))
+            }
+        };
     state.apply_config(config);
 
     {
@@ -101,9 +100,18 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             Err(opencode_core::OpenCodeError::CredentialsMissing) => {}
             Err(error) => credentials.error = Some(error.into()),
         }
+        tracing::info!(
+            available = credentials.available,
+            keyring_error = credentials.error.is_some(),
+            "keyring credential check finished"
+        );
     }
     *state.config_error.write().expect("config error rwlock") = config_error;
     app.manage(state.clone());
+    tracing::info!(
+        configured = state.configured(),
+        "application state initialized"
+    );
 
     // 2. System tray (best effort; close behavior falls back to Exit).
     match tray::init(app.handle()) {
@@ -128,11 +136,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let state = handle.state::<Arc<AppState>>().inner().clone();
                 let tray_available = state.tray.lock().expect("tray mutex").is_some();
-                let minimize_to_tray = state
-                    .config
-                    .lock()
-                    .expect("config mutex")
-                    .close_behavior
+                let minimize_to_tray = state.config.lock().expect("config mutex").close_behavior
                     == CloseBehavior::MinimizeToTray;
                 if tray_available && minimize_to_tray {
                     api.prevent_close();
@@ -156,9 +160,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 7. Initial quota refresh when configured and monitoring is enabled.
-    if state.configured()
-        && state.config.lock().expect("config mutex").monitor_enabled
-    {
+    if state.configured() && state.config.lock().expect("config mutex").monitor_enabled {
         let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
             monitor::run_once(&handle).await;
@@ -167,7 +169,12 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // 8. Updater: periodic checks plus a startup check when enabled.
     updater::spawn_auto_check(app.handle().clone());
-    if state.config.lock().expect("config mutex").update_checks_enabled {
+    if state
+        .config
+        .lock()
+        .expect("config mutex")
+        .update_checks_enabled
+    {
         let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
             updater::check(&handle).await;

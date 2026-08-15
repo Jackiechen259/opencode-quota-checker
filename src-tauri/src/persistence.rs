@@ -10,10 +10,7 @@ use tauri::Manager;
 /// blocking error, because the in-memory state remains authoritative for the
 /// current run (matches the archived Iced client).
 pub fn persist_config(app: &tauri::AppHandle) {
-    let state = app
-        .state::<Arc<crate::state::AppState>>()
-        .inner()
-        .clone();
+    let state = app.state::<Arc<crate::state::AppState>>().inner().clone();
     persist_config_state(&state);
 }
 

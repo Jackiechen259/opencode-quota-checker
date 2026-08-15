@@ -24,7 +24,9 @@ const CORNER_RADIUS: f32 = 16.0;
 fn hwnd(window: &WebviewWindow) -> Option<HWND> {
     let handle = window.window_handle().ok()?.as_raw();
     match handle {
-        raw_window_handle::RawWindowHandle::Win32(handle) => Some(HWND(handle.hwnd.get() as *mut _)),
+        raw_window_handle::RawWindowHandle::Win32(handle) => {
+            Some(HWND(handle.hwnd.get() as *mut _))
+        }
         _ => None,
     }
 }
