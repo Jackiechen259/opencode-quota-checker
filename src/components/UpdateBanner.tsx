@@ -11,7 +11,7 @@ export function UpdateBanner({ update }: { update: UpdateStateDto }) {
 
   switch (update.status) {
     case "ready_to_install": {
-      const version = update.downloaded_version ?? "";
+      const version = update.downloadedVersion ?? "";
       label = `新版本 v${version} 已准备好`;
       action = { label: "安装并重启", onClick: () => void api.installUpdate() };
       break;

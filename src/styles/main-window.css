@@ -227,6 +227,67 @@
   color: var(--color-text-muted);
 }
 
+/* Startup error screen: replaces the infinite loading state when the boot
+   command fails or exceeds its deadline. The shell stays fully usable. */
+.startup-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.startup-error-card {
+  max-width: 520px;
+  padding: 24px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--main-frame-radius);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.startup-error-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.startup-error-message {
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.startup-error-details {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.startup-error-details summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.startup-error-detail {
+  margin-top: 8px;
+  padding: 10px;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.startup-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .main-footer {
   height: var(--footer-height);
   display: flex;

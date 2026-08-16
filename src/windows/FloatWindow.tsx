@@ -39,13 +39,13 @@ export function FloatWindow() {
 
   useTauriEvent<FloatStateDto>(EVENT.FLOAT_STATE, (payload) => {
     setFloatState(payload);
-    setMode(payload.top_docked ? "docked" : payload.mode);
+    setMode(payload.topDocked ? "docked" : payload.mode);
   });
 
   useEffect(() => {
     void api.getFloatState().then((state) => {
       setFloatState(state);
-      setMode(state.top_docked ? "docked" : state.mode);
+      setMode(state.topDocked ? "docked" : state.mode);
     });
     void reload();
   }, [reload]);
@@ -56,7 +56,7 @@ export function FloatWindow() {
     const timer = window.setInterval(() => {
       void api.getFloatState().then((state) => {
         setFloatState(state);
-        setMode(state.top_docked ? "docked" : state.mode);
+        setMode(state.topDocked ? "docked" : state.mode);
       });
     }, 1_000);
     return () => window.clearInterval(timer);
@@ -74,7 +74,7 @@ export function FloatWindow() {
     void api.refreshUsage();
   }, []);
 
-  const effectiveMode = floatState?.top_docked ? "docked" : mode;
+  const effectiveMode = floatState?.topDocked ? "docked" : mode;
   const windowClass = `float-window float-${effectiveMode}`;
   const dotColor = loading
     ? "var(--color-primary)"

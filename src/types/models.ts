@@ -1,7 +1,10 @@
 // TypeScript mirror of the Rust serde DTOs.
 //
 // Types from `opencode-core` keep snake_case field names (no `rename_all`);
-// the Tauri command DTOs use camelCase (`serde(rename_all = "camelCase")`).
+// the Tauri command DTOs use camelCase (`serde(rename_all = "camelCase")`),
+// and every IPC interface below must match the exact serialized JSON keys.
+// The Rust integration tests in `src-tauri/tests/state.rs` assert the same
+// contract on the Rust side — change both together.
 
 export type FloatMode = "full" | "compact" | "docked";
 export type CloseBehavior = "minimize_to_tray" | "exit";
@@ -78,30 +81,30 @@ export interface CredentialStatusDto {
 
 export interface MonitorStatusDto {
   enabled: boolean;
-  interval_secs: number;
+  intervalSecs: number;
   loading: boolean;
-  last_fetch_ms: number | null;
+  lastFetchMs: number | null;
   error: AppError | null;
-  notification_error: AppError | null;
+  notificationError: AppError | null;
 }
 
 export interface FloatStateDto {
   open: boolean;
   mode: FloatMode;
-  top_docked: boolean;
+  topDocked: boolean;
 }
 
 export interface UsageDto {
   report: UsageReport | null;
   loading: boolean;
   error: AppError | null;
-  last_success_ms: number | null;
+  lastSuccessMs: number | null;
 }
 
 export interface UpdateInfoDto {
   version: string;
   tag: string;
-  release_notes_url: string;
+  releaseNotesUrl: string;
   body: string | null;
 }
 
@@ -113,21 +116,30 @@ export interface UpdateProgressDto {
 export interface UpdateStateDto {
   status: UpdateStatus;
   available: UpdateInfoDto | null;
-  downloaded_version: string | null;
+  downloadedVersion: string | null;
   progress: UpdateProgressDto | null;
   error: AppError | null;
-  last_checked_ms: number | null;
-  banner_dismissed: boolean;
+  lastCheckedMs: number | null;
+  bannerDismissed: boolean;
+}
+
+/** Boot-critical subset of the app status, from `get_boot_status`. */
+export interface BootStatusDto {
+  version: string;
+  configured: boolean;
+  configLoaded: boolean;
+  configError: AppError | null;
+  credentials: CredentialStatusDto;
 }
 
 export interface AppStatusDto {
   version: string;
   configured: boolean;
-  config_loaded: boolean;
-  config_error: AppError | null;
+  configLoaded: boolean;
+  configError: AppError | null;
   credentials: CredentialStatusDto;
-  tray_available: boolean;
-  tray_error: string | null;
+  trayAvailable: boolean;
+  trayError: string | null;
   monitor: MonitorStatusDto;
   float: FloatStateDto;
   update: UpdateStateDto;

@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AppConfig,
   AppStatusDto,
+  BootStatusDto,
   FloatMode,
   FloatStateDto,
   MonitorStatusDto,
@@ -14,6 +15,8 @@ import type {
 } from "../types/models";
 
 export const api = {
+  /** Boot-critical status; the only command the startup screen waits on. */
+  getBootStatus: () => invoke<BootStatusDto>("get_boot_status"),
   getAppStatus: () => invoke<AppStatusDto>("get_app_status"),
   quitApp: () => invoke<void>("quit_app"),
 

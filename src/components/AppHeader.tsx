@@ -102,7 +102,7 @@ export function AppHeader({
     <div className="app-header">
       <div className="app-header-status">
         <LoadBadge report={report} />
-        {status && !status.tray_available ? (
+        {status && !status.trayAvailable ? (
           <StatusBadge tone="danger">托盘不可用</StatusBadge>
         ) : null}
       </div>

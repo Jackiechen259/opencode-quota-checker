@@ -145,7 +145,7 @@ function UpdateStatusBlock({ update }: { update: UpdateStateDto }) {
       );
     }
     case "ready_to_install": {
-      const version = update.downloaded_version ?? "";
+      const version = update.downloadedVersion ?? "";
       const installLabel = "安装并重启";
       return (
         <div className="settings-update-status settings-update-row">
@@ -256,14 +256,20 @@ export function Settings({
       },
     }));
     if (saved) {
-      await api.setMonitor(true).catch(() => {});
+      await api.setMonitor(true).catch((error) => {
+        console.error("[settings] set_monitor failed", error);
+      });
       setNotice("监控配置已保存并启动。");
-      await api.refreshUsage().catch(() => {});
+      await api.refreshUsage().catch((error) => {
+        console.error("[settings] refresh_usage failed", error);
+      });
     }
   };
 
   const stopMonitor = async () => {
-    await api.setMonitor(false).catch(() => {});
+    await api.setMonitor(false).catch((error) => {
+      console.error("[settings] set_monitor failed", error);
+    });
     const saved = await persist((config) => ({ ...config, monitor_enabled: false }));
     if (saved) setNotice("监控已停止。");
   };
@@ -328,8 +334,8 @@ export function Settings({
 
       {error ? <Notice kind="error">{error.user}</Notice> : null}
       {notice ? <Notice kind="success">{notice}</Notice> : null}
-      {status?.config_error ? (
-        <Notice kind="warning">配置文件读取失败，已使用默认配置：{status.config_error.user}</Notice>
+      {status?.configError ? (
+        <Notice kind="warning">配置文件读取失败，已使用默认配置：{status.configError.user}</Notice>
       ) : null}
 
       <SettingsCard
@@ -489,7 +495,7 @@ export function Settings({
           onChange={toggleAutoDownload}
         />
         <FormField label="上次检查">
-          <span className="settings-last-checked">{lastCheckedText(update?.last_checked_ms ?? null)}</span>
+          <span className="settings-last-checked">{lastCheckedText(update?.lastCheckedMs ?? null)}</span>
         </FormField>
         <div className="settings-row-right">
           <button

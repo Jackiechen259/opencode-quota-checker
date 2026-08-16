@@ -1,46 +1,55 @@
 // Main window shell: title bar, header, body router, footer, overlays.
 // One rounded frame around the whole page (like the archived Iced frame);
 // maximized windows go square and flush with the screen edge.
+//
+// Boot contract: the shell (TitleBar + AppHeader + window controls) renders
+// immediately and is never gated on backend state. Only the main body waits
+// on the boot status, and only for a bounded time: `get_boot_status` must
+// answer within STARTUP_TIMEOUT_MS, otherwise the loading screen becomes a
+// StartupError with an explicit retry. A failed/hanging IPC is never
+// silently reinterpreted as "still loading".
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AppHeader, type HeaderPage } from "./components/AppHeader";
+import { StartupError } from "./components/StartupError";
 import { Toast } from "./components/common";
 import { TitleBar } from "./components/TitleBar";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useAppStatus, useConfig, useQuota, useUpdater } from "./hooks/useApp";
 import { useNow } from "./hooks/useTauriEvents";
+import { useWindowState } from "./hooks/useWindowState";
 import { Credentials } from "./pages/Credentials";
 import { Dashboard } from "./pages/Dashboard";
 import { Debug } from "./pages/Debug";
 import { Settings } from "./pages/Settings";
 import { api } from "./services/tauri";
+import { windowService } from "./services/window";
 import { timestamp } from "./lib/format";
 
-const WINDOW = getCurrentWindow();
+/** How long the initial `get_boot_status` may take before the loading
+ * screen turns into an explicit startup error. */
+const STARTUP_TIMEOUT_MS = 8_000;
 
 export function MainWindow() {
-  const { status, reload: reloadStatus } = useAppStatus();
+  const { boot, status, reload: reloadStatus, retry: retryBoot } = useAppStatus();
   const { report, loading, error } = useQuota();
   const { config, setConfig } = useConfig();
   const { update } = useUpdater();
   const nowMs = useNow();
+  const { maximized } = useWindowState();
 
   const [page, setPage] = useState<HeaderPage>("dashboard");
   const [toast, setToast] = useState<string | null>(null);
-  const [maximized, setMaximized] = useState<boolean | null>(null);
+  const [startupTimedOut, setStartupTimedOut] = useState(false);
 
-  const refreshMaximized = useCallback(() => {
-    void WINDOW.isMaximized().then(setMaximized).catch(() => setMaximized(null));
-  }, []);
-
+  // Watchdog: the boot command has a hard deadline. If it neither resolves
+  // nor rejects in time, the UI must stop showing an infinite loading state.
   useEffect(() => {
-    refreshMaximized();
-    const unlisteners: (() => void)[] = [];
-    void WINDOW.onResized(refreshMaximized).then((fn) => unlisteners.push(fn));
-    void WINDOW.onMoved(refreshMaximized).then((fn) => unlisteners.push(fn));
-    return () => unlisteners.forEach((fn) => fn());
-  }, [refreshMaximized]);
+    if (boot.phase !== "loading") return;
+    setStartupTimedOut(false);
+    const timer = window.setTimeout(() => setStartupTimedOut(true), STARTUP_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [boot.phase]);
 
   useEffect(() => {
     if (!toast) return;
@@ -53,11 +62,13 @@ export function MainWindow() {
   }, []);
 
   const toggleFloat = useCallback(() => {
-    void api.openFloatWindow().catch(() => {});
+    void api.openFloatWindow().catch((error) => {
+      console.error("[float] open_float_window failed", error);
+    });
   }, []);
 
   const hideMain = useCallback(() => {
-    void WINDOW.hide();
+    void windowService.hide();
   }, []);
 
   const exitApp = useCallback(() => {
@@ -75,10 +86,14 @@ export function MainWindow() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onKeyDown]);
 
-  const configured = status?.configured ?? false;
-  const credentialPhase = status?.credentials.phase ?? "checking";
+  // The boot-ready status is the only source for boot gating; the undefined
+  // fallback pattern (`status?.x ?? false`) is banned here because it hides
+  // schema mismatches behind a "false" that looks like real data.
+  const booted = boot.phase === "ready" ? boot.status : null;
+  const configured = booted?.configured ?? false;
+  const credentialPhase = booted?.credentials.phase ?? "checking";
   const checking = credentialPhase === "checking";
-  const configLoaded = status?.config_loaded ?? false;
+  const configLoaded = booted?.configLoaded ?? false;
   const dashboardOpen = page === "dashboard" && configLoaded && configured;
 
   let body: ReactNode;
@@ -98,14 +113,51 @@ export function MainWindow() {
         onRefreshStatus={reloadStatus}
       />
     );
-  } else if (checking || !configLoaded) {
+  } else if (boot.phase === "error") {
+    body = (
+      <StartupError
+        title="应用初始化失败"
+        message="无法从后端获取启动状态。请检查日志后重试。"
+        detail={boot.error}
+        onRetry={retryBoot}
+      />
+    );
+  } else if (boot.phase === "loading") {
+    if (startupTimedOut) {
+      body = (
+        <StartupError
+          title="应用初始化超时"
+          message={`后端未在 ${STARTUP_TIMEOUT_MS / 1_000} 秒内响应启动状态请求。`}
+          detail="get_boot_status 未在期限内返回。可能原因：Tauri IPC 主线程阻塞、命令 panic 或命令不存在。"
+          onRetry={retryBoot}
+        />
+      );
+    } else {
+      body = <div className="checking-state">正在检查系统钥匙串…</div>;
+    }
+  } else if (!configLoaded) {
+    // Ready but the config never loaded: a backend contract violation, not
+    // something to hide behind a loading screen.
+    console.error("[ipc-contract] BootStatusDto missing configLoaded", booted);
+    body = (
+      <StartupError
+        title="应用初始化失败"
+        message="后端报告配置未加载，无法继续。"
+        detail="configLoaded 为 false。请检查配置文件后重试。"
+        onRetry={retryBoot}
+      />
+    );
+  } else if (checking) {
+    // A recheck is in flight (initial boot never reaches here: while the
+    // boot command itself is pending the shell shows the watchdog-guarded
+    // loading state above). The shell stays fully interactive.
     body = <div className="checking-state">正在检查系统钥匙串…</div>;
   } else if (!configured) {
     body = (
       <Credentials
         configured={false}
         phase={credentialPhase}
-        statusError={status?.credentials.error ?? null}
+        statusError={booted?.credentials.error ?? null}
         onRecheck={() => {
           void api.recheckCredentials();
           reloadStatus();
@@ -130,7 +182,7 @@ export function MainWindow() {
   return (
     <div className={`main-window ${maximized ? "main-window-maximized" : ""}`}>
       <div className="main-frame">
-        <TitleBar />
+        <TitleBar maximized={maximized} />
         <AppHeader
           status={status}
           report={report}
@@ -144,7 +196,7 @@ export function MainWindow() {
           onExit={exitApp}
         />
         {update &&
-        !update.banner_dismissed &&
+        !update.bannerDismissed &&
         (update.status === "available" ||
           update.status === "downloading" ||
           update.status === "ready_to_install") ? (
