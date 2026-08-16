@@ -39,9 +39,11 @@ finalize (un-draft the release)
 `package` jobs build through `tauri-action` with updater signing enabled:
 
 - `TAURI_SIGNING_PRIVATE_KEY` — the private key contents (secret)
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the key password (secret)
 
-Both live only in GitHub Actions Secrets. The public key is in
+The current key is passwordless (generated with `cargo tauri signer generate -p ""`),
+so `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is not needed; if the key ever has a
+password again, it must be provided as a second secret. The private key lives
+only in GitHub Actions Secrets. The public key is in
 `src-tauri/tauri.conf.json` under `plugins.updater.pubkey`.
 
 Local packaging uses the Tauri bundler:
