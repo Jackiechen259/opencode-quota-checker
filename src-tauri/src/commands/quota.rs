@@ -10,18 +10,15 @@ use crate::error::AppError;
 use crate::monitor;
 use crate::state::{AppState, UsageDto};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Returns the latest parsed usage report (never the raw response).
+///
+/// Async so the mutex acquisition never runs on the Tauri main thread.
 #[tauri::command]
-pub fn get_usage(state: State<'_, Arc<AppState>>) -> UsageDto {
-    let usage = state.inner().usage.lock().expect("usage mutex");
-    UsageDto {
-        report: usage.report.clone(),
-        loading: usage.loading,
-        error: usage.error.clone(),
-        last_success_ms: usage.last_success_ms,
-    }
+pub async fn get_usage(app: AppHandle) -> UsageDto {
+    let state = app.state::<Arc<AppState>>().inner().clone();
+    state.usage_dto()
 }
 
 /// Triggers one fetch/parse/alert cycle through the shared monitor path.

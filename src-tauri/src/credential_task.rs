@@ -86,7 +86,31 @@ pub enum CredentialCheckResult {
 
 /// Checks whether an OpenCode auth cookie is stored, with a soft timeout.
 pub async fn check_credentials() -> CredentialCheckResult {
+    #[cfg(debug_assertions)]
+    if let Some(delay) = simulated_keyring_delay() {
+        // Test-only: simulate a wedged Credential Manager so the timeout and
+        // UI-responsiveness paths can be exercised on a real machine.
+        return check_credentials_with(
+            move || {
+                std::thread::sleep(delay);
+                OpenCodeAuthStore.load()
+            },
+            CREDENTIAL_TIMEOUT,
+        )
+        .await;
+    }
     check_credentials_with(|| OpenCodeAuthStore.load(), CREDENTIAL_TIMEOUT).await
+}
+
+/// Debug-build-only hook: `OQC_KEYRING_DELAY_MS` makes the boot keyring
+/// check block for the given duration (inside the blocking worker), which
+/// forces the soft-timeout path. Never compiled into release builds.
+#[cfg(debug_assertions)]
+fn simulated_keyring_delay() -> Option<Duration> {
+    std::env::var("OQC_KEYRING_DELAY_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .map(Duration::from_millis)
 }
 
 /// Testable core of [`check_credentials`]: runs an injected load operation.

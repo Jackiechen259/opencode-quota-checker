@@ -40,6 +40,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::app::get_boot_status,
             commands::app::get_app_status,
             commands::app::quit_app,
             commands::quota::get_usage,
@@ -79,10 +80,29 @@ fn init_logging() {
 }
 
 /// Loads the shared state and starts every background service.
+///
+/// Every stage logs `[startup]` timing so a startup wedge is attributable to
+/// one phase from the logs. Nothing here ever touches the keyring: the
+/// credential check runs on the blocking pool inside a spawned task and can
+/// only delay the credential *result*, never the window shell.
 fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    use std::time::Instant;
+
+    let started = Instant::now();
+    let stage = |name: &str, from: Instant| {
+        tracing::info!(
+            target: "opencode_quota_checker_lib::startup",
+            elapsed_ms = from.elapsed().as_millis() as u64,
+            total_ms = started.elapsed().as_millis() as u64,
+            "[startup] {name}"
+        );
+        Instant::now()
+    };
+
     // 1. Shared state: config, credentials, quota service.
     let (monitor_tx, monitor_rx) = watch::channel(None);
     let state = Arc::new(AppState::new(monitor::service()?, monitor_tx));
+    let mut since = stage("state initialized", started);
 
     let (config, config_error) =
         match ConfigStore::discover().and_then(|store| store.load_or_default()) {
@@ -93,6 +113,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         };
     state.apply_config(config);
+    since = stage("config loaded", since);
 
     // The keyring availability check runs as a background task on the
     // blocking pool with a soft timeout — never on the setup thread. The
@@ -109,6 +130,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
     *state.config_error.write().expect("config error rwlock") = config_error;
     app.manage(state.clone());
+    since = stage("credential task spawned", since);
     tracing::info!(
         configured = state.configured(),
         "application state initialized"
@@ -122,13 +144,16 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             *state.tray_error.write().expect("tray error rwlock") = Some(error);
         }
     }
+    since = stage("tray initialized", since);
 
     // 3. Notifications (permission prompt on macOS).
     notifications::request_permission(app.handle());
+    since = stage("notifications initialized", since);
 
     // 4. Background monitor.
     monitor::spawn(app.handle().clone(), monitor_rx);
     state.push_monitor_config();
+    since = stage("monitor spawned", since);
 
     // 5. Window behavior: the caption × and Alt+F4 always terminate the
     // process. Hiding to the tray is a separate, explicit action (header
@@ -147,35 +172,46 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
+    since = stage("window handlers installed", since);
 
     // 6. Restore the floating window when configured.
-    if state.config.lock().expect("config mutex").float_open {
+    let float_open = state.config.lock().expect("config mutex").float_open;
+    if float_open {
         if let Err(error) = window::float_window::open(app.handle(), &state) {
             tracing::error!(%error, "failed to restore the floating window");
         }
     }
+    since = stage("float restore complete", since);
 
     // 7. Initial quota refresh when configured and monitoring is enabled.
-    if state.configured() && state.config.lock().expect("config mutex").monitor_enabled {
+    let monitor_enabled = state.config.lock().expect("config mutex").monitor_enabled;
+    if state.configured() && monitor_enabled {
         let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
             monitor::run_once(&handle).await;
         });
     }
+    since = stage("initial quota spawned", since);
 
     // 8. Updater: periodic checks plus a startup check when enabled.
     updater::spawn_auto_check(app.handle().clone());
-    if state
+    let update_checks_enabled = state
         .config
         .lock()
         .expect("config mutex")
-        .update_checks_enabled
-    {
+        .update_checks_enabled;
+    if update_checks_enabled {
         let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
             updater::check(&handle).await;
         });
     }
+    stage("updater spawned", since);
 
+    tracing::info!(
+        target: "opencode_quota_checker_lib::startup",
+        total_ms = started.elapsed().as_millis() as u64,
+        "[startup] setup complete"
+    );
     Ok(())
 }

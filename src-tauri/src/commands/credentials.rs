@@ -32,7 +32,7 @@ pub async fn has_credentials() -> Result<bool, AppError> {
 /// The check runs in the background; the result arrives via the `app://status`
 /// event. The window shell stays fully operable while it is in flight.
 #[tauri::command]
-pub fn recheck_credentials(
+pub async fn recheck_credentials(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<(), AppError> {

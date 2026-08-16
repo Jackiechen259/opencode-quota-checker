@@ -107,9 +107,11 @@ pub fn change_float_mode(app: &AppHandle, mode: FloatMode) {
     {
         let mut floating = state.floating.lock().expect("float mutex");
         floating.top_docked = mode == FloatMode::Docked;
-        if mode != FloatMode::Docked {
-            state.config.lock().expect("config mutex").float_mode = mode;
-        }
+    }
+    // Never nested with the floating guard: both locks are acquired one at a
+    // time per the lock-ordering rules on `AppState`.
+    if mode != FloatMode::Docked {
+        state.config.lock().expect("config mutex").float_mode = mode;
     }
     if let Some(window) = app.get_webview_window("float") {
         let effective = float_window::effective_mode(&state);

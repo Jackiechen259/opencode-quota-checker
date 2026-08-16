@@ -67,19 +67,16 @@ pub async fn check(app: &AppHandle) {
     };
 
     // Apply the outcome with the guard strictly scoped, so no `MutexGuard`
-    // can ever be held across the `download` await below.
-    let auto_download = {
+    // can ever be held across the `download` await below or across another
+    // lock acquisition (see the lock-ordering rules on `AppState`).
+    let available = {
         let mut updater = state.updater.lock().expect("updater mutex");
         updater.last_checked_ms = Some(chrono::Utc::now().timestamp_millis());
         match result {
             Ok(Some(update)) => {
                 updater.available = Some(update);
                 updater.status = UpdateStatus::Available;
-                state
-                    .config
-                    .lock()
-                    .expect("config mutex")
-                    .auto_download_updates
+                true
             }
             Ok(None) => {
                 updater.status = UpdateStatus::UpToDate;
@@ -97,8 +94,15 @@ pub async fn check(app: &AppHandle) {
         }
     };
     emit(app);
-    if auto_download {
-        download(app).await;
+    if available {
+        let auto_download = state
+            .config
+            .lock()
+            .expect("config mutex")
+            .auto_download_updates;
+        if auto_download {
+            download(app).await;
+        }
     }
 }
 
@@ -131,12 +135,16 @@ pub async fn download(app: &AppHandle) {
     let result = update
         .download(
             move |chunk_len, total| {
-                let mut updater = progress_state.updater.lock().expect("updater mutex");
-                let downloaded = updater
-                    .progress
-                    .map_or(0, |(downloaded, _)| downloaded)
-                    .saturating_add(chunk_len as u64);
-                updater.progress = Some((downloaded, total));
+                // The updater and throttle guards are never held together:
+                // each is scoped to its own block (lock-ordering rules).
+                {
+                    let mut updater = progress_state.updater.lock().expect("updater mutex");
+                    let downloaded = updater
+                        .progress
+                        .map_or(0, |(downloaded, _)| downloaded)
+                        .saturating_add(chunk_len as u64);
+                    updater.progress = Some((downloaded, total));
+                }
                 let should_emit = {
                     let mut last = throttle.lock().expect("progress throttle mutex");
                     let now = Instant::now();
@@ -148,7 +156,6 @@ pub async fn download(app: &AppHandle) {
                     }
                     due
                 };
-                drop(updater);
                 if should_emit {
                     let _ = progress_app.emit(events::UPDATE_STATE, progress_state.update_dto());
                 }

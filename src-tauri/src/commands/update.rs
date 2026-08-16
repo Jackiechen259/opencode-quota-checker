@@ -5,12 +5,15 @@ use crate::error::AppError;
 use crate::state::{AppState, UpdateStateDto};
 use crate::updater;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 
 /// Returns the current updater snapshot.
+///
+/// Async so the mutex acquisition never runs on the Tauri main thread.
 #[tauri::command]
-pub fn get_update_state(state: State<'_, Arc<AppState>>) -> UpdateStateDto {
-    state.inner().update_dto()
+pub async fn get_update_state(app: AppHandle) -> UpdateStateDto {
+    let state = app.state::<Arc<AppState>>().inner().clone();
+    state.update_dto()
 }
 
 /// Runs one manifest check (background; events carry the result).
@@ -44,8 +47,10 @@ pub fn dismiss_update(app: AppHandle) {
 }
 
 /// Opens the release notes of the available update in the browser.
+///
+/// Async so the updater snapshot lock never runs on the Tauri main thread.
 #[tauri::command]
-pub fn open_release_notes(app: AppHandle) -> Result<(), AppError> {
+pub async fn open_release_notes(app: AppHandle) -> Result<(), AppError> {
     let state = app.state::<Arc<AppState>>().inner().clone();
     let dto = state.update_dto();
     let Some(info) = dto.available else {

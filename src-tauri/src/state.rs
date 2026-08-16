@@ -135,6 +135,25 @@ pub struct UpdateState {
 }
 
 /// The single state container shared by every window and background task.
+///
+/// # Lock ordering
+///
+/// Global lock order (highest to lowest priority): **credentials → config →
+/// tray → monitor → floating → updater → usage**. The `tray_error` /
+/// `config_error` `RwLock`s are leaf resources and never nested.
+///
+/// Hard rules enforced across the crate:
+///
+/// * No function may hold two guards at the same time. Every acquisition is
+///   either a statement temporary or inside its own block that drops the
+///   guard before the next acquisition. If two locks ever need to be held
+///   together, acquire them in the documented order and add a comment here.
+/// * No `std::sync::MutexGuard` may be held across an `await` or across a
+///   call that can acquire another lock (including `persist_config`,
+///   `status_dto`, `configured`, `push_monitor_config`).
+/// * A guard must never be acquired as a temporary inside an `if`/`while`
+///   condition: the temporary lives until the end of the whole statement,
+///   which silently nests the lock. Bind the value explicitly instead.
 pub struct AppState {
     pub config: Mutex<AppConfig>,
     pub usage: Mutex<UsageState>,
@@ -253,6 +272,22 @@ impl AppState {
 // Serializable DTOs crossing the IPC boundary
 // ---------------------------------------------------------------------------
 
+/// Boot-critical subset of the app status, returned by `get_boot_status`.
+///
+/// Deliberately small: the startup UI only needs the version, config load
+/// state and the credential phase. It never touches the tray, monitor,
+/// floating-window or updater state, so a wedged subsystem (e.g. a poisoned
+/// updater mutex) can never prevent the main window from booting.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BootStatusDto {
+    pub version: String,
+    pub configured: bool,
+    pub config_loaded: bool,
+    pub config_error: Option<AppError>,
+    pub credentials: CredentialStatusDto,
+}
+
 /// Snapshot returned by `get_app_status`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -359,6 +394,17 @@ impl AppState {
         }
     }
 
+    /// Builds the current usage snapshot for IPC/events.
+    pub fn usage_dto(&self) -> UsageDto {
+        let usage = self.usage.lock().expect("usage mutex");
+        UsageDto {
+            report: usage.report.clone(),
+            loading: usage.loading,
+            error: usage.error.clone(),
+            last_success_ms: usage.last_success_ms,
+        }
+    }
+
     /// Builds the current monitor snapshot for IPC/events.
     pub fn monitor_dto(&self) -> MonitorStatusDto {
         let monitor = self.monitor.lock().expect("monitor mutex");
@@ -382,13 +428,62 @@ impl AppState {
         }
     }
 
+    /// Builds the boot-critical snapshot: config load state + credentials.
+    ///
+    /// Touches only the credentials mutex (through `configured()` and
+    /// `credentials`), the config mutex and the config-error rwlock — never
+    /// tray / monitor / float / updater state. Each phase is traced so a
+    /// wedge is identifiable from the logs instead of guessed.
+    pub fn boot_dto(&self) -> BootStatusDto {
+        let started = std::time::Instant::now();
+        let configured = self.configured();
+        tracing::debug!(
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "snapshot: configured"
+        );
+        let credentials = self.credentials.lock().expect("credential mutex");
+        tracing::debug!(
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "snapshot: credentials"
+        );
+        let dto = BootStatusDto {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            configured,
+            config_loaded: self.config_loaded.load(Ordering::SeqCst),
+            config_error: self
+                .config_error
+                .read()
+                .expect("config error rwlock")
+                .clone(),
+            credentials: CredentialStatusDto {
+                phase: credentials.phase,
+                available: credentials.available,
+                error: credentials.error.clone(),
+            },
+        };
+        tracing::debug!(
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "boot snapshot complete"
+        );
+        dto
+    }
+
     /// Builds the full application status snapshot.
     pub fn status_dto(&self) -> AppStatusDto {
+        let started = std::time::Instant::now();
         // `configured()` acquires the credentials mutex itself; it must run
         // before we take that mutex here (std Mutex is not reentrant).
         let configured = self.configured();
+        tracing::debug!(
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "status snapshot: configured"
+        );
         let credentials = self.credentials.lock().expect("credential mutex");
-        AppStatusDto {
+        tracing::debug!(
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "status snapshot: credentials"
+        );
+        let dto = AppStatusDto {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             configured,
             config_loaded: self.config_loaded.load(Ordering::SeqCst),
@@ -407,34 +502,47 @@ impl AppState {
             monitor: self.monitor_dto(),
             float: self.float_dto(),
             update: self.update_dto(),
-        }
+        };
+        tracing::debug!(
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "status snapshot complete"
+        );
+        dto
     }
 
     /// Records a moved float position and schedules a debounced persistence.
     ///
     /// Takes the `Arc` so the spawned task can keep its own reference to the
-    /// shared state.
+    /// shared state. The guard is released before `persist_config` runs:
+    /// persisting acquires the config lock and must never be called while
+    /// another guard is held (see the lock-ordering rules on `AppState`).
     pub fn mark_float_moved(self: &Arc<Self>, app: &tauri::AppHandle, position: FloatPosition) {
         {
             let mut config = self.config.lock().expect("config mutex");
             config.float_position = Some(position);
         }
-        {
+        let generation = {
             let mut floating = self.floating.lock().expect("float mutex");
             floating.position_dirty = true;
             floating.position_gen += 1;
-            let generation = floating.position_gen;
-            drop(floating);
-            let state = Arc::clone(self);
-            let handle = app.clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+            floating.position_gen
+        };
+        let state = Arc::clone(self);
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+            let should_persist = {
                 let mut floating = state.floating.lock().expect("float mutex");
                 if floating.position_dirty && floating.position_gen == generation {
                     floating.position_dirty = false;
-                    crate::persistence::persist_config(&handle);
+                    true
+                } else {
+                    false
                 }
-            });
-        }
+            };
+            if should_persist {
+                crate::persistence::persist_config(&handle);
+            }
+        });
     }
 }

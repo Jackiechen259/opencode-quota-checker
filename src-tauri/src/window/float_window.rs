@@ -25,7 +25,11 @@ pub const TOP_RELEASE_DISTANCE: f64 = 24.0;
 /// Returns the presentation mode currently in effect: Docked while the
 /// window is snapped to the monitor top, otherwise the configured mode.
 pub fn effective_mode(state: &AppState) -> FloatMode {
-    if state.floating.lock().expect("float mutex").top_docked {
+    // Bind the guard explicitly: a guard temporary inside an `if` condition
+    // lives until the end of the whole statement and would silently nest
+    // with the config lock below (lock-ordering rules on `AppState`).
+    let top_docked = state.floating.lock().expect("float mutex").top_docked;
+    if top_docked {
         FloatMode::Docked
     } else {
         state.config.lock().expect("config mutex").float_mode

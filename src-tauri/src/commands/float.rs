@@ -10,9 +10,12 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
 /// Returns the current floating-window snapshot.
+///
+/// Async so the mutex acquisition never runs on the Tauri main thread.
 #[tauri::command]
-pub fn get_float_state(state: State<'_, Arc<AppState>>) -> FloatStateDto {
-    state.inner().float_dto()
+pub async fn get_float_state(app: AppHandle) -> FloatStateDto {
+    let state = app.state::<Arc<AppState>>().inner().clone();
+    state.float_dto()
 }
 
 /// Opens (or focuses) the floating window.

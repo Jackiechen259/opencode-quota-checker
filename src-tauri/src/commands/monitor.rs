@@ -2,10 +2,13 @@
 
 use crate::state::{AppState, MonitorStatusDto};
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Manager};
 
 /// Returns the current monitoring snapshot.
+///
+/// Async so the mutex acquisition never runs on the Tauri main thread.
 #[tauri::command]
-pub fn get_monitor_status(state: State<'_, Arc<AppState>>) -> MonitorStatusDto {
-    state.inner().monitor_dto()
+pub async fn get_monitor_status(app: AppHandle) -> MonitorStatusDto {
+    let state = app.state::<Arc<AppState>>().inner().clone();
+    state.monitor_dto()
 }

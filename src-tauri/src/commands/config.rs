@@ -8,12 +8,16 @@ use crate::error::AppError;
 use crate::persistence::persist_config;
 use crate::state::AppState;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Returns the current validated configuration.
+///
+/// Async so the mutex acquisition never runs on the Tauri main thread.
 #[tauri::command]
-pub fn get_config(state: State<'_, Arc<AppState>>) -> AppConfig {
-    state.inner().config.lock().expect("config mutex").clone()
+pub async fn get_config(app: AppHandle) -> AppConfig {
+    let state = app.state::<Arc<AppState>>().inner().clone();
+    let config = state.config.lock().expect("config mutex").clone();
+    config
 }
 
 /// Validates, persists, and applies a configuration update.
@@ -45,8 +49,11 @@ pub async fn save_config(
 }
 
 /// Toggles background monitoring on/off (persisted).
+///
+/// Async because it performs a disk write (`persist_config`) that must never
+/// run on the Tauri main thread.
 #[tauri::command]
-pub fn set_monitor(
+pub async fn set_monitor(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
     enabled: bool,
