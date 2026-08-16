@@ -1,24 +1,11 @@
 {
-  "name": "opencode-quota-checker",
-  "private": true,
-  "version": "0.1.2",
-  "type": "module",
-  "description": "Monitor OpenCode Go quota windows, alerts, and reset times from a native Tauri desktop application.",
-  "license": "Apache-2.0",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings 0",
-    "test": "vitest run",
-    "tauri": "tauri"
-  },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.2.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
+  "description": "Monitor OpenCode Go quota windows, alerts, and reset times from a native Tauri desktop application.",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.9.0",
@@ -35,5 +22,18 @@
     "typescript": "~5.6.3",
     "vite": "^6.0.3",
     "vitest": "^2.1.8"
-  }
+  },
+  "license": "Apache-2.0",
+  "name": "opencode-quota-checker",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite",
+    "lint": "eslint . --max-warnings 0",
+    "tauri": "tauri",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "0.2.0"
 }
