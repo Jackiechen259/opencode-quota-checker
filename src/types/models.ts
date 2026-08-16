@@ -5,6 +5,12 @@
 
 export type FloatMode = "full" | "compact" | "docked";
 export type CloseBehavior = "minimize_to_tray" | "exit";
+export type CredentialPhase =
+  | "checking"
+  | "available"
+  | "missing"
+  | "error"
+  | "timeout";
 export type UpdateStatus =
   | "idle"
   | "checking"
@@ -65,7 +71,7 @@ export interface AppConfig {
 }
 
 export interface CredentialStatusDto {
-  checking: boolean;
+  phase: CredentialPhase;
   available: boolean;
   error: AppError | null;
 }

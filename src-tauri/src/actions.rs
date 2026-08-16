@@ -7,6 +7,30 @@ use crate::window::float_window;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
+/// Response to a main-window close request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MainCloseAction {
+    /// Terminate the process.
+    Exit,
+    /// Hide to the tray, keeping the daemon alive.
+    ///
+    /// Never constructed: closing must not hide. The variant documents the
+    /// behavior that was deliberately removed so a future change cannot
+    /// silently reintroduce close-to-tray through this decision point.
+    #[allow(dead_code)]
+    HideToTray,
+}
+
+/// Decides what a main-window close request (caption ×, Alt+F4) does.
+///
+/// Closing always exits. Hiding to the tray is an explicit action (header
+/// menu "隐藏主窗口" / tray menu); closing and hiding never share a path.
+/// The `close_behavior` config field is retained for schema compatibility
+/// but deliberately no longer consulted here.
+pub fn main_close_action() -> MainCloseAction {
+    MainCloseAction::Exit
+}
+
 /// Shows (or recreates) and focuses the main window.
 pub fn show_main(app: &AppHandle) {
     match app.get_webview_window("main") {
@@ -24,8 +48,11 @@ pub fn show_main(app: &AppHandle) {
 }
 
 /// Hides the main window while keeping the daemon (and monitoring) alive.
+///
+/// This is the only path that hides to the tray; it is always explicit.
 pub fn hide_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        tracing::info!("main window hidden to tray");
         let _ = window.hide();
     }
 }
@@ -99,4 +126,16 @@ pub fn change_float_mode(app: &AppHandle, mode: FloatMode) {
 /// Terminates the whole application: monitor task, windows, webviews, process.
 pub fn quit(app: &AppHandle) {
     app.exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn main_close_always_exits() {
+        // The caption × and Alt+F4 terminate the process; hiding to the tray
+        // is an explicit action only and never reachable through close.
+        assert_eq!(main_close_action(), MainCloseAction::Exit);
+    }
 }

@@ -3,10 +3,12 @@
 
 mod actions;
 mod commands;
-// `state`, `config`, `window` and `error` are public so the integration
-// tests in `src-tauri/tests/` can exercise the shared state machines. The
-// crate is a desktop binary; nothing else consumes this API surface.
+// `credential_task`, `state`, `config`, `window` and `error` are public so
+// the integration tests in `src-tauri/tests/` can exercise the shared state
+// machines. The crate is a desktop binary; nothing else consumes this API
+// surface.
 pub mod config;
+pub mod credential_task;
 pub mod error;
 mod events;
 mod icons;
@@ -19,11 +21,10 @@ mod tray;
 mod updater;
 pub mod window;
 
-use crate::config::{AppConfig, CloseBehavior, ConfigStore};
+use crate::config::{AppConfig, ConfigStore};
 use crate::state::AppState;
-use opencode_core::OpenCodeAuthStore;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::sync::watch;
 
 /// Application entry point invoked by `main.rs`.
@@ -48,6 +49,7 @@ pub fn run() {
             commands::config::save_config,
             commands::config::set_monitor,
             commands::credentials::has_credentials,
+            commands::credentials::recheck_credentials,
             commands::credentials::save_credentials,
             commands::credentials::clear_credentials,
             commands::credentials::open_login_page,
@@ -92,19 +94,18 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         };
     state.apply_config(config);
 
+    // The keyring availability check runs as a background task on the
+    // blocking pool with a soft timeout — never on the setup thread. The
+    // window and its shell appear immediately; a wedged Credential Manager
+    // can delay only the credential result, never the UI.
     {
-        let mut credentials = state.credentials.lock().expect("credential mutex");
-        credentials.checking = false;
-        match OpenCodeAuthStore.load() {
-            Ok(_) => credentials.available = true,
-            Err(opencode_core::OpenCodeError::CredentialsMissing) => {}
-            Err(error) => credentials.error = Some(error.into()),
-        }
-        tracing::info!(
-            available = credentials.available,
-            keyring_error = credentials.error.is_some(),
-            "keyring credential check finished"
-        );
+        let state = state.clone();
+        let handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            let result = credential_task::check_credentials().await;
+            state.apply_credential_check(result);
+            let _ = handle.emit(events::APP_STATUS, state.status_dto());
+        });
     }
     *state.config_error.write().expect("config error rwlock") = config_error;
     app.manage(state.clone());
@@ -129,24 +130,19 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     monitor::spawn(app.handle().clone(), monitor_rx);
     state.push_monitor_config();
 
-    // 5. Window behavior: close-to-tray on the main window.
+    // 5. Window behavior: the caption × and Alt+F4 always terminate the
+    // process. Hiding to the tray is a separate, explicit action (header
+    // menu / tray menu); closing and hiding never share a path.
     if let Some(main_window) = app.get_webview_window("main") {
         let handle = app.handle().clone();
         main_window.on_window_event(move |event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let state = handle.state::<Arc<AppState>>().inner().clone();
-                let tray_available = state.tray.lock().expect("tray mutex").is_some();
-                let minimize_to_tray = state.config.lock().expect("config mutex").close_behavior
-                    == CloseBehavior::MinimizeToTray;
-                if tray_available && minimize_to_tray {
-                    api.prevent_close();
-                    if let Some(window) = handle.get_webview_window("main") {
-                        let _ = window.hide();
-                    }
-                } else {
-                    // Exit behavior (or missing tray): terminate everything —
-                    // monitor task, webviews, windows, process.
-                    handle.exit(0);
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                tracing::info!("main window close request; exiting");
+                match crate::actions::main_close_action() {
+                    crate::actions::MainCloseAction::Exit => handle.exit(0),
+                    // Unreachable by design: closing never hides. The arm
+                    // exists so the close policy stays a single decision.
+                    crate::actions::MainCloseAction::HideToTray => {}
                 }
             }
         });

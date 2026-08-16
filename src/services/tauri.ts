@@ -26,6 +26,7 @@ export const api = {
   setMonitor: (enabled: boolean) => invoke<void>("set_monitor", { enabled }),
 
   hasCredentials: () => invoke<boolean>("has_credentials"),
+  recheckCredentials: () => invoke<void>("recheck_credentials"),
   saveCredentials: (workspaceId: string, authCookie: string) =>
     invoke<void>("save_credentials", { workspaceId, authCookie }),
   clearCredentials: () => invoke<void>("clear_credentials"),

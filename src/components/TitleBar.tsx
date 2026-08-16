@@ -72,8 +72,9 @@ export function TitleBar() {
           className="titlebar-control titlebar-control-close"
           title="关闭"
           aria-label="关闭"
-          // Routes through the Rust close handler, so close-to-tray semantics
-          // stay identical to the native ×.
+          // Routes through the Rust close handler, which always terminates
+          // the process. Hiding to the tray is an explicit action only
+          // (header menu "隐藏主窗口" / tray menu).
           onClick={() => void WINDOW.close()}
         >
           <Icons.WinClose size={11} />

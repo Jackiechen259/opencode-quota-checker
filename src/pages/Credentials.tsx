@@ -7,14 +7,26 @@
 import { useState } from "react";
 import { Notice } from "../components/common";
 import { api } from "../services/tauri";
-import type { AppError } from "../types/models";
+import type { AppError, CredentialPhase } from "../types/models";
 
 interface Props {
   configured: boolean;
+  /** Keyring availability phase reported by the backend. */
+  phase: CredentialPhase;
+  /** Error attached to the keyring check (timeout / keyring failure). */
+  statusError: AppError | null;
+  /** Re-runs the keyring availability check. */
+  onRecheck: () => void;
   onSaved: () => void;
 }
 
-export function Credentials({ configured, onSaved }: Props) {
+export function Credentials({
+  configured,
+  phase,
+  statusError,
+  onRecheck,
+  onSaved,
+}: Props) {
   const [workspace, setWorkspace] = useState("");
   const [cookie, setCookie] = useState("");
   const [mutating, setMutating] = useState(false);
@@ -22,6 +34,8 @@ export function Credentials({ configured, onSaved }: Props) {
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
 
   const canSave = !mutating && workspace.trim().length > 0 && cookie.trim().length > 0;
+
+  const keyringFailed = phase === "error" || phase === "timeout";
 
   const save = async () => {
     if (!canSave) return;
@@ -97,6 +111,16 @@ export function Credentials({ configured, onSaved }: Props) {
         </div>
         {loginNotice ? <div className="credentials-login-notice">{loginNotice}</div> : null}
         {error ? <Notice kind="error">{error.user}</Notice> : null}
+        {keyringFailed && statusError ? <Notice kind="error">{statusError.user}</Notice> : null}
+        {keyringFailed ? (
+          <button
+            type="button"
+            className="btn credentials-recheck"
+            onClick={onRecheck}
+          >
+            重新检查系统钥匙串
+          </button>
+        ) : null}
       </div>
       {configured ? (
         <div className="credentials-configured-hint">

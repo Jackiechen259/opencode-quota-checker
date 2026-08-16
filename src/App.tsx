@@ -76,7 +76,8 @@ export function MainWindow() {
   }, [onKeyDown]);
 
   const configured = status?.configured ?? false;
-  const checking = status?.credentials.checking ?? true;
+  const credentialPhase = status?.credentials.phase ?? "checking";
+  const checking = credentialPhase === "checking";
   const configLoaded = status?.config_loaded ?? false;
   const dashboardOpen = page === "dashboard" && configLoaded && configured;
 
@@ -100,7 +101,18 @@ export function MainWindow() {
   } else if (checking || !configLoaded) {
     body = <div className="checking-state">正在检查系统钥匙串…</div>;
   } else if (!configured) {
-    body = <Credentials configured={false} onSaved={reloadStatus} />;
+    body = (
+      <Credentials
+        configured={false}
+        phase={credentialPhase}
+        statusError={status?.credentials.error ?? null}
+        onRecheck={() => {
+          void api.recheckCredentials();
+          reloadStatus();
+        }}
+        onSaved={reloadStatus}
+      />
+    );
   } else {
     body = (
       <Dashboard
