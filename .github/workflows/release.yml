@@ -197,6 +197,7 @@ jobs:
       - name: Finalize the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release edit "${{ needs.resolve.outputs.tag }}" --draft=false
           gh release view "${{ needs.resolve.outputs.tag }}" --json assets --jq '.assets[].name' | sort
