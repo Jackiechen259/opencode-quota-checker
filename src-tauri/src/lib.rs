@@ -177,7 +177,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // 6. Restore the floating window when configured.
     let float_open = state.config.lock().expect("config mutex").float_open;
     if float_open {
-        if let Err(error) = window::float_window::open(app.handle(), &state) {
+        if let Err(error) = window::float_window::open(app.handle(), state.clone()) {
             tracing::error!(%error, "failed to restore the floating window");
         }
     }

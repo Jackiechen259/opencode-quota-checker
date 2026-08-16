@@ -3,7 +3,10 @@
 //! Behavior ported from the archived Iced `window/float_window.rs`:
 //!
 //! - always-on-top, borderless, non-resizable;
-//! - Full / Compact / Docked sizes in logical pixels;
+//! - Full / Compact / Docked sizes in logical pixels (single source of the
+//!   layout constants lives here, matching `float-window.css`);
+//! - Full height is dynamic: `FULL_CHROME_HEIGHT + quota_count ×
+//!   FULL_CARD_STEP`, clamped to `FULL_MIN_HEIGHT..=FULL_MAX_HEIGHT`;
 //! - position persisted in physical pixels (stable across mixed-DPI
 //!   monitors) and clamped to the nearest monitor work area on restore;
 //! - top docking with hysteresis: snapping at 18 px (DPI-scaled) while
@@ -22,18 +25,97 @@ pub const TOP_SNAP_DISTANCE: f64 = 18.0;
 /// Larger release distance prevents repeated mode changes near the boundary.
 pub const TOP_RELEASE_DISTANCE: f64 = 24.0;
 
+/// Width of the floating widget in logical pixels, shared by every mode.
+pub const FLOAT_WIDTH: f64 = 392.0;
+/// Compact card height (the hero row flexes to fill the extra space).
+pub const COMPACT_HEIGHT: f64 = 168.0;
+/// Docked strip height.
+pub const DOCKED_HEIGHT: f64 = 48.0;
+/// Full mode lower bound: never shrink below the skeleton/empty layout.
+pub const FULL_MIN_HEIGHT: f64 = 280.0;
+/// Full mode upper bound: beyond this the quota list scrolls.
+pub const FULL_MAX_HEIGHT: f64 = 560.0;
+/// One quota card plus its gap, in logical pixels.
+pub const FULL_CARD_STEP: f64 = 96.0;
+/// Fixed Full chrome (padding + header + gaps + meta + footer), logical px.
+pub const FULL_CHROME_HEIGHT: f64 = 134.0;
+
+/// Corner radius per presentation mode, in logical pixels.
+///
+/// Must stay in sync with the CSS `border-radius` in `float-window.css`
+/// (`--radius-float` / `--radius-float-docked`); the native region and the
+/// rendered card would otherwise show a jagged ring between the two shapes.
+pub fn corner_radius(mode: FloatMode) -> f32 {
+    match mode {
+        FloatMode::Docked => 12.0,
+        FloatMode::Full | FloatMode::Compact => 16.0,
+    }
+}
+
 /// Returns the presentation mode currently in effect: Docked while the
 /// window is snapped to the monitor top, otherwise the configured mode.
+///
+/// Reads `AppConfig.float_mode` — the single persisted source — instead of a
+/// duplicated transient copy, so the DTO, the native window size and the
+/// frontend render can never disagree. The config guard is a statement
+/// temporary (dropped before the floating lock is taken), honoring the
+/// lock-ordering rules on `AppState`.
 pub fn effective_mode(state: &AppState) -> FloatMode {
-    // Bind the guard explicitly: a guard temporary inside an `if` condition
-    // lives until the end of the whole statement and would silently nest
-    // with the config lock below (lock-ordering rules on `AppState`).
+    let configured = state.config.lock().expect("config mutex").float_mode;
     let top_docked = state.floating.lock().expect("float mutex").top_docked;
     if top_docked {
         FloatMode::Docked
     } else {
-        state.config.lock().expect("config mutex").float_mode
+        configured
     }
+}
+
+/// Ideal Full height for `quota_count` cards, clamped to the window bounds.
+pub fn full_height(quota_count: usize) -> f64 {
+    (FULL_CHROME_HEIGHT + FULL_CARD_STEP * quota_count as f64)
+        .clamp(FULL_MIN_HEIGHT, FULL_MAX_HEIGHT)
+}
+
+/// Ideal Full height for the current usage state.
+///
+/// While no report exists the skeleton is sized for two cards, so the first
+/// load does not resize the window out from under the loading UI.
+pub fn full_height_for(state: &AppState) -> f64 {
+    let count = state
+        .usage
+        .lock()
+        .expect("usage mutex")
+        .report
+        .as_ref()
+        .map_or(2, |report| report.windows.len().max(1));
+    full_height(count)
+}
+
+/// Logical size for a presentation mode under the current usage state.
+pub fn size_for(mode: FloatMode, state: &AppState) -> (f64, f64) {
+    let height = match mode {
+        FloatMode::Full => full_height_for(state),
+        FloatMode::Compact => COMPACT_HEIGHT,
+        FloatMode::Docked => DOCKED_HEIGHT,
+    };
+    (FLOAT_WIDTH, height)
+}
+
+/// Resizes the float window (when it exists) to the ideal size for its
+/// current presentation mode and usage state.
+///
+/// Idempotent and safe to call from any thread; the size always derives from
+/// the canonical state, so the native window can never drift from the DTO
+/// the frontend renders. Called after every mode/dock change and after every
+/// quota refresh.
+pub fn sync_float_size(app: &AppHandle) {
+    let state = app.state::<Arc<AppState>>().inner().clone();
+    let Some(window) = app.get_webview_window("float") else {
+        return;
+    };
+    let mode = effective_mode(&state);
+    let (width, height) = size_for(mode, &state);
+    let _ = window.set_size(LogicalSize::new(width, height));
 }
 
 /// Docking decision with hysteresis.
@@ -52,12 +134,17 @@ pub fn is_top_docked(currently_docked: bool, distance: f64, scale_factor: f64) -
 }
 
 /// Creates the unique floating window with all its event handlers.
-pub fn open(app: &AppHandle, state: &AppState) -> Result<(), String> {
+///
+/// The window is created hidden and sized to the effective presentation
+/// mode before it is ever shown, so the webview's first frames (a
+/// lightweight boot shell until `get_float_state` resolves) already match
+/// the native size — no Full-in-a-Compact-window first frame.
+pub fn open(app: &AppHandle, state: Arc<AppState>) -> Result<(), String> {
     if app.get_webview_window("float").is_some() {
         return Ok(());
     }
-    let mode = effective_mode(state);
-    let (width, height) = mode.size();
+    let mode = effective_mode(&state);
+    let (width, height) = size_for(mode, &state);
 
     let builder = WebviewWindowBuilder::new(app, "float", WebviewUrl::App("index.html".into()))
         .title("OpenCode Quota Checker · 悬浮窗")
@@ -83,6 +170,7 @@ pub fn open(app: &AppHandle, state: &AppState) -> Result<(), String> {
     let _ = window.set_size(LogicalSize::new(width, height));
 
     let handle = app.clone();
+    let state_for_events = state.clone();
     window.on_window_event(move |event| match event {
         tauri::WindowEvent::Moved(position) => {
             handle_moved(&handle, position);
@@ -91,7 +179,8 @@ pub fn open(app: &AppHandle, state: &AppState) -> Result<(), String> {
         {
             #[cfg(target_os = "windows")]
             if let Some(window) = handle.get_webview_window("float") {
-                crate::window::win::round_corners(&window);
+                let mode = effective_mode(&state_for_events);
+                crate::window::win::round_corners_for(&window, corner_radius(mode));
             }
         }
         tauri::WindowEvent::CloseRequested { .. } => {
@@ -101,7 +190,7 @@ pub fn open(app: &AppHandle, state: &AppState) -> Result<(), String> {
     });
 
     #[cfg(target_os = "windows")]
-    crate::window::win::round_corners(&window);
+    crate::window::win::round_corners_for(&window, corner_radius(mode));
 
     window.show().map_err(|error| error.to_string())?;
     let _ = window.set_focus();
@@ -140,7 +229,7 @@ fn handle_moved(app: &AppHandle, position: &PhysicalPosition<i32>) {
     }
     state.floating.lock().expect("float mutex").top_docked = top_docked;
     let mode = effective_mode(&state);
-    let (width, height) = mode.size();
+    let (width, height) = size_for(mode, &state);
     let _ = window.set_size(LogicalSize::new(width, height));
     if top_docked {
         snap_to_monitor_top(&window);

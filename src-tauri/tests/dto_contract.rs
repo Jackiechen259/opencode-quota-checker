@@ -78,7 +78,12 @@ fn app_status_dto_uses_camel_case_contract() {
     assert_lacks(monitor, "notification_error");
 
     let float = json.get("float").expect("float snapshot");
+    assert_has(float, "configuredMode");
+    assert_has(float, "presentationMode");
     assert_has(float, "topDocked");
+    // The old single `mode` field is gone: the DTO must not smuggle one
+    // field with three meanings (persisted / native / render).
+    assert_lacks(float, "mode");
     assert_lacks(float, "top_docked");
 
     let update = json.get("update").expect("update snapshot");

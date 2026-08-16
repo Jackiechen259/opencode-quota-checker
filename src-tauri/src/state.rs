@@ -84,10 +84,15 @@ pub struct MonitorState {
 }
 
 /// Transient floating-window state.
+///
+/// The persisted layout mode intentionally does NOT live here: `AppConfig`
+/// is the single source of truth for Full / Compact, and `top_docked` is the
+/// only transient presentation flag. Keeping a second `mode` field here is
+/// exactly what caused the frontend to render Full while the native window
+/// was Compact — the two copies drifted apart.
 #[derive(Debug, Default)]
 pub struct FloatState {
     pub open: bool,
-    pub mode: FloatMode,
     /// Whether the window is temporarily snapped to the monitor top.
     pub top_docked: bool,
     /// Whether a move event is waiting for debounced persistence.
@@ -217,7 +222,6 @@ impl AppState {
         }
         {
             let mut floating = self.floating.lock().expect("float mutex");
-            floating.mode = config.float_mode;
             floating.open = config.float_open;
         }
         self.push_monitor_config();
@@ -250,6 +254,29 @@ impl AppState {
                 credentials.available = false;
                 credentials.error = Some(crate::credential_task::timeout_error("读取"));
             }
+        }
+    }
+
+    /// Applies the canonical float-mode transition to the shared state.
+    ///
+    /// - Full / Compact become the persisted configured mode and clear
+    ///   docking;
+    /// - Docked only flips the transient `top_docked` flag — it never
+    ///   touches the persisted mode, so undocking restores the previous
+    ///   Full/Compact.
+    ///
+    /// `AppConfig.float_mode` is the single source of truth for the
+    /// configured mode; there is deliberately no duplicate copy in
+    /// `FloatState` anymore (that duplication is what let the DTO drift
+    /// from the native window). Both guards are taken one at a time and
+    /// never nested (lock-ordering rules on `AppState`).
+    pub fn apply_float_mode(&self, mode: FloatMode) {
+        {
+            let mut floating = self.floating.lock().expect("float mutex");
+            floating.top_docked = mode == FloatMode::Docked;
+        }
+        if mode != FloatMode::Docked {
+            self.config.lock().expect("config mutex").float_mode = mode;
         }
     }
 
@@ -323,11 +350,20 @@ pub struct MonitorStatusDto {
     pub notification_error: Option<AppError>,
 }
 
+/// Snapshot of the floating window crossing the IPC boundary.
+///
+/// `configured_mode` is the persisted layout (Full or Compact — Docked is
+/// transient and never persisted) and `presentation_mode` is what the UI
+/// must render right now (Docked while the window is snapped to the monitor
+/// top, otherwise the configured mode). Keeping the two distinct means the
+/// frontend never has to derive one from the other, and the native window
+/// size always follows `presentation_mode`.
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FloatStateDto {
     pub open: bool,
-    pub mode: FloatMode,
+    pub configured_mode: FloatMode,
+    pub presentation_mode: FloatMode,
     pub top_docked: bool,
 }
 
@@ -419,11 +455,21 @@ impl AppState {
     }
 
     /// Builds the current floating-window snapshot for IPC/events.
+    ///
+    /// The config lock is taken first and released (statement temporary)
+    /// before the floating lock, so the two guards are never held together
+    /// (lock-ordering rules on `AppState`).
     pub fn float_dto(&self) -> FloatStateDto {
+        let configured = self.config.lock().expect("config mutex").float_mode;
         let floating = self.floating.lock().expect("float mutex");
         FloatStateDto {
             open: floating.open,
-            mode: floating.mode,
+            configured_mode: configured,
+            presentation_mode: if floating.top_docked {
+                FloatMode::Docked
+            } else {
+                configured
+            },
             top_docked: floating.top_docked,
         }
     }

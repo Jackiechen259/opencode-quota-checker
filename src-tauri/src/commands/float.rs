@@ -29,7 +29,7 @@ pub fn open_float_window(app: AppHandle, state: State<'_, Arc<AppState>>) -> Res
         }
         return Ok(());
     }
-    crate::window::float_window::open(&app, &state)?;
+    crate::window::float_window::open(&app, state.clone())?;
     state.floating.lock().expect("float mutex").open = true;
     crate::tray::emit_float_state(&app);
     crate::persistence::persist_config(&app);

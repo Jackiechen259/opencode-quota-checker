@@ -17,7 +17,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowRect, SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
 };
 
-/// Corner radius of the floating card, in logical pixels.
+/// Corner radius of the floating card, in logical pixels (Full / Compact).
 const CORNER_RADIUS: f32 = 16.0;
 
 /// Returns the native `HWND` of a live window.
@@ -31,13 +31,20 @@ fn hwnd(window: &WebviewWindow) -> Option<HWND> {
     }
 }
 
+/// Clips the undecorated floating window to a rounded rectangle using the
+/// default card radius.
+pub fn round_corners(window: &WebviewWindow) {
+    round_corners_for(window, CORNER_RADIUS);
+}
+
 /// Clips the undecorated floating window to a rounded rectangle.
 ///
 /// The webview surface is opaque on Windows, so the renderer cannot draw the
 /// rounded shape itself. A window region is what remains. The region lives in
 /// window coordinates and does not follow a resize, so it is reapplied on
-/// every resize/DPI change (the float window's `Resized` handler calls this).
-pub fn round_corners(window: &WebviewWindow) {
+/// every resize/DPI change (the float window's `Resized` handler calls this
+/// with the radius of the current presentation mode).
+pub fn round_corners_for(window: &WebviewWindow, radius: f32) {
     let Some(hwnd) = hwnd(window) else {
         return;
     };
@@ -52,7 +59,7 @@ pub fn round_corners(window: &WebviewWindow) {
     let scale = if dpi == 0 { 1.0 } else { dpi as f32 / 96.0 };
     // The region bounds are exclusive, and `CreateRoundRectRgn` takes the
     // size of the ellipse its corners are cut from rather than a radius.
-    let ellipse = (CORNER_RADIUS * scale * 2.0).round() as i32;
+    let ellipse = (radius * scale * 2.0).round() as i32;
     // SAFETY: plain value arguments; the returned handle is checked below.
     let region = unsafe {
         CreateRoundRectRgn(

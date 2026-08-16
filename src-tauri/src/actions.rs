@@ -65,7 +65,7 @@ pub fn open_float(app: &AppHandle) {
         let _ = window.set_focus();
         return;
     }
-    if let Err(error) = float_window::open(app, &state) {
+    if let Err(error) = float_window::open(app, state.clone()) {
         tracing::error!(%error, "failed to open the floating window");
         return;
     }
@@ -102,20 +102,20 @@ pub fn toggle_float(app: &AppHandle) {
 }
 
 /// Switches the floating window mode and resizes it to the mode's size.
+///
+/// Transactional order: canonical state → effective mode → native resize →
+/// dock snap → emit the (already consistent) DTO → persist. The frontend
+/// renders only from the emitted DTO, so native window and UI can never
+/// disagree — the same `presentation_mode` that sized the window is the one
+/// the event carries. The state transition itself lives in
+/// `AppState::apply_float_mode` (public so the integration tests can pin the
+/// state machine without a window handle).
 pub fn change_float_mode(app: &AppHandle, mode: FloatMode) {
     let state = app.state::<Arc<AppState>>().inner().clone();
-    {
-        let mut floating = state.floating.lock().expect("float mutex");
-        floating.top_docked = mode == FloatMode::Docked;
-    }
-    // Never nested with the floating guard: both locks are acquired one at a
-    // time per the lock-ordering rules on `AppState`.
-    if mode != FloatMode::Docked {
-        state.config.lock().expect("config mutex").float_mode = mode;
-    }
+    state.apply_float_mode(mode);
     if let Some(window) = app.get_webview_window("float") {
         let effective = float_window::effective_mode(&state);
-        let (width, height) = effective.size();
+        let (width, height) = float_window::size_for(effective, &state);
         let _ = window.set_size(tauri::LogicalSize::new(width, height));
         if effective == FloatMode::Docked {
             float_window::snap_to_monitor_top(&window);

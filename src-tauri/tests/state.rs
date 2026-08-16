@@ -70,12 +70,16 @@ fn monitor_dto_reflects_state() {
 }
 
 #[test]
-fn float_dto_marks_top_docked() {
+fn float_dto_separates_configured_from_presentation() {
     let state = state();
+    assert_eq!(state.float_dto().configured_mode, FloatMode::Full);
+    assert_eq!(state.float_dto().presentation_mode, FloatMode::Full);
+
     state.floating.lock().expect("float mutex").top_docked = true;
     let dto = state.float_dto();
     assert!(dto.top_docked);
-    assert_eq!(dto.mode, FloatMode::Full);
+    assert_eq!(dto.configured_mode, FloatMode::Full);
+    assert_eq!(dto.presentation_mode, FloatMode::Docked);
 }
 
 #[test]

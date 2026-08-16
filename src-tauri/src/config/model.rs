@@ -20,6 +20,10 @@ pub enum CloseBehavior {
 }
 
 /// Floating-window presentation mode.
+///
+/// `Full` and `Compact` are persisted configured modes; `Docked` is a
+/// transient presentation entered by snapping to the monitor top and is
+/// never written to disk (`AppConfig::validate` normalizes it away).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum FloatMode {
@@ -30,17 +34,6 @@ pub enum FloatMode {
     Compact,
     /// Single-line docked status.
     Docked,
-}
-
-impl FloatMode {
-    /// Returns the logical inner size for the mode.
-    pub fn size(self) -> (f64, f64) {
-        match self {
-            Self::Full => (360.0, 420.0),
-            Self::Compact => (360.0, 148.0),
-            Self::Docked => (360.0, 56.0),
-        }
-    }
 }
 
 /// Persisted screen position of the floating window.
