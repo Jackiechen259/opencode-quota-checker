@@ -26,6 +26,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -44,7 +45,6 @@
       }
     },
     "targets": "all",
-    "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -66,5 +66,5 @@
     }
   },
   "productName": "OpenCode Quota Checker",
-  "version": "0.2.0"
+  "version": "0.2.1"
 }
