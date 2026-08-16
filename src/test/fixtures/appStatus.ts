@@ -37,7 +37,7 @@ export function appStatusFixture(overrides?: Partial<AppStatusDto>): AppStatusDt
       error: null,
       notificationError: null,
     },
-    float: { open: false, mode: "full", topDocked: false },
+    float: { open: false, configuredMode: "full", presentationMode: "full", topDocked: false },
     update: {
       status: "idle",
       available: null,

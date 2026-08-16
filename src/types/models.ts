@@ -7,6 +7,11 @@
 // contract on the Rust side — change both together.
 
 export type FloatMode = "full" | "compact" | "docked";
+/**
+ * Modes that may be persisted to the config. `docked` is a transient
+ * presentation (snapped to the monitor top) and must never be written.
+ */
+export type PersistedFloatMode = Exclude<FloatMode, "docked">;
 export type CloseBehavior = "minimize_to_tray" | "exit";
 export type CredentialPhase =
   | "checking"
@@ -88,9 +93,19 @@ export interface MonitorStatusDto {
   notificationError: AppError | null;
 }
 
+/**
+ * Floating-window snapshot crossing the IPC boundary.
+ *
+ * `configuredMode` is the persisted layout (full | compact — docked is never
+ * persisted) and `presentationMode` is what the UI must render right now
+ * (docked while the window is snapped to the monitor top, otherwise the
+ * configured mode). The frontend renders ONLY from `presentationMode` and
+ * never derives it, so the native window size and the React UI always agree.
+ */
 export interface FloatStateDto {
   open: boolean;
-  mode: FloatMode;
+  configuredMode: PersistedFloatMode;
+  presentationMode: FloatMode;
   topDocked: boolean;
 }
 

@@ -1,4 +1,23 @@
-/* Floating window: Full / Compact / Docked. */
+/* Floating window — Desktop Quota Widget.
+ *
+ * Full / Compact / Docked are three distinct layouts (never a squashed
+ * copy of each other). The native window size is owned by the Rust backend
+ * (`float_window.rs` layout constants); this stylesheet only has to render
+ * fluidly inside it:
+ *
+ * - Full height is dynamic (min 280 / max 560 logical px). Only the quota
+ *   list scrolls; header, meta and footer stay fixed.
+ * - border-radius must match the native region: 16px Full/Compact
+ *   (`--radius-float`), 12px Docked (`--radius-float-docked`).
+ * - Every hard-coded color comes from tokens.css; state colors reach the
+ *   DOM only through the `--quota-accent` custom property.
+ */
+
+body[data-window="float"] {
+  background: transparent;
+}
+
+/* Shell --------------------------------------------------------------------- */
 
 .float-window {
   width: 100%;
@@ -7,31 +26,44 @@
   overflow: hidden;
 }
 
+.float-window--full .float-inner,
+.float-window--compact .float-inner {
+  border-radius: var(--radius-float);
+}
+
 .float-inner {
   width: 100%;
   height: 100%;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-float);
+  box-shadow: var(--shadow-floating);
   display: flex;
   flex-direction: column;
-  padding: 12px 13px;
   gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
 }
 
-/* Header --------------------------------------------------------------------- */
+.float-spacer {
+  flex: 1;
+}
+
+/* Header -------------------------------------------------------------------- */
 
 .float-header {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex-shrink: 0;
+  padding: 6px 0;
 }
 
 .float-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
   cursor: grab;
 }
 
@@ -40,196 +72,292 @@
 }
 
 .float-logo {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
-  color: var(--color-surface);
-  font-size: 11px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: #fff;
+  font-size: 12px;
   font-weight: 700;
-  flex-shrink: 0;
+  user-select: none;
 }
 
 .float-brand-text {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
 }
 
 .float-brand-title {
   font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-primary);
+  font-weight: 600;
+  color: var(--text-primary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
 .float-brand-status {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 9px;
-  color: var(--color-text-muted);
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
 }
 
+/* Actions ------------------------------------------------------------------- */
+
 .float-icon-button {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-button);
-  color: var(--color-text-secondary);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .float-icon-button:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text-primary);
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
 }
 
-/* Full mode ------------------------------------------------------------------ */
+.float-icon-button:active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 
-.float-full {
+.float-icon-button--close:hover {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.float-icon-button--close:active {
+  background: var(--danger-border);
+  color: var(--danger-text);
+}
+
+/* Boot shell (before the first float snapshot resolves) --------------------- */
+
+.float-boot {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.float-boot-text {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* Full layout --------------------------------------------------------------- */
+
+.float-full {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-height: 0;
-  overflow-y: auto;
 }
 
 .float-meta {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .float-plan-badge {
-  padding: 4px 8px;
+  padding: 4px 10px;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-light);
-  border: 1px solid var(--color-primary-border);
-  color: var(--color-primary);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 500;
-}
-
-.float-meta-count {
-  font-size: 11px;
-  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .float-meta-highest {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.float-quota-panel {
+/* Quota list: the ONLY scrollable region; header/meta/footer stay fixed. */
+
+.float-quota-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-left-width: 3px;
-  border-radius: 10px;
-  background: var(--color-surface);
-}
-
-.float-panel-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  padding-right: 2px;
 }
 
-.float-panel-title-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--color-text-primary);
-  font-weight: 500;
+.float-quota-list::-webkit-scrollbar {
+  width: 4px;
 }
 
-.float-panel-percent {
-  font-size: 14px;
-  font-weight: 600;
+.float-quota-list::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
 }
 
-.float-panel-muted {
-  font-size: 10px;
-  color: var(--color-text-muted);
-}
-
-.float-panel-progress {
-  height: 6px;
+.float-quota-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .float-footer-row {
   display: flex;
   align-items: center;
-  font-size: 10px;
-  color: var(--color-text-muted);
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 
-.float-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.float-footer-monitor {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 5px;
 }
 
-.float-empty-title {
+.float-footer-time {
+  white-space: nowrap;
+}
+
+/* Quota card ---------------------------------------------------------------- */
+
+.float-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.float-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.float-card-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
-  color: var(--color-text-primary);
   font-weight: 500;
+  color: var(--text-primary);
+  min-width: 0;
 }
 
-.float-empty-detail {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  text-align: center;
+.float-card-label-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.float-empty-small {
-  flex-direction: row;
-  justify-content: flex-start;
+.float-card-percent {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--quota-accent);
+  white-space: nowrap;
 }
 
-/* Compact mode --------------------------------------------------------------- */
+.float-card-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.float-card-muted {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* Progress (shared by card + compact) --------------------------------------- */
+
+.float-card-progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-track);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.float-card-progress-fill {
+  height: 100%;
+  min-width: 0;
+  border-radius: var(--radius-pill);
+  background: var(--quota-accent, var(--accent));
+  transition: width 300ms ease;
+}
+
+/* Compact layout ------------------------------------------------------------ */
 
 .float-compact {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   flex: 1;
-}
-
-.float-compact-top {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-}
-
-.float-compact-label-block {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 10px;
+  min-height: 0;
+}
+
+.float-compact-hero {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+}
+
+.float-compact-percent-block {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.float-compact-percent {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .float-compact-label {
   font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.float-compact-percent {
-  font-size: 23px;
-  font-weight: 600;
-  line-height: 1.1;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
 }
 
 .float-compact-remaining {
@@ -237,69 +365,68 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
+  flex-shrink: 0;
 }
 
 .float-compact-remaining-label {
   font-size: 10px;
-  color: var(--color-text-muted);
+  color: var(--text-tertiary);
 }
 
 .float-compact-remaining-value {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.float-compact-progress {
-  height: 7px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .float-compact-bottom {
   display: flex;
   align-items: center;
-  font-size: 10px;
+  gap: 8px;
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
 .float-compact-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .float-compact-reset {
-  color: var(--color-text-muted);
+  color: var(--text-tertiary);
+  white-space: nowrap;
 }
 
-/* Docked mode ---------------------------------------------------------------- */
+/* Docked layout ------------------------------------------------------------- */
 
 .float-docked {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 5px 8px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  cursor: grab;
-}
-
-.float-docked:active {
-  cursor: grabbing;
+  gap: 4px;
+  padding: 0 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-float-docked);
+  box-shadow: var(--shadow-floating);
+  overflow: hidden;
 }
 
 .float-docked-content {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.float-docked-main {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+  cursor: grab;
+}
+
+.float-docked-content:active {
+  cursor: grabbing;
 }
 
 .float-docked-status {
@@ -307,49 +434,143 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .float-docked-label {
-  font-size: 11px;
-  color: var(--color-text-secondary);
+  font-size: 12px;
+  color: var(--text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
 }
 
 .float-docked-percent {
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .float-docked-remaining {
-  font-size: 10px;
-  color: var(--color-text-muted);
+  font-size: 11px;
+  color: var(--text-tertiary);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .float-docked-button {
-  padding: 3px 6px;
-  border-radius: var(--radius-button);
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  font-size: 11px;
+  height: 28px;
+  padding: 0 10px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  transition: background var(--transition-fast);
 }
 
 .float-docked-button:hover {
-  background: var(--color-primary-pressed);
+  background: var(--accent-border);
+}
+
+.float-docked-button:active {
+  background: var(--accent-pressed);
+  color: #fff;
 }
 
 .float-docked-close {
+  width: 28px;
+  padding: 0;
   background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  padding: 3px 7px;
+  color: var(--text-secondary);
 }
 
 .float-docked-close:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text-primary);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+/* Empty / error / loading states -------------------------------------------- */
+
+.float-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  min-height: 0;
+}
+
+.float-state--row {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+
+.float-state-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.float-state-detail {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  max-width: 100%;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.float-state-retry {
+  margin-top: 4px;
+  height: 26px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background var(--transition-fast);
+}
+
+.float-state-retry:hover {
+  background: var(--accent-border);
+}
+
+.float-state-retry:active {
+  background: var(--accent-pressed);
+  color: #fff;
+}
+
+/* Content transition (very light; disabled by the global reduced-motion
+   media query). */
+
+.float-window--full .float-inner > :not(.float-header),
+.float-window--compact .float-inner > :not(.float-header) {
+  animation: float-view-in 160ms ease;
+}
+
+@keyframes float-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

@@ -47,13 +47,13 @@ function LoadBadge({ report }: { report: UsageReport | null }) {
         className="dot"
         style={{
           background: healthColor(health),
-          width: 8,
-          height: 8,
+          width: 6,
+          height: 6,
           display: "inline-block",
           borderRadius: "50%",
         }}
       />
-      最高 {highest.percent.toFixed(1)}%
+      最高 {Math.round(highest.percent)}%
     </StatusBadge>
   );
 }
@@ -95,7 +95,7 @@ export function AppHeader({
     report && loading ? (
       <span className="header-updated header-updated-loading">正在刷新…</span>
     ) : report ? (
-      <span className="header-updated">{relative(report.fetched_at, nowMs)}更新</span>
+      <span className="header-updated">{relative(report.fetched_at, nowMs)}</span>
     ) : null;
 
   return (

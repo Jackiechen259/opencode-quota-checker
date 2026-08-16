@@ -177,7 +177,7 @@ export function MainWindow() {
     );
   }
 
-  const footer = report ? `最后更新：${timestamp(report.fetched_at)}` : "最后更新：暂无数据";
+  const footer = report ? `最后同步 · ${timestamp(report.fetched_at)}` : "最后同步 · 暂无数据";
 
   return (
     <div className={`main-window ${maximized ? "main-window-maximized" : ""}`}>

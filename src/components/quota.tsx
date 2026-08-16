@@ -3,15 +3,31 @@
 import { countdown, number, percent } from "../lib/format";
 import type { UsageReport, WindowReport } from "../types/models";
 import { quotaHealth } from "../types/models";
-import { Card, Divider, Dot, Metric, ProgressBar, SectionDivider, SectionHeader, StatusBadge, healthColor, progressColor } from "./common";
+import {
+  Card,
+  Dot,
+  ProgressBar,
+  SectionDivider,
+  SectionHeader,
+  StatusBadge,
+  healthColor,
+} from "./common";
 import { Icons } from "./icons";
 
 /** SVG ring showing the used percentage. */
-export function QuotaRing({ percent, health, size = 112 }: { percent: number; health: string; size?: number }) {
-  const stroke = 10;
+export function QuotaRing({
+  percent: value,
+  health,
+  size = 104,
+}: {
+  percent: number;
+  health: string;
+  size?: number;
+}) {
+  const stroke = 8;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const clamped = Math.min(100, Math.max(0, percent));
+  const clamped = Math.min(100, Math.max(0, value));
   const dash = (clamped / 100) * circumference;
   const color = healthColor(health as "healthy" | "warning" | "critical");
   return (
@@ -34,12 +50,12 @@ export function QuotaRing({ percent, health, size = 112 }: { percent: number; he
         y="50%"
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize="32"
-        fontWeight="600"
+        fontSize="30"
+        fontWeight="650"
         fill="var(--color-text-primary)"
       >
         {clamped.toFixed(0)}
-        <tspan fontSize="14" fill="var(--color-text-muted)">
+        <tspan fontSize="12" fill="var(--color-text-muted)">
           %
         </tspan>
       </text>
@@ -51,6 +67,14 @@ function healthTone(health: "healthy" | "warning" | "critical"): "success" | "wa
   return health === "critical" ? "danger" : health === "warning" ? "warning" : "success";
 }
 
+function healthText(health: "healthy" | "warning" | "critical"): string {
+  return health === "healthy" ? "健康" : health === "warning" ? "接近阈值" : "危险";
+}
+
+function statusText(health: "healthy" | "warning" | "critical"): string {
+  return health === "healthy" ? "正常" : health === "warning" ? "警告" : "危险";
+}
+
 /** One quota window card (ring + metrics + reset countdown). */
 export function QuotaCard({ window, nowMs }: { window: WindowReport; nowMs: number }) {
   const health = quotaHealth(window.percent);
@@ -60,17 +84,28 @@ export function QuotaCard({ window, nowMs }: { window: WindowReport; nowMs: numb
       <div className="quota-card-header">
         <span className="quota-card-status">
           <Dot color={healthColor(health)} />
-          {health === "healthy" ? "正常" : health === "warning" ? "警告" : "危险"}
+          {statusText(health)}
         </span>
-        <span className="quota-card-title">{window.label}</span>
-        <StatusBadge tone={healthTone(health)}>{health === "healthy" ? "健康" : health === "warning" ? "接近阈值" : "危险"}</StatusBadge>
+        <span className="quota-card-title" title={window.label}>
+          {window.label}
+        </span>
+        <StatusBadge tone={healthTone(health)}>{healthText(health)}</StatusBadge>
       </div>
       <div className="quota-card-body">
         <QuotaRing percent={window.percent} health={health} />
         <div className="quota-card-metrics">
-          <Metric label="已用" value={number(window.used)} />
-          <Metric label="总额" value={number(window.quota)} />
-          <Metric label="剩余" value={number(window.remaining)} />
+          <div className="quota-card-metric-row">
+            <span className="quota-card-metric-label">已用</span>
+            <span className="quota-card-metric-value">{number(window.used)}</span>
+          </div>
+          <div className="quota-card-metric-row">
+            <span className="quota-card-metric-label">剩余</span>
+            <span className="quota-card-metric-value">{number(window.remaining)}</span>
+          </div>
+          <div className="quota-card-metric-row">
+            <span className="quota-card-metric-label">总额</span>
+            <span className="quota-card-metric-value">{number(window.quota)}</span>
+          </div>
         </div>
       </div>
       <SectionDivider />
@@ -97,7 +132,7 @@ export function OverviewCard({ report }: { report: UsageReport }) {
   }
   const health = quotaHealth(highest.percent);
   const accent = healthColor(health);
-  const barColor = progressColor(health);
+  const barColor = healthColor(health);
   const counts = report.windows.reduce(
     (acc, window) => {
       const h = quotaHealth(window.percent);
@@ -115,44 +150,51 @@ export function OverviewCard({ report }: { report: UsageReport }) {
           <Dot color={accent} />
         </span>
         <span className="overview-heading-title">最高负载</span>
-        <StatusBadge>{highest.label}</StatusBadge>
         <span style={{ flex: 1 }} />
+        <StatusBadge>{highest.label}</StatusBadge>
       </div>
       <div className="overview-hero">
         <span className="overview-hero-value" style={{ color: accent }}>
           {percent(highest.percent)}
         </span>
-        <span style={{ flex: 1 }} />
         <span className="overview-hero-countdown">
-          <Icons.Clock size={16} className="overview-hero-clock" />
+          <Icons.Clock size={15} className="overview-hero-clock" />
           {countdown(highest.reset_in_secs)}
         </span>
       </div>
       <ProgressBar percent={highest.percent} color={barColor} />
-      <SectionDivider />
       <div className="overview-stats">
-        <Metric label="已用" value={number(highest.used)} />
-        <Divider height={40} />
-        <Metric label="总额" value={number(highest.quota)} />
-        <Divider height={40} />
-        <Metric label="剩余" value={number(highest.remaining)} />
-        <Divider height={40} />
-        <div className="overview-health">
-          <Metric label="窗口健康" value={`${counts.healthy} / ${total}`} />
-          <div className="overview-health-distribution">
-            {([["healthy", "var(--color-success)"], ["warning", "var(--color-warning)"], ["critical", "var(--color-danger)"]] as const).map(
-              ([key, color]) =>
-                counts[key] > 0 ? (
-                  <span
-                    key={key}
-                    className="overview-health-segment"
-                    style={{
-                      background: color,
-                      flexGrow: counts[key],
-                    }}
-                  />
-                ) : null,
-            )}
+        <div className="stat-tile">
+          <span className="stat-tile-label">已使用</span>
+          <span className="stat-tile-value">{number(highest.used)}</span>
+        </div>
+        <div className="stat-tile">
+          <span className="stat-tile-label">剩余</span>
+          <span className="stat-tile-value">{number(highest.remaining)}</span>
+        </div>
+        <div className="stat-tile">
+          <span className="stat-tile-label">总额</span>
+          <span className="stat-tile-value">{number(highest.quota)}</span>
+        </div>
+        <div className="stat-tile">
+          <span className="stat-tile-label">窗口健康</span>
+          <div className="overview-health">
+            <span className="stat-tile-value">{counts.healthy} / {total}</span>
+            <div className="overview-health-distribution">
+              {([["healthy", "var(--color-success)"], ["warning", "var(--color-warning)"], ["critical", "var(--color-danger)"]] as const).map(
+                ([key, color]) =>
+                  counts[key] > 0 ? (
+                    <span
+                      key={key}
+                      className="overview-health-segment"
+                      style={{
+                        background: color,
+                        flexGrow: counts[key],
+                      }}
+                    />
+                  ) : null,
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -50,7 +50,7 @@ export function Debug({ onClose, onToast }: Props) {
         <span className="debug-title">原始 API JSON</span>
         <span style={{ flex: 1 }} />
         <button type="button" className="btn btn-primary" disabled={!raw} onClick={copy}>
-          复制 JSON
+          <Icons.Copy size={14} /> 复制 JSON
         </button>
         <button type="button" className="btn btn-soft" onClick={onClose}>
           关闭（Esc）

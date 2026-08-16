@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { QuotaHealth } from "../types/models";
 import { Icons } from "./icons";
 
-export function Dot({ color, size = 9 }: { color: string; size?: number }) {
+export function Dot({ color, size = 7 }: { color: string; size?: number }) {
   return <span className="dot" style={{ background: color, width: size, height: size }} />;
 }
 
@@ -16,10 +16,6 @@ const healthColors: Record<QuotaHealth, string> = {
 
 export function healthColor(health: QuotaHealth): string {
   return healthColors[health];
-}
-
-export function progressColor(health: QuotaHealth): string {
-  return health === "healthy" ? "var(--color-primary)" : healthColors[health];
 }
 
 type Tone = "neutral" | "primary" | "success" | "warning" | "danger";
@@ -75,27 +71,6 @@ export function SectionHeader({
   );
 }
 
-export function Spinner({ size = 48 }: { size?: number }) {
-  return (
-    <svg
-      className="spinner"
-      width={size}
-      height={size}
-      viewBox="0 0 48 48"
-      aria-label="加载中"
-    >
-      <circle cx="24" cy="24" r="18" fill="none" stroke="var(--color-track)" strokeWidth="4" />
-      <path
-        d="M42 24a18 18 0 0 0-18-18"
-        fill="none"
-        stroke="var(--color-primary)"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 export function IconButton({
   icon,
   label,
@@ -125,29 +100,23 @@ export function IconButton({
   );
 }
 
-export function Divider({ height = 40 }: { height?: number }) {
-  return <span className="divider" style={{ height }} />;
-}
-
 export function SectionDivider() {
   return <hr className="section-divider" />;
 }
 
-export function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="metric">
-      <div className="metric-label">{label}</div>
-      <div className="metric-value">{value}</div>
-    </div>
-  );
-}
-
 export function ProgressBar({ percent, color }: { percent: number; color: string }) {
+  const clamped = Math.min(100, Math.max(0, percent));
   return (
-    <div className="progress">
+    <div
+      className="progress"
+      role="progressbar"
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
       <div
         className="progress-fill"
-        style={{ width: `${Math.min(100, Math.max(0, percent))}%`, background: color }}
+        style={{ width: `${clamped}%`, background: color }}
       />
     </div>
   );
@@ -215,16 +184,21 @@ export function EmptyState({
   );
 }
 
+let appLogoId = 0;
+
 export function AppLogo({ size = 16 }: { size?: number }) {
+  // Unique per instance: TitleBar and the Credentials page can render the
+  // logo at the same time, and duplicate SVG gradient ids are invalid HTML.
+  const gradientId = `app-logo-gradient-${++appLogoId}`;
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
       <defs>
-        <linearGradient id="app-logo-gradient" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#3b82f6" />
           <stop offset="100%" stopColor="#2563eb" />
         </linearGradient>
       </defs>
-      <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#app-logo-gradient)" />
+      <rect x="1" y="1" width="30" height="30" rx="8" fill={`url(#${gradientId})`} />
       <text
         x="16"
         y="21.5"

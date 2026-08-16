@@ -5,7 +5,7 @@
 // successful save. It is never stored in the webview or written to logs.
 
 import { useState } from "react";
-import { Notice } from "../components/common";
+import { AppLogo, Notice } from "../components/common";
 import { api } from "../services/tauri";
 import type { AppError, CredentialPhase } from "../types/models";
 
@@ -69,6 +69,9 @@ export function Credentials({
   return (
     <div className="credentials-page">
       <div className="credentials-card">
+        <span className="credentials-logo">
+          <AppLogo size={44} />
+        </span>
         <div className="credentials-title">尚未配置 OpenCode Go</div>
         <div className="credentials-detail">
           OpenCode Go 尚无公开的配额 API，配额数据来自登录后的工作区面板。Workspace

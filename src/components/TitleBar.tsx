@@ -36,7 +36,7 @@ export function TitleBar({ maximized }: Props) {
         data-tauri-drag-region
         onDoubleClick={toggleMaximize}
       >
-        <AppLogo size={16} />
+        <AppLogo size={18} />
         <span className="titlebar-title">OpenCode Quota Checker</span>
       </div>
       <div className="titlebar-spacer" data-tauri-drag-region onDoubleClick={toggleMaximize} />
