@@ -170,6 +170,10 @@ pub fn open(app: &AppHandle, state: Arc<AppState>) -> Result<(), String> {
     let _ = window.set_size(LogicalSize::new(width, height));
 
     let handle = app.clone();
+    // Only the Windows Resized handler re-applies the native corner radius,
+    // which needs the state; keep the binding cfg-scoped so non-Windows
+    // clippy (--all-targets) does not see an unused variable.
+    #[cfg(target_os = "windows")]
     let state_for_events = state.clone();
     window.on_window_event(move |event| match event {
         tauri::WindowEvent::Moved(position) => {
