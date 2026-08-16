@@ -57,16 +57,26 @@ Legend: ☐ unchecked · ☑ passed · ❌ failed (record details)
 
 ### Floating window
 - ☐ Toggle from the header button and the tray; checkmark stays in sync.
-- ☐ Full (360×420), Compact (360×148), Docked (360×56) sizes correct.
+- ☐ Full (392 wide; dynamic height 280–560 by quota count), Compact
+  (392×168), Docked (392×48) sizes correct; height never clips cards.
 - ☐ Always on top over other apps.
-- ☐ Drag by the brand area (Full/Compact) or the whole strip (Docked).
-- ☐ Docked: "展开" returns to Full; × closes.
+- ☐ Drag by the brand area (Full/Compact) or the whole strip (Docked);
+  every button stays clickable.
+- ☐ Full → Compact → Full and Docked expand/close; the UI never shows
+  Full inside a Compact-sized window.
+- ☐ Docked: "展开" returns to the previous Full/Compact mode; × closes.
+- ☐ Restart with `float_open`: the saved mode (Full/Compact) is restored;
+  Docked is never persisted.
 - ☐ Position persists across restarts; clamped to a visible monitor.
 - ☐ Multi-monitor: moving the float to a second monitor works.
-- ☐ Mixed-DPI monitors: no WM_DPICHANGED feedback loop, no jumps.
+- ☐ Mixed-DPI monitors (100–200%): no WM_DPICHANGED feedback loop, no
+  jumps; logical size, region radius and dock thresholds scale.
 - ☐ Top docking: dragging near the monitor top (≤18 px, DPI-scaled) snaps to
   Docked; releasing requires the 24 px hysteresis to leave.
-- ☐ Rounded corners on the float card after resize/DPI changes.
+- ☐ Rounded corners (16 px Full/Compact, 12 px Docked) on the float card
+  after resize/DPI changes.
+- ☐ Many quota windows (5+): the quota list scrolls inside the window;
+  header/meta/footer stay fixed.
 
 ### Updater
 - ☐ 检查更新 finds a newer release from GitHub.
