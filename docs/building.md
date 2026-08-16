@@ -47,7 +47,8 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
 ```
 
-Bundles are written to `src-tauri/target/<target>/release/bundle/`.
+Because the Tauri crate is a member of the root Cargo workspace, bundles are
+written to `target/<target>/release/bundle/`.
 
 ### Windows
 
