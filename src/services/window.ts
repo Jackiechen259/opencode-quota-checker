@@ -35,10 +35,25 @@ async function withDiagnostics<T>(
   }
 }
 
+export type ResizeDirection =
+  | "East"
+  | "North"
+  | "NorthEast"
+  | "NorthWest"
+  | "South"
+  | "SouthEast"
+  | "SouthWest"
+  | "West";
+
 export const windowService = {
   minimize: () => withDiagnostics("minimize", () => WINDOW.minimize()),
   toggleMaximize: () => withDiagnostics("toggleMaximize", () => WINDOW.toggleMaximize()),
   close: () => withDiagnostics("close", () => WINDOW.close()),
   hide: () => withDiagnostics("hide", () => WINDOW.hide()),
   isMaximized: () => withDiagnostics("isMaximized", () => WINDOW.isMaximized()),
+  startDragging: () => withDiagnostics("startDragging", () => WINDOW.startDragging()),
+  startResizeDragging: (direction: ResizeDirection) =>
+    withDiagnostics(`startResizeDragging:${direction}`, () =>
+      WINDOW.startResizeDragging(direction as unknown as Parameters<typeof WINDOW.startResizeDragging>[0]),
+    ),
 };
