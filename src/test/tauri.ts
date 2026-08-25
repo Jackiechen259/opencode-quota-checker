@@ -25,6 +25,8 @@ const windowApi = {
   isMaximized: vi.fn(async () => false),
   onResized: vi.fn(async () => () => {}),
   onMoved: vi.fn(async () => () => {}),
+  startDragging: vi.fn(async () => {}),
+  startResizeDragging: vi.fn(async (_direction: unknown) => {}),
 };
 
 const eventListeners = new Map<string, Array<(message: { payload: unknown }) => void>>();
@@ -52,6 +54,8 @@ function reset() {
   windowApi.close.mockClear();
   windowApi.hide.mockClear();
   windowApi.isMaximized.mockClear();
+  windowApi.startDragging.mockClear();
+  windowApi.startResizeDragging.mockClear();
 }
 
 export const tauri = { invoke, windowApi, listen, emit, reset };

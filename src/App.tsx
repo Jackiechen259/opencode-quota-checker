@@ -15,6 +15,7 @@ import { StartupError } from "./components/StartupError";
 import { Toast } from "./components/common";
 import { TitleBar } from "./components/TitleBar";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { WindowResizeHandles } from "./components/WindowResizeHandles";
 import { useAppStatus, useConfig, useQuota, useUpdater } from "./hooks/useApp";
 import { useNow } from "./hooks/useTauriEvents";
 import { useWindowState } from "./hooks/useWindowState";
@@ -181,6 +182,7 @@ export function MainWindow() {
 
   return (
     <div className={`main-window ${maximized ? "main-window-maximized" : ""}`}>
+      <WindowResizeHandles maximized={maximized} />
       <div className="main-frame">
         <TitleBar maximized={maximized} />
         <AppHeader

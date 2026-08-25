@@ -12,6 +12,84 @@
   background: var(--bg-app);
   padding: var(--main-frame-inset);
   display: flex;
+  position: relative;
+}
+
+/* Window resize handles — explicit OS resize via startResizeDragging() --------
+ * Positioned fixed at the viewport edges so they sit above the rounded
+ * main-frame (which has overflow:hidden) and are never clipped. Edges are
+ * 6px, corners 12px. Cursors reflect the resize axis. Disabled when
+ * maximized: the component returns null (see WindowResizeHandles.tsx). */
+
+.resize-handle {
+  position: fixed;
+  z-index: 50;
+  background: transparent;
+  touch-action: none;
+}
+
+.resize-handle-n {
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.resize-handle-s {
+  bottom: 0;
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.resize-handle-w {
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.resize-handle-e {
+  top: 12px;
+  bottom: 12px;
+  right: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.resize-handle-nw {
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+}
+
+.resize-handle-ne {
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nesw-resize;
+}
+
+.resize-handle-sw {
+  bottom: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nesw-resize;
+}
+
+.resize-handle-se {
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
 }
 
 .main-frame {
@@ -49,6 +127,11 @@
   align-items: stretch;
   background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-header) 100%);
   flex-shrink: 0;
+  /* Create stacking context; controls must sit above resize handles
+   * (fixed z-index 50) so caption buttons remain clickable at corners
+   * where resize handles would otherwise intercept. */
+  position: relative;
+  z-index: 1;
 }
 
 .titlebar-brand {
@@ -74,6 +157,8 @@
 
 .titlebar-controls {
   display: flex;
+  position: relative;
+  z-index: 60;
 }
 
 .titlebar-control {
