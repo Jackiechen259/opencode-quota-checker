@@ -192,6 +192,16 @@ button:focus:not(:focus-visible) {
   outline: none;
 }
 
+.text-input:disabled {
+  background: var(--bg-surface-subtle);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.text-input:disabled:hover {
+  border-color: var(--card-border);
+}
+
 /* Status badges ------------------------------------------------------------ */
 
 .badge {

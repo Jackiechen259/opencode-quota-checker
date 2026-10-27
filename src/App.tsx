@@ -107,10 +107,7 @@ export function MainWindow() {
         config={config}
         update={update}
         onClose={() => setPage("dashboard")}
-        onConfigSaved={(saved) => {
-          setConfig(saved);
-          reloadStatus();
-        }}
+        onConfigSaved={(saved) => setConfig(saved)}
         onRefreshStatus={reloadStatus}
       />
     );
