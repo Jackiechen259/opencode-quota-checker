@@ -181,13 +181,19 @@ jobs:
       - name: Generate SHA256SUMS and legacy update.json
         run: cargo xtask update-manifest ${{ needs.resolve.outputs.tag }} release-assets
 
-      - name: Attach legacy manifest to the draft release
+      - name: Attach legacy manifest and installers to the draft release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.resolve.outputs.tag }}
+          # update.json/SHA256SUMS reference the normalized names below, so the
+          # files themselves must be published or every legacy URL 404s.
           files: |
             release-assets/SHA256SUMS
             release-assets/update.json
+            release-assets/opencode-quota-checker-windows-x86_64.exe
+            release-assets/opencode-quota-checker-linux-x86_64.AppImage
+            release-assets/opencode-quota-checker-linux-x86_64.deb
+            release-assets/opencode-quota-checker-macos-aarch64.dmg
 
   finalize:
     name: Publish release
