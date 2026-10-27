@@ -1,9 +1,22 @@
 // Settings page: connection, monitoring rules, updater, danger zone.
 //
-// Data flow: React edits local form state → `save_config` command → Rust
-// `AppConfig::validate` (the final authority) → canonical config returned.
+// Button contract:
+//
+// * Every action has its own pending key. Clicking one button only changes
+//   that button's label and only disables the controls it would conflict
+//   with — the old shared `saving` flag made a monitor save look like a
+//   connection save and vice versa.
+// * Config writes are serialized and always start from the backend's latest
+//   config (`get_config`), so a stale frontend snapshot can never overwrite a
+//   field that another action just persisted (workspace id, monitor_enabled).
+// * Progress, stop and apply are three separate operations: "保存更改" keeps
+//   monitoring in its current state, "启动监控" enables it, "停止监控" only
+//   disables it. Stopping never validates or applies the draft form, so a
+//   half-edited interval cannot block it.
+// * Every invoke rejection is surfaced as a notice. No settings button is
+//   fire-and-forget anymore.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog, Dot, Notice, StatusBadge } from "../components/common";
 import { Icons } from "../components/icons";
 import { bytes, lastCheckedText } from "../lib/format";
@@ -13,6 +26,7 @@ import type {
   AppError,
   AppStatusDto,
   UpdateStateDto,
+  UpdateStatus,
 } from "../types/models";
 
 interface Props {
@@ -22,6 +36,67 @@ interface Props {
   onClose: () => void;
   onConfigSaved: (config: AppConfig) => void;
   onRefreshStatus: () => void;
+}
+
+type PendingKey =
+  | "open-console"
+  | "save-connection"
+  | "test-connection"
+  | "clear-credentials"
+  | "apply-monitor"
+  | "start-monitor"
+  | "stop-monitor"
+  | "toggle-update-checks"
+  | "toggle-auto-download"
+  | "check-update"
+  | "download-update"
+  | "install-update"
+  | "open-release-notes";
+
+type MonitorAction = "apply" | "start" | "stop";
+
+function usePendingActions() {
+  const [pending, setPending] = useState<ReadonlySet<PendingKey>>(() => new Set());
+  const active = useRef(new Set<PendingKey>());
+
+  const begin = useCallback((key: PendingKey) => {
+    // The ref is the synchronous guard: two clicks in the same tick must not
+    // start the same action twice, before React has re-rendered the button.
+    if (active.current.has(key)) return false;
+    active.current.add(key);
+    setPending(new Set(active.current));
+    return true;
+  }, []);
+
+  const end = useCallback((key: PendingKey) => {
+    active.current.delete(key);
+    setPending(new Set(active.current));
+  }, []);
+
+  const has = useCallback((key: PendingKey) => pending.has(key), [pending]);
+
+  return { begin, end, has };
+}
+
+/** Normalizes anything thrown by IPC into the `AppError` shape the notices use. */
+function toAppError(caught: unknown): AppError {
+  if (typeof caught === "object" && caught !== null) {
+    const candidate = caught as Partial<AppError>;
+    if (typeof candidate.user === "string" && candidate.user.length > 0) {
+      return {
+        code: candidate.code ?? "unexpected_error",
+        user: candidate.user,
+        detail: candidate.detail ?? candidate.user,
+      };
+    }
+  }
+  const detail = caught instanceof Error ? caught.message : String(caught);
+  console.error("[settings] unexpected action failure", caught);
+  return {
+    code: "unexpected_error",
+    user: detail.length > 0 ? detail : "操作失败，请重试。",
+    detail,
+  };
 }
 
 function SettingsCard({
@@ -72,21 +147,34 @@ function FormField({
 
 function ToggleRow({
   label,
+  hint,
   checked,
+  disabled,
+  busy,
   onChange,
 }: {
   label: string;
+  hint?: string;
   checked: boolean;
+  disabled?: boolean;
+  busy?: boolean;
   onChange: (checked: boolean) => void;
-}) {  return (
-    <div className="settings-toggle-row">
-      <span className="settings-toggle-label">{label}</span>
+}) {
+  return (
+    <div className={`settings-toggle-row ${disabled ? "settings-toggle-row-disabled" : ""}`}>
+      <div className="settings-toggle-copy">
+        <span className="settings-toggle-label">{label}</span>
+        {hint ? <span className="settings-toggle-hint">{hint}</span> : null}
+      </div>
       <span style={{ flex: 1 }} />
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={label}
+        aria-busy={busy ? true : undefined}
         className={`toggle ${checked ? "toggle-on" : ""}`}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
       >
         <span className="toggle-knob" />
@@ -95,7 +183,54 @@ function ToggleRow({
   );
 }
 
-function UpdateStatusBlock({ update }: { update: UpdateStateDto }) {
+type UpdateBadge = {
+  label: string;
+  tone: "neutral" | "primary" | "success" | "warning" | "danger";
+};
+
+function updateBadge(update: UpdateStateDto | null): UpdateBadge {
+  if (!update) return { label: "未检查", tone: "neutral" };
+  switch (update.status) {
+    case "checking":
+      return { label: "检查中…", tone: "primary" };
+    case "available":
+      return { label: "有可用更新", tone: "primary" };
+    case "downloading":
+      return { label: "下载中…", tone: "primary" };
+    case "ready_to_install":
+      return { label: "待安装", tone: "warning" };
+    case "installing":
+      return { label: "安装中…", tone: "primary" };
+    case "up_to_date":
+      return { label: "已是最新", tone: "success" };
+    case "error":
+      return { label: "检查失败", tone: "danger" };
+    default:
+      return { label: "未检查", tone: "neutral" };
+  }
+}
+
+const UPDATE_BUSY_STATUSES: readonly UpdateStatus[] = [
+  "checking",
+  "downloading",
+  "installing",
+];
+
+function UpdateStatusBlock({
+  update,
+  busy,
+  onOpenNotes,
+  onDownload,
+  onInstall,
+  onRetryCheck,
+}: {
+  update: UpdateStateDto;
+  busy: boolean;
+  onOpenNotes: () => void;
+  onDownload: () => void;
+  onInstall: () => void;
+  onRetryCheck: () => void;
+}) {
   switch (update.status) {
     case "checking":
       return <div className="settings-update-status">正在检查更新…</div>;
@@ -108,14 +243,16 @@ function UpdateStatusBlock({ update }: { update: UpdateStateDto }) {
           <button
             type="button"
             className="btn btn-soft"
-            onClick={() => void api.openReleaseNotes()}
+            disabled={busy}
+            onClick={onOpenNotes}
           >
             查看更新说明
           </button>
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => void api.downloadUpdate()}
+            disabled={busy}
+            onClick={onDownload}
           >
             下载更新
           </button>
@@ -125,18 +262,28 @@ function UpdateStatusBlock({ update }: { update: UpdateStateDto }) {
     case "downloading": {
       const tag = update.available?.tag ?? "更新";
       const progress = update.progress;
-      const ratio = progress?.total ? progress.downloaded / progress.total : 0;
+      const ratio = progress?.total
+        ? Math.min(1, Math.max(0, progress.downloaded / progress.total))
+        : 0;
+      const percent = Math.round(ratio * 100);
       return (
         <div className="settings-update-status">
           <div>正在下载 {tag}…</div>
-          <div className="progress settings-update-progress">
+          <div
+            className="progress settings-update-progress"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <div
               className="progress-fill"
-              style={{ width: `${Math.min(100, ratio * 100)}%`, background: "var(--color-primary)" }}
+              style={{ width: `${percent}%`, background: "var(--color-primary)" }}
             />
           </div>
           {progress ? (
             <div className="settings-update-progress-label">
+              {progress.total ? `${percent}% · ` : ""}
               {bytes(progress.downloaded)}
               {progress.total ? ` / ${bytes(progress.total)}` : ""}
             </div>
@@ -145,26 +292,44 @@ function UpdateStatusBlock({ update }: { update: UpdateStateDto }) {
       );
     }
     case "ready_to_install": {
-      const version = update.downloadedVersion ?? "";
-      const installLabel = "安装并重启";
+      const version = update.downloadedVersion ?? update.available?.version ?? "";
       return (
         <div className="settings-update-status settings-update-row">
-          <span>v{version} 已准备好</span>
+          <span>{version ? `v${version} 已准备好` : "更新已准备好"}</span>
           <span style={{ flex: 1 }} />
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => void api.installUpdate()}
+            disabled={busy}
+            onClick={onInstall}
           >
-            {installLabel}
+            安装并重启
           </button>
         </div>
       );
     }
+    case "installing":
+      return <div className="settings-update-status">正在安装更新，应用即将重启…</div>;
     case "error":
-      return update.error ? <Notice kind="error">{update.error.user}</Notice> : null;
+      return (
+        <div className="settings-update-status">
+          <Notice kind="error">{update.error?.user ?? "更新失败，请重试。"}</Notice>
+          <div className="settings-row-right">
+            <button
+              type="button"
+              className="btn btn-soft"
+              disabled={busy}
+              onClick={onRetryCheck}
+            >
+              重试检查
+            </button>
+          </div>
+        </div>
+      );
+    case "up_to_date":
+      return <div className="settings-update-status">已是最新版本。</div>;
     default:
-      return null;
+      return <div className="settings-update-status">尚未检查更新。</div>;
   }
 }
 
@@ -201,144 +366,363 @@ export function Settings({
   onConfigSaved,
   onRefreshStatus,
 }: Props) {
-  const [interval, setInterval] = useState("");
+  const [interval, setIntervalText] = useState("");
   const [fiveHour, setFiveHour] = useState("");
   const [weekly, setWeekly] = useState("");
   const [monthly, setMonthly] = useState("");
   const [workspace, setWorkspace] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [mutatingCredentials, setMutatingCredentials] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmInstall, setConfirmInstall] = useState(false);
 
+  const { begin, end, has: isPending } = usePendingActions();
+
+  // Config mutations run one at a time, in click order. Each one re-reads the
+  // backend config first, so two cards can never overwrite each other's fields
+  // with a stale snapshot.
+  const configWriteChain = useRef<Promise<unknown>>(Promise.resolve());
+  const serializeConfigWrite = useCallback(function serialized<T>(
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const next = configWriteChain.current.then(task, task);
+    configWriteChain.current = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }, []);
+
+  const applyMonitorForm = useCallback((next: AppConfig) => {
+    setIntervalText(String(next.monitor_interval_secs));
+    setFiveHour(String(next.thresholds.five_hour));
+    setWeekly(String(next.thresholds.weekly));
+    setMonthly(String(next.thresholds.monthly));
+  }, []);
+
+  const applyConnectionForm = useCallback((next: AppConfig) => {
+    setWorkspace(next.opencode_workspace_id ?? "");
+  }, []);
+
+  // Initialise the draft form once. Later config updates caused by unrelated
+  // cards (e.g. toggling update checks) must not discard monitor edits that
+  // are still being typed; save actions reset their own fields explicitly.
+  const formInitialized = useRef(false);
   useEffect(() => {
-    if (!config) return;
-    setInterval(String(config.monitor_interval_secs));
-    setFiveHour(String(config.thresholds.five_hour));
-    setWeekly(String(config.thresholds.weekly));
-    setMonthly(String(config.thresholds.monthly));
-    setWorkspace(config.opencode_workspace_id ?? "");
-  }, [config]);
+    if (!config || formInitialized.current) return;
+    formInitialized.current = true;
+    applyMonitorForm(config);
+    applyConnectionForm(config);
+  }, [config, applyMonitorForm, applyConnectionForm]);
 
-  const persist = async (mutation: (config: AppConfig) => AppConfig) => {
-    if (!config) return;
-    setSaving(true);
-    setError(null);
+  const run = useCallback(
+    async (key: PendingKey, task: () => Promise<void>): Promise<boolean> => {
+      if (!begin(key)) return false;
+      setError(null);
+      setNotice(null);
+      try {
+        await task();
+        return true;
+      } catch (caught) {
+        setError(toAppError(caught));
+        return false;
+      } finally {
+        end(key);
+      }
+    },
+    [begin, end],
+  );
+
+  const persist = useCallback(
+    async (
+      mutation: (current: AppConfig) => AppConfig,
+      applySavedToForm: "monitor" | "connection" | null = null,
+    ) => {
+      return serializeConfigWrite(async () => {
+        const current = await api.getConfig();
+        const saved = await api.saveConfig(mutation(current));
+        if (applySavedToForm === "monitor") applyMonitorForm(saved);
+        if (applySavedToForm === "connection") applyConnectionForm(saved);
+        onConfigSaved(saved);
+        return saved;
+      });
+    },
+    [serializeConfigWrite, applyMonitorForm, applyConnectionForm, onConfigSaved],
+  );
+
+  if (!config) return null;
+
+  const credentials = status?.credentials;
+  const credentialsAvailable = credentials?.available ?? false;
+  const credentialsMissing = credentials?.phase === "missing";
+  const monitorEnabled = config.monitor_enabled;
+
+  const workspaceValue = workspace.trim();
+  const storedWorkspace = config.opencode_workspace_id ?? "";
+  const workspaceDirty = workspaceValue !== storedWorkspace;
+  const apiKeyPresent = apiKey.trim().length > 0;
+  const canSaveWorkspaceOnly = credentialsAvailable && workspaceDirty && !apiKeyPresent;
+  const canSaveConnection = apiKeyPresent || canSaveWorkspaceOnly;
+  const canClearCredentials =
+    credentials !== undefined &&
+    !credentialsMissing &&
+    credentials.phase !== "checking" &&
+    !isPending("clear-credentials") &&
+    !isPending("save-connection") &&
+    !isPending("test-connection");
+
+  const monitorDirty =
+    interval !== String(config.monitor_interval_secs) ||
+    fiveHour !== String(config.thresholds.five_hour) ||
+    weekly !== String(config.thresholds.weekly) ||
+    monthly !== String(config.thresholds.monthly);
+
+  const connectionBusy =
+    isPending("save-connection") ||
+    isPending("test-connection") ||
+    isPending("clear-credentials");
+  const monitorBusy =
+    isPending("apply-monitor") ||
+    isPending("start-monitor") ||
+    isPending("stop-monitor");
+  const updateToggleBusy =
+    isPending("toggle-update-checks") || isPending("toggle-auto-download");
+  const updateActionBusy =
+    isPending("check-update") ||
+    isPending("download-update") ||
+    isPending("install-update") ||
+    isPending("open-release-notes");
+
+  const updateView = update ?? status?.update ?? null;
+  const updateStatusBusy = updateView
+    ? UPDATE_BUSY_STATUSES.includes(updateView.status)
+    : false;
+  const checkUpdateDisabled =
+    updateActionBusy || updateStatusBusy || updateView?.status === "ready_to_install";
+  const badge = updateBadge(updateView);
+
+  const validateMonitorDraft = (): boolean => {
+    const validationError = validateMonitorForm(interval, fiveHour, weekly, monthly);
+    if (!validationError) return true;
+    setError({ code: "settings_invalid", user: validationError, detail: validationError });
     setNotice(null);
-    try {
-      const saved = await api.saveConfig(mutation(config));
-      onConfigSaved(saved);
-      return saved;
-    } catch (caught) {
-      setError(caught as AppError);
-      return null;
-    } finally {
-      setSaving(false);
-    }
+    return false;
   };
 
-  const startMonitor = async () => {
-    const validationError = validateMonitorForm(interval, fiveHour, weekly, monthly);
-    if (validationError) {
-      setError({ code: "settings_invalid", user: validationError, detail: validationError });
+  const saveMonitorSettings = (action: MonitorAction) => {
+    if (action === "start" && !credentialsAvailable) return;
+    if (action === "stop") {
+      void run("stop-monitor", async () => {
+        // Stop from the persisted config, never from the draft: an invalid
+        // draft interval must not keep the monitor running.
+        await persist((current) => ({ ...current, monitor_enabled: false }));
+        setNotice("监控已停止。");
+      });
       return;
     }
-    const saved = await persist((config) => ({
-      ...config,
-      monitor_enabled: true,
-      monitor_interval_secs: Number(interval),
-      thresholds: {
-        five_hour: Number(fiveHour),
-        weekly: Number(weekly),
-        monthly: Number(monthly),
-      },
-    }));
-    if (saved) {
-      await api.setMonitor(true).catch((error) => {
-        console.error("[settings] set_monitor failed", error);
-      });
-      setNotice("监控配置已保存并启动。");
-      await api.refreshUsage().catch((error) => {
-        console.error("[settings] refresh_usage failed", error);
-      });
-    }
-  };
 
-  const stopMonitor = async () => {
-    await api.setMonitor(false).catch((error) => {
-      console.error("[settings] set_monitor failed", error);
+    const applyDraft = action === "apply" || monitorDirty;
+    if (applyDraft && !validateMonitorDraft()) return;
+
+    if (action === "apply") {
+      void run("apply-monitor", async () => {
+        await persist(
+          (current) => ({
+            ...current,
+            monitor_interval_secs: Number(interval),
+            thresholds: {
+              five_hour: Number(fiveHour),
+              weekly: Number(weekly),
+              monthly: Number(monthly),
+            },
+          }),
+          "monitor",
+        );
+        setNotice("监控设置已保存。");
+      });
+      return;
+    }
+
+    void run("start-monitor", async () => {
+      await persist(
+        (current) => {
+          const next: AppConfig = {
+            ...current,
+            monitor_enabled: true,
+            ...(monitorDirty
+              ? {
+                  monitor_interval_secs: Number(interval),
+                  thresholds: {
+                    five_hour: Number(fiveHour),
+                    weekly: Number(weekly),
+                    monthly: Number(monthly),
+                  },
+                }
+              : {}),
+          };
+          return next;
+        },
+        monitorDirty ? "monitor" : null,
+      );
+      setNotice(monitorDirty ? "监控配置已保存，监控已启动。" : "监控已启动。");
+      // The monitor loop waits one interval before its first fetch; refresh
+      // immediately so the dashboard is not empty after starting.
+      void api.refreshUsage().catch((caught) => {
+        console.error("[settings] refresh_usage failed", caught);
+      });
     });
-    const saved = await persist((config) => ({ ...config, monitor_enabled: false }));
-    if (saved) setNotice("监控已停止。");
   };
 
-  const saveConnection = async () => {
-    if (!apiKey.trim() || mutatingCredentials) return;
-    setMutatingCredentials(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const trimmedWorkspace = workspace.trim();
-      await api.saveCredentials(trimmedWorkspace.length > 0 ? trimmedWorkspace : null, apiKey);
-      setApiKey("");
-      setNotice("连接已校验并保存到系统钥匙串。");
-      onRefreshStatus();
-    } catch (caught) {
-      // The key is stored even when the probe fails; refresh so the panel
-      // reflects what the backend actually has.
-      setError(caught as AppError);
-      onRefreshStatus();
-    } finally {
-      setMutatingCredentials(false);
+  const saveConnection = () => {
+    if (connectionBusy || !canSaveConnection) return;
+
+    if (!apiKeyPresent) {
+      // Workspace ID lives in the plain config, not the keyring, so it can be
+      // saved without re-entering the API key.
+      void run("save-connection", async () => {
+        await persist(
+          (current) => ({
+            ...current,
+            opencode_workspace_id: workspaceValue.length > 0 ? workspaceValue : null,
+          }),
+          "connection",
+        );
+        setNotice("Workspace ID 已保存。");
+        void api.refreshUsage().catch((caught) => {
+          console.error("[settings] refresh_usage failed", caught);
+        });
+      });
+      return;
     }
+
+    const key = apiKey.trim();
+    void run("save-connection", async () => {
+      await serializeConfigWrite(async () => {
+        let keyStored = false;
+        try {
+          await api.saveCredentials(workspaceValue.length > 0 ? workspaceValue : null, key);
+          keyStored = true;
+          setApiKey("");
+          setNotice("连接已校验并保存到系统钥匙串。");
+        } catch (caught) {
+          // The key is stored even when the probe fails; keep the input so a
+          // keyring failure can be retried, and surface the probe error. The
+          // draft workspace is also kept: resetting the field could discard
+          // input from a save that failed before persisting it.
+          setError(toAppError(caught));
+        }
+
+        // `save_credentials` persists the workspace before probing. Adopt the
+        // canonical config so a later save cannot resurrect the previous id.
+        try {
+          const canonical = await api.getConfig();
+          onConfigSaved(canonical);
+          if (keyStored) applyConnectionForm(canonical);
+        } catch (caught) {
+          console.error("[settings] get_config after save_credentials failed", caught);
+        }
+
+        onRefreshStatus();
+      });
+    });
   };
 
-  const testConnection = async () => {
-    if (mutatingCredentials) return;
-    setMutatingCredentials(true);
-    setError(null);
-    setNotice(null);
-    try {
+  const testConnection = () => {
+    if (!credentialsAvailable || apiKeyPresent) return;
+    void run("test-connection", async () => {
       await api.testConnection();
       setNotice("连接正常，已读取到最新用量。");
       onRefreshStatus();
-    } catch (caught) {
-      setError(caught as AppError);
-    } finally {
-      setMutatingCredentials(false);
-    }
+    });
   };
 
-  const clearConnection = async () => {
+  const openConsole = () => {
+    void run("open-console", async () => {
+      await api.openConsolePage();
+      setNotice("已在浏览器中打开 OpenCode Console。");
+    });
+  };
+
+  const clearConnection = () => {
     setConfirmClear(false);
-    setMutatingCredentials(true);
-    setError(null);
-    setNotice(null);
-    try {
-      await api.clearCredentials();
-      setNotice("连接已清除，监控已停止。");
-      onRefreshStatus();
-    } catch (caught) {
-      setError(caught as AppError);
-    } finally {
-      setMutatingCredentials(false);
-    }
+    void run("clear-credentials", async () => {
+      await serializeConfigWrite(async () => {
+        await api.clearCredentials();
+        setApiKey("");
+        setWorkspace("");
+        setNotice("连接已清除，监控已停止。");
+        try {
+          const canonical = await api.getConfig();
+          onConfigSaved(canonical);
+          applyConnectionForm(canonical);
+        } catch (caught) {
+          console.error("[settings] get_config after clear_credentials failed", caught);
+        }
+        onRefreshStatus();
+      });
+    });
+  };
+
+  const checkForUpdate = () => {
+    if (checkUpdateDisabled) return;
+    void run("check-update", async () => {
+      await api.checkForUpdate();
+    });
+  };
+
+  const downloadUpdate = () => {
+    if (updateActionBusy || updateView?.status !== "available") return;
+    void run("download-update", async () => {
+      await api.downloadUpdate();
+    });
+  };
+
+  const installUpdate = () => {
+    setConfirmInstall(false);
+    void run("install-update", async () => {
+      await api.installUpdate();
+    });
+  };
+
+  const openReleaseNotes = () => {
+    void run("open-release-notes", async () => {
+      await api.openReleaseNotes();
+    });
   };
 
   const toggleUpdateChecks = async (enabled: boolean) => {
-    const saved = await persist((config) => ({ ...config, update_checks_enabled: enabled }));
-    if (saved && enabled) void api.checkForUpdate();
+    const didSave = await run("toggle-update-checks", async () => {
+      await persist((current) => ({ ...current, update_checks_enabled: enabled }));
+    });
+    // Only an explicit enable triggers an immediate check; disabling simply
+    // stops the next scheduled one. Auto-download guards keep a ready package
+    // from being re-checked (and potentially invalidated).
+    if (didSave && enabled) checkForUpdate();
   };
 
   const toggleAutoDownload = async (enabled: boolean) => {
-    await persist((config) => ({ ...config, auto_download_updates: enabled }));
+    await run("toggle-auto-download", async () => {
+      await persist((current) => ({ ...current, auto_download_updates: enabled }));
+    });
   };
 
-  if (!config) return null;
-  const credentials = status?.credentials;
-  const monitorEnabled = status?.monitor.enabled ?? config.monitor_enabled;
+  const saveConnectionLabel = isPending("save-connection")
+    ? "保存中…"
+    : apiKeyPresent
+      ? "保存连接"
+      : "保存 Workspace ID";
+  const saveConnectionTitle = canSaveConnection
+    ? undefined
+    : !credentialsAvailable
+      ? "请先输入 API Key 并保存连接"
+      : "修改 Workspace ID 或输入新的 API Key 后可保存";
+  const testConnectionTitle = apiKeyPresent
+    ? "请先保存新的 API Key，测试连接只校验已保存的凭证"
+    : !credentialsAvailable
+      ? "请先保存 API Key 后才能测试连接"
+      : undefined;
+
   return (
     <div className="settings-page">
       <div className="settings-header">
@@ -377,7 +761,9 @@ export function Settings({
           <input
             className="text-input"
             placeholder="ws_xxxxxxxxxxxxx"
+            aria-label="Workspace ID"
             value={workspace}
+            disabled={connectionBusy}
             onChange={(event) => setWorkspace(event.target.value)}
             autoComplete="off"
           />
@@ -389,8 +775,10 @@ export function Settings({
           <input
             className="text-input"
             placeholder="oc_sk_..."
+            aria-label="API Key"
             type="password"
             value={apiKey}
+            disabled={connectionBusy}
             onChange={(event) => setApiKey(event.target.value)}
             autoComplete="off"
             spellCheck={false}
@@ -406,25 +794,28 @@ export function Settings({
           <button
             type="button"
             className="btn btn-soft"
-            onClick={() => void api.openConsolePage()}
+            disabled={isPending("open-console")}
+            onClick={openConsole}
           >
-            打开 Console
+            {isPending("open-console") ? "正在打开…" : "打开 Console"}
           </button>
           <button
             type="button"
             className="btn btn-soft"
-            disabled={mutatingCredentials || !status?.credentials.available}
+            disabled={connectionBusy || !credentialsAvailable || apiKeyPresent}
+            title={testConnectionTitle}
             onClick={testConnection}
           >
-            测试连接
+            {isPending("test-connection") ? "测试中…" : "测试连接"}
           </button>
           <button
             type="button"
             className="btn btn-primary"
-            disabled={mutatingCredentials || !apiKey.trim()}
+            disabled={connectionBusy || !canSaveConnection}
+            title={saveConnectionTitle}
             onClick={saveConnection}
           >
-            {mutatingCredentials ? "保存中…" : "保存连接"}
+            {saveConnectionLabel}
           </button>
         </div>
       </SettingsCard>
@@ -445,8 +836,10 @@ export function Settings({
             <span>每</span>
             <input
               className="text-input settings-interval-input"
+              aria-label="检查间隔（秒）"
               value={interval}
-              onChange={(event) => setInterval(event.target.value)}
+              disabled={monitorBusy}
+              onChange={(event) => setIntervalText(event.target.value)}
               inputMode="numeric"
             />
             <span>秒</span>
@@ -455,16 +848,18 @@ export function Settings({
         <FormField label="通知阈值">
           <div className="settings-thresholds">
             {[
-              ["5 小时", fiveHour, setFiveHour],
-              ["近一周", weekly, setWeekly],
-              ["近一月", monthly, setMonthly],
-            ].map(([label, value, setter]) => (
-              <div className="settings-threshold" key={label as string}>
-                <span className="settings-threshold-label">{label as string}</span>
+              { key: "five_hour", label: "5 小时", value: fiveHour, set: setFiveHour },
+              { key: "weekly", label: "近一周", value: weekly, set: setWeekly },
+              { key: "monthly", label: "近一月", value: monthly, set: setMonthly },
+            ].map((item) => (
+              <div className="settings-threshold" key={item.key}>
+                <span className="settings-threshold-label">{item.label}</span>
                 <input
                   className="text-input settings-threshold-input"
-                  value={value as string}
-                  onChange={(event) => (setter as (value: string) => void)(event.target.value)}
+                  aria-label={`${item.label}阈值`}
+                  value={item.value}
+                  disabled={monitorBusy}
+                  onChange={(event) => item.set(event.target.value)}
                   inputMode="decimal"
                 />
               </div>
@@ -472,23 +867,40 @@ export function Settings({
           </div>
         </FormField>
         <div className="settings-row-right">
+          {!monitorEnabled && !credentialsAvailable ? (
+            <span className="settings-action-hint">保存 API Key 后才能启动监控</span>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={monitorBusy || !monitorDirty}
+            title={!monitorDirty ? "修改检查间隔或阈值后可保存" : undefined}
+            onClick={() => saveMonitorSettings("apply")}
+          >
+            {isPending("apply-monitor") ? "保存中…" : "保存更改"}
+          </button>
           {monitorEnabled ? (
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={saving}
-              onClick={stopMonitor}
+              disabled={monitorBusy}
+              onClick={() => saveMonitorSettings("stop")}
             >
-              {saving ? "保存中…" : "停止监控"}
+              {isPending("stop-monitor") ? "停止中…" : "停止监控"}
             </button>
           ) : (
             <button
               type="button"
               className="btn btn-primary"
-              disabled={saving}
-              onClick={startMonitor}
+              disabled={monitorBusy || !credentialsAvailable}
+              title={!credentialsAvailable ? "请先在连接卡片中保存 API Key" : undefined}
+              onClick={() => saveMonitorSettings("start")}
             >
-              {saving ? "保存中…" : "保存并启动"}
+              {isPending("start-monitor")
+                ? "启动中…"
+                : monitorDirty
+                  ? "保存并启动"
+                  : "启动监控"}
             </button>
           )}
         </div>
@@ -498,59 +910,69 @@ export function Settings({
         icon={<Icons.Refresh size={16} />}
         title="应用更新"
         subtitle="从 GitHub Releases 自动发现并安装新版本"
-        trailing={
-          update ? (
-            <StatusBadge
-              tone={
-                update.status === "up_to_date"
-                  ? "success"
-                  : update.status === "error"
-                    ? "danger"
-                    : update.status === "checking" || update.status === "downloading"
-                      ? "primary"
-                      : "neutral"
-              }
-            >
-              {update.status === "checking"
-                ? "检查中…"
-                : update.status === "downloading"
-                  ? "下载中…"
-                  : update.status === "up_to_date"
-                    ? "已是最新"
-                    : update.status === "error"
-                      ? "检查失败"
-                      : "未检查"}
-            </StatusBadge>
-          ) : undefined
-        }
+        trailing={<StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
       >
         <FormField label="当前版本">
-          <span className="settings-version">v{status?.version ?? "0.1.2"}</span>
+          <span className="settings-version">
+            {status?.version ? `v${status.version}` : "未知"}
+          </span>
         </FormField>
         <ToggleRow
           label="自动检查更新"
           checked={config.update_checks_enabled}
-          onChange={toggleUpdateChecks}
+          disabled={updateToggleBusy}
+          busy={isPending("toggle-update-checks")}
+          onChange={(enabled) => void toggleUpdateChecks(enabled)}
         />
         <ToggleRow
           label="自动下载更新"
+          hint={
+            config.auto_download_updates
+              ? "手动检查发现新版本时也会自动下载"
+              : undefined
+          }
           checked={config.auto_download_updates}
-          onChange={toggleAutoDownload}
+          disabled={updateToggleBusy}
+          busy={isPending("toggle-auto-download")}
+          onChange={(enabled) => void toggleAutoDownload(enabled)}
         />
         <FormField label="上次检查">
-          <span className="settings-last-checked">{lastCheckedText(update?.lastCheckedMs ?? null)}</span>
+          <span className="settings-last-checked">
+            {lastCheckedText(updateView?.lastCheckedMs ?? null)}
+          </span>
         </FormField>
         <div className="settings-row-right">
           <button
             type="button"
             className="btn btn-secondary"
-            disabled={update?.status === "checking" || update?.status === "downloading" || update?.status === "installing"}
-            onClick={() => void api.checkForUpdate()}
+            disabled={checkUpdateDisabled}
+            title={
+              updateView?.status === "ready_to_install"
+                ? "请先安装当前更新"
+                : updateStatusBusy
+                  ? "更新任务进行中，请稍候"
+                  : undefined
+            }
+            onClick={checkForUpdate}
           >
-            检查更新
+            {isPending("check-update") || updateView?.status === "checking"
+              ? "检查中…"
+              : "检查更新"}
           </button>
         </div>
-        {update ? <UpdateStatusBlock update={update} /> : null}
+        {updateView ? (
+          <UpdateStatusBlock
+            update={updateView}
+            busy={updateActionBusy}
+            onOpenNotes={openReleaseNotes}
+            onDownload={downloadUpdate}
+            onInstall={() => {
+              setConfirmClear(false);
+              setConfirmInstall(true);
+            }}
+            onRetryCheck={checkForUpdate}
+          />
+        ) : null}
       </SettingsCard>
 
       <section className="settings-card settings-danger-zone">
@@ -564,10 +986,22 @@ export function Settings({
           <button
             type="button"
             className="btn btn-danger-outline"
-            disabled={mutatingCredentials}
-            onClick={() => setConfirmClear(true)}
+            disabled={!canClearCredentials}
+            title={
+              credentialsMissing
+                ? "当前没有已保存的凭证"
+                : credentials === undefined || credentials.phase === "checking"
+                  ? "正在检查已保存的凭证"
+                  : connectionBusy
+                    ? "连接操作进行中，请稍候"
+                    : undefined
+            }
+            onClick={() => {
+              setConfirmInstall(false);
+              setConfirmClear(true);
+            }}
           >
-            清除凭证
+            {isPending("clear-credentials") ? "清除中…" : "清除凭证"}
           </button>
         </div>
       </section>
@@ -580,6 +1014,21 @@ export function Settings({
           cancelLabel="取消"
           onConfirm={clearConnection}
           onCancel={() => setConfirmClear(false)}
+        />
+      ) : null}
+
+      {confirmInstall && updateView?.status === "ready_to_install" ? (
+        <ConfirmDialog
+          title="安装更新"
+          body={`将安装 ${
+            updateView.downloadedVersion
+              ? `v${updateView.downloadedVersion}`
+              : updateView.available?.tag ?? "更新"
+          } 并重启应用。安装过程中请勿关闭应用。`}
+          confirmLabel="安装并重启"
+          cancelLabel="取消"
+          onConfirm={installUpdate}
+          onCancel={() => setConfirmInstall(false)}
         />
       ) : null}
     </div>

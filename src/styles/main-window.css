@@ -1079,11 +1079,13 @@
 /* Settings page ---------------------------------------------------------------------- */
 
 .settings-page {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-base);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  align-items: start;
+  gap: var(--card-gap);
   padding: var(--page-padding);
-  max-width: 760px;
+  max-width: 1500px;
   margin: 0 auto;
   overflow-y: auto;
   height: 100%;
@@ -1095,6 +1097,12 @@
   align-items: center;
   gap: var(--space-base);
   padding-bottom: var(--space-sm);
+  grid-column: 1 / -1;
+}
+
+/* Top-level action feedback spans the whole grid, never a single card cell. */
+.settings-page > .notice {
+  grid-column: 1 / -1;
 }
 
 .settings-title {
@@ -1119,6 +1127,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .settings-card-header {
@@ -1206,7 +1215,16 @@
 
 .settings-row-right {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.settings-action-hint {
+  margin-right: auto;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
 }
 
 .settings-monitor-badge {
@@ -1224,9 +1242,24 @@
   gap: var(--space-sm);
 }
 
+.settings-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .settings-toggle-label {
   font-size: var(--text-body);
   color: var(--text-secondary);
+}
+
+.settings-toggle-hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+.settings-toggle-row-disabled .settings-toggle-label {
+  color: var(--text-tertiary);
 }
 
 .toggle {
@@ -1243,12 +1276,25 @@
   background: var(--border-strong);
 }
 
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle:disabled:hover {
+  background: var(--bg-track);
+}
+
 .toggle-on {
   background: var(--accent);
 }
 
 .toggle-on:hover {
   background: var(--accent-hover);
+}
+
+.toggle-on:disabled:hover {
+  background: var(--accent);
 }
 
 .toggle-knob {
@@ -1284,6 +1330,7 @@
 .settings-update-row {
   flex-direction: row;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -1300,6 +1347,7 @@
 .settings-danger-zone {
   border-color: var(--danger-border);
   background: linear-gradient(180deg, var(--bg-surface) 0%, var(--danger-soft) 260%);
+  grid-column: 1 / -1;
 }
 
 .settings-danger-title {
@@ -1430,6 +1478,24 @@
 @media (max-width: 1199px) {
   .quota-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 1279px) {
+  .settings-page {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Two columns: update and danger share the second row instead of leaving a
+     full-width update card with a switch stranded on the far right. */
+  .settings-danger-zone {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 899px) {
+  .settings-page {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
