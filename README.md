@@ -103,7 +103,8 @@ cargo test --workspace
 │   └── styles/               # 设计令牌与样式
 ├── src-tauri/                # Tauri v2 Rust 后端
 │   ├── src/commands/         # IPC 命令层
-│   ├── src/window/           # 悬浮窗 / 停靠 / Windows 原生适配
+│   ├── src/float/            # 悬浮窗：状态机 / 控制器 / 布局 / Windows 原生适配
+│   ├── src/window/           # 主窗口生命周期
 │   ├── src/monitor.rs        # 后台监控任务
 │   ├── src/tray.rs           # 系统托盘
 │   ├── src/updater.rs        # 更新状态机
@@ -113,7 +114,7 @@ cargo test --workspace
 └── xtask/                    # 版本与发布工具
 ```
 
-`opencode-core` 不依赖桌面 UI，可独立测试。应用状态只存在于 Tauri Rust 后端（`AppState`）；主窗口与悬浮窗共享同一份配额状态，通过事件同步到 React。
+`opencode-core` 不依赖桌面 UI，可独立测试。应用状态只存在于 Tauri Rust 后端（`AppState`）；主窗口与悬浮窗共享同一份配额状态，通过事件同步到 React。悬浮窗的状态模型、停靠算法与 Windows 原生适配见[悬浮窗架构](docs/architecture/float-window.md)。
 
 ## 构建
 
@@ -151,7 +152,7 @@ cargo xtask release 1.0.0 --push
 
 - 不在日志、配置、测试 fixture 或错误信息中输出 API Key。
 - HTTP 请求使用 rustls TLS，并设置有限超时及响应体错误截断。
-- 悬浮窗 capability 采用最小权限：只能读取配额状态、监听事件、移动/缩放/关闭自身窗口；无权修改凭据、更新器、文件系统或执行 shell。
+- 悬浮窗 capability 采用最小权限：只能监听事件并发起拖拽；窗口创建、缩放、定位与关闭均由 Rust controller 完成，无权修改凭据、更新器、文件系统或执行 shell。
 - 更新包使用 Ed25519 签名校验；私钥仅存于 GitHub Secrets。
 - 发布包未配置平台代码签名；正式分发前应配置 Windows 与 macOS 签名凭据。
 

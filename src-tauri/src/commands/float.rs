@@ -1,51 +1,43 @@
 //! Floating window commands.
 //!
-//! These are synchronous commands: they run on the main thread, which is
-//! required for window creation.
+//! Every command is a thin wrapper around `float::controller`, which owns the
+//! native window, the runtime state, event emission and persistence. Opening a
+//! window must run on the main thread, so the mutating commands stay
+//! synchronous; only the read-only snapshot is async so its mutex acquisition
+//! never blocks the event loop.
 
-use crate::actions;
-use crate::config::FloatMode;
-use crate::state::{AppState, FloatStateDto};
-use std::sync::Arc;
-use tauri::{AppHandle, Manager, State};
+use crate::config::FloatLayout;
+use crate::float::controller;
+use crate::state::FloatStateDto;
+use tauri::AppHandle;
 
 /// Returns the current floating-window snapshot.
-///
-/// Async so the mutex acquisition never runs on the Tauri main thread.
 #[tauri::command]
 pub async fn get_float_state(app: AppHandle) -> FloatStateDto {
-    let state = app.state::<Arc<AppState>>().inner().clone();
-    state.float_dto()
+    controller::snapshot(&app)
 }
 
 /// Opens (or focuses) the floating window.
+///
+/// Async on purpose: on Windows, creating a webview from a synchronous command
+/// deadlocks (WebView2 must be created outside the command/event handler
+/// thread). Tauri runs async commands on its runtime, which is the supported
+/// context for `WebviewWindowBuilder::build`.
 #[tauri::command]
-pub fn open_float_window(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<(), String> {
-    let state = state.inner().clone();
-    if app.get_webview_window("float").is_some() {
-        if let Some(window) = app.get_webview_window("float") {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-        return Ok(());
-    }
-    crate::window::float_window::open(&app, state.clone())?;
-    state.floating.lock().expect("float mutex").open = true;
-    crate::tray::emit_float_state(&app);
-    crate::persistence::persist_config(&app);
-    Ok(())
+pub async fn open_float_window(app: AppHandle) -> Result<(), String> {
+    controller::open(&app)
 }
 
 /// Closes the floating window through the normal close path.
 #[tauri::command]
 pub fn close_float_window(app: AppHandle) -> Result<(), String> {
-    actions::close_float(&app);
+    controller::close(&app);
     Ok(())
 }
 
-/// Switches the floating window mode (Full / Compact / Docked).
+/// Switches the persisted floating-window layout (Full / Compact).
 #[tauri::command]
-pub fn set_float_mode(app: AppHandle, mode: FloatMode) -> Result<(), String> {
-    actions::change_float_mode(&app, mode);
+pub fn set_float_mode(app: AppHandle, mode: FloatLayout) -> Result<(), String> {
+    controller::set_layout(&app, mode);
     Ok(())
 }

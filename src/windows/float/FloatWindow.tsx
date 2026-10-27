@@ -1,27 +1,27 @@
 // Floating window shell.
 //
-// State architecture (the fix for the mode-desync bug):
+// State architecture:
 //
-//   AppConfig.float_mode  ── persisted (full | compact)
-//   FloatState.top_docked ── transient (native drag / dock command)
+//   AppConfig.float_mode  ── persisted exactly once (full | compact)
+//   FloatRuntime.docked   ── transient (native drag / dock command)
 //   presentationMode      ── derived in the BACKEND, delivered in the DTO
 //   native window size    ── set by the backend from the same derivation
 //
 // This component keeps NO local mode state: it renders exclusively from
-// `floatState.presentationMode`. Until the first `get_float_state` resolves
-// it shows a lightweight boot shell — it never guesses "full" and flashes
-// the wrong layout inside a Compact native window.
+// `snapshot.presentationMode`. Until the first `get_float_state` resolves it
+// shows a lightweight boot shell — it never guesses "full" and flashes the
+// wrong layout inside a Compact native window.
 
 import { useCallback } from "react";
 import { useQuota } from "../../hooks/useApp";
 import { api } from "../../services/tauri";
 import type { PersistedFloatMode } from "../../types/models";
-import { CompactFloatView } from "./CompactFloatView";
-import { DockedFloatView } from "./DockedFloatView";
+import { CompactView } from "./CompactView";
+import { DockedView } from "./DockedView";
 import { FloatHeader } from "./FloatHeader";
-import { FullFloatView } from "./FullFloatView";
+import { FullView } from "./FullView";
 import { highestWindow } from "./floatLayout";
-import { useFloatState } from "./useFloatState";
+import { useFloatSnapshot } from "./useFloatSnapshot";
 
 function BootShell() {
   return (
@@ -38,7 +38,7 @@ function BootShell() {
 
 export function FloatWindow() {
   const { report, loading, error } = useQuota();
-  const floatState = useFloatState();
+  const snapshot = useFloatSnapshot();
 
   const refresh = useCallback(() => {
     void api.refreshUsage();
@@ -52,7 +52,7 @@ export function FloatWindow() {
     void api.closeFloatWindow();
   }, []);
 
-  const presentationMode = floatState?.presentationMode ?? null;
+  const presentationMode = snapshot?.presentationMode ?? null;
 
   if (presentationMode === null) {
     return <BootShell />;
@@ -67,7 +67,7 @@ export function FloatWindow() {
   if (presentationMode === "docked") {
     return (
       <div className="float-window float-window--docked">
-        <DockedFloatView
+        <DockedView
           report={report}
           loading={loading}
           error={error?.user ?? null}
@@ -95,14 +95,14 @@ export function FloatWindow() {
           onClose={close}
         />
         {compact ? (
-          <CompactFloatView
+          <CompactView
             report={report}
             loading={loading}
             error={error?.user ?? null}
             onRetry={refresh}
           />
         ) : (
-          <FullFloatView
+          <FullView
             report={report}
             loading={loading}
             error={error?.user ?? null}

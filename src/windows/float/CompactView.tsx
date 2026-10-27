@@ -5,11 +5,18 @@
 
 import { Dot } from "../../components/common";
 import { quotaHealth, type UsageReport } from "../../types/models";
-import { clampPercent, compactNumber, healthColors, healthLabel, highestWindow, progressWidth } from "./floatLayout";
-import { FloatStateView } from "./FloatStateView";
+import {
+  clampPercent,
+  compactNumber,
+  healthColors,
+  healthLabel,
+  highestWindow,
+  progressWidth,
+} from "./floatLayout";
+import { StateView } from "./StateView";
 import { ResetCountdown } from "./tickers";
 
-export function CompactFloatView({
+export function CompactView({
   report,
   loading,
   error,
@@ -24,7 +31,7 @@ export function CompactFloatView({
   if (!window) {
     return (
       <div className="float-compact">
-        <FloatStateView loading={loading} error={error} onRetry={onRetry} variant="compact" />
+        <StateView loading={loading} error={error} onRetry={onRetry} variant="compact" />
       </div>
     );
   }

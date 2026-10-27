@@ -11,8 +11,9 @@ Tauri Rust Desktop Layer (src-tauri/src/)
         │                   monitor, float, update, app status)
         ├── monitor.rs      tokio background monitor task
         ├── tray.rs         system tray + menu events
-        ├── window/         main + floating windows, top docking,
-        │                   Windows native adapters (work area, snap, corners)
+        ├── float/          float-window subsystem: layout, runtime state,
+        │                   controller, Windows native adapters
+        ├── window/         main-window lifecycle
         ├── updater.rs      tauri-plugin-updater state machine
         ├── notifications.rs native notifications (dedup upstream)
         ├── state.rs        AppState — the single shared state container
@@ -50,9 +51,12 @@ opencode-core (crates/opencode-core/)
   `quota://updated` / `quota://error` / `monitor://status` events.
 - Config: React form → `save_config` command → `AppConfig::validate` (final
   authority) → atomic file write → `app://status` event.
-- Float window: commands create/destroy/resize it; Rust `on_window_event`
-  handles position persistence (debounced), top docking (hysteresis 18/24 px,
-  DPI-scaled, physical coordinates), snapping, and Windows rounded corners.
+- Float window: `float::controller` creates/destroys/resizes it; the layout is
+  `AppConfig.float_mode` (Full/Compact), the only transient flag is
+  `FloatRuntime::docked`, and `presentation_mode` is derived once in Rust for
+  both the native size and the DTO. Rust `on_window_event` handles position
+  persistence (debounced), top docking (hysteresis 18/24 px, DPI-scaled,
+  physical coordinates), snapping, and Windows rounded corners.
 
 ## Events
 
@@ -68,8 +72,9 @@ opencode-core (crates/opencode-core/)
 ## Security / capabilities
 
 - `main` window: `core:default` + window controls + clipboard write.
-- `float` window: least privilege — event listen, drag, resize/move/close
-  itself only. No credential, updater, fs, or shell permissions.
+- `float` window: least privilege — event listen + start-dragging only.
+  Window creation, sizing, focus, positioning and closing are performed by the
+  Rust controller; no credential, updater, fs, or shell permissions.
 - No secrets in the webview; no shell execution from the frontend.
 
 ## Upgrade compatibility

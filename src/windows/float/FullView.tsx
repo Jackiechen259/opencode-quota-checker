@@ -7,11 +7,11 @@
 import { Dot } from "../../components/common";
 import { quotaHealth, type UsageReport } from "../../types/models";
 import { highestWindow, healthColors } from "./floatLayout";
-import { FloatStateView } from "./FloatStateView";
 import { QuotaCard } from "./QuotaCard";
+import { StateView } from "./StateView";
 import { RelativeUpdateTime } from "./tickers";
 
-export function FullFloatView({
+export function FullView({
   report,
   loading,
   error,
@@ -25,7 +25,7 @@ export function FullFloatView({
   if (!report || report.windows.length === 0) {
     return (
       <div className="float-full">
-        <FloatStateView loading={loading} error={error} onRetry={onRetry} />
+        <StateView loading={loading} error={error} onRetry={onRetry} />
       </div>
     );
   }

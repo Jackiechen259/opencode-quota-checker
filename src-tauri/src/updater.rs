@@ -235,7 +235,7 @@ pub async fn install(app: &AppHandle) -> Result<(), AppError> {
         Ok(()) => {
             tracing::info!("update installer launched");
             #[cfg(any(target_os = "windows", target_os = "linux"))]
-            app.exit(0);
+            crate::actions::quit(app);
             Ok(())
         }
         Err(error) => {

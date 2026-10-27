@@ -74,7 +74,7 @@ export interface AppConfig {
   opencode_workspace_id: string | null;
   close_behavior: CloseBehavior;
   float_open: boolean;
-  float_mode: FloatMode;
+  float_mode: PersistedFloatMode;
   float_position: FloatPosition | null;
   update_checks_enabled: boolean;
   auto_download_updates: boolean;

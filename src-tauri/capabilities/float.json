@@ -1,15 +1,9 @@
 {
   "identifier": "float-capability",
-  "description": "Least-privilege permissions for the floating window: it only reads quota state, listens to quota events, and moves/resizes/closes itself. It cannot touch credentials, the updater, the filesystem, or the shell.",
+  "description": "Least-privilege permissions for the floating window: it only listens to quota/float events and initiates dragging. Window creation, sizing, focus, positioning and closing are performed by the Rust controller over IPC, so the webview needs no other window permissions.",
   "windows": ["float"],
   "permissions": [
     "core:event:default",
-    "core:window:allow-start-dragging",
-    "core:window:allow-set-size",
-    "core:window:allow-set-position",
-    "core:window:allow-close",
-    "core:window:allow-show",
-    "core:window:allow-hide",
-    "core:window:allow-set-focus"
+    "core:window:allow-start-dragging"
   ]
 }

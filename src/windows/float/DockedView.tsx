@@ -1,14 +1,15 @@
 // Docked floating view: a true one-line status strip.
 //
-// The whole content area is a drag region (bare attribute = direct clicks
-// only); the buttons carry no drag-region attribute so they stay clickable.
+// The whole strip is a deep drag region, so the label/percent/remaining text
+// are draggable as well as the empty areas. The buttons are clickable elements
+// without the attribute, so Tauri's drag script leaves them alone.
 
 import { Dot } from "../../components/common";
 import { Icons } from "../../components/icons";
 import { quotaHealth, type UsageReport } from "../../types/models";
 import { compactNumber, healthColors, highestWindow } from "./floatLayout";
 
-export function DockedFloatView({
+export function DockedView({
   report,
   loading,
   error,
@@ -55,11 +56,11 @@ export function DockedFloatView({
     );
   }
   return (
-    <div className="float-docked">
-      <div className="float-docked-content" data-tauri-drag-region>
+    <div className="float-docked" data-tauri-drag-region="deep">
+      <div className="float-docked-content">
         {content}
       </div>
-      <span className="float-spacer" data-tauri-drag-region />
+      <span className="float-spacer" />
       <button
         type="button"
         className="float-docked-button"

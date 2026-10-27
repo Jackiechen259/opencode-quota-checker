@@ -7,9 +7,9 @@ import type {
   AppConfig,
   AppStatusDto,
   BootStatusDto,
-  FloatMode,
   FloatStateDto,
   MonitorStatusDto,
+  PersistedFloatMode,
   UpdateStateDto,
   UsageDto,
 } from "../types/models";
@@ -41,7 +41,7 @@ export const api = {
   getFloatState: () => invoke<FloatStateDto>("get_float_state"),
   openFloatWindow: () => invoke<void>("open_float_window"),
   closeFloatWindow: () => invoke<void>("close_float_window"),
-  setFloatMode: (mode: FloatMode) => invoke<void>("set_float_mode", { mode }),
+  setFloatMode: (mode: PersistedFloatMode) => invoke<void>("set_float_mode", { mode }),
 
   getUpdateState: () => invoke<UpdateStateDto>("get_update_state"),
   checkForUpdate: () => invoke<void>("check_for_update"),

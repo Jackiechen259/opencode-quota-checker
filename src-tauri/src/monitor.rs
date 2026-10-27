@@ -69,7 +69,7 @@ pub async fn run_once(app: &AppHandle) {
     emit_monitor_status(app);
     // The loading state may change the ideal Full height (skeleton before
     // the first report); keep the native window in sync with the DTO.
-    crate::window::float_window::sync_float_size(app);
+    crate::float::controller::sync_size(app);
 
     let config = state.config.lock().expect("config mutex").clone();
     let workspace = config.opencode_workspace_id.clone();
@@ -114,7 +114,7 @@ pub async fn run_once(app: &AppHandle) {
                 monitor.last_fetch_ms = Some(now_ms);
             }
             // Quota count changes the ideal Full height; re-sync the window.
-            crate::window::float_window::sync_float_size(app);
+            crate::float::controller::sync_size(app);
             let _ = app.emit(events::QUOTA_UPDATED, &report);
         }
         Err(error) => {
@@ -129,7 +129,7 @@ pub async fn run_once(app: &AppHandle) {
                 monitor.loading = false;
                 monitor.error = Some(error.clone());
             }
-            crate::window::float_window::sync_float_size(app);
+            crate::float::controller::sync_size(app);
             let _ = app.emit(events::QUOTA_ERROR, &error);
         }
     }

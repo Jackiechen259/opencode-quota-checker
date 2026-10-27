@@ -81,7 +81,7 @@
   --radius-pill: 999px;
   --radius-frame: 12px;
   /* Floating widget: must match the native window region radius
-     (`float_window::corner_radius`) — 16 for Full/Compact, 12 for Docked. */
+     (`float::layout::corner_radius`) — 16 for Full/Compact, 12 for Docked. */
   --radius-float: 16px;
   --radius-float-docked: 12px;
 

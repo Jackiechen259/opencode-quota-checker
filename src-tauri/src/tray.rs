@@ -48,8 +48,16 @@ pub fn init(app: &AppHandle) -> Result<TrayHandle, String> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show-main" => crate::actions::show_main(app),
             "hide-main" => crate::actions::hide_main(app),
-            "toggle-float" => crate::actions::toggle_float(app),
-            "quit" => app.exit(0),
+            "toggle-float" => {
+                // WebView2 window creation must not run on the menu event
+                // handler thread (it deadlocks on Windows); dispatch it to the
+                // async runtime, which is the supported construction context.
+                let handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::float::controller::toggle(&handle);
+                });
+            }
+            "quit" => crate::actions::quit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -78,13 +86,6 @@ pub fn sync_float_checked(app: &AppHandle, checked: bool) {
     if let Some(tray) = tray_guard.as_ref() {
         let _ = tray.float_item.set_checked(checked);
     }
-}
-
-/// Emits the current float state after any float mutation.
-pub fn emit_float_state(app: &AppHandle) {
-    let state = app.state::<Arc<AppState>>().inner().clone();
-    let _ = app.emit(crate::events::FLOAT_STATE, state.float_dto());
-    sync_float_checked(app, state.float_dto().open);
 }
 
 /// Emits the current monitor state after any monitor mutation.

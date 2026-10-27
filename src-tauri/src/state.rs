@@ -5,14 +5,16 @@
 //! command. The frontend never mirrors this state; it receives snapshots and
 //! events.
 
-use crate::config::{AppConfig, FloatMode, FloatPosition};
+use crate::config::{AppConfig, FloatLayout};
 use crate::credential_task::CredentialCheckResult;
 use crate::error::AppError;
+use crate::float::FloatRuntime;
+pub use crate::float::FloatStateDto;
 use opencode_core::{QuotaService, UsageReport};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use tokio::sync::watch;
 
 /// Configuration watched by the background monitor task.
@@ -83,24 +85,6 @@ pub struct MonitorState {
     pub notification_error: Option<AppError>,
 }
 
-/// Transient floating-window state.
-///
-/// The persisted layout mode intentionally does NOT live here: `AppConfig`
-/// is the single source of truth for Full / Compact, and `top_docked` is the
-/// only transient presentation flag. Keeping a second `mode` field here is
-/// exactly what caused the frontend to render Full while the native window
-/// was Compact — the two copies drifted apart.
-#[derive(Debug, Default)]
-pub struct FloatState {
-    pub open: bool,
-    /// Whether the window is temporarily snapped to the monitor top.
-    pub top_docked: bool,
-    /// Whether a move event is waiting for debounced persistence.
-    pub position_dirty: bool,
-    /// Debounce generation; only the newest move wins the write.
-    pub position_gen: u64,
-}
-
 /// Lifecycle of the updater state machine; mirrors the archived client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -163,7 +147,7 @@ pub struct AppState {
     pub config: Mutex<AppConfig>,
     pub usage: Mutex<UsageState>,
     pub monitor: Mutex<MonitorState>,
-    pub floating: Mutex<FloatState>,
+    pub floating: Mutex<FloatRuntime>,
     pub updater: Mutex<UpdateState>,
     pub credentials: Mutex<CredentialStatus>,
     /// Tray handle; `None` when the tray failed to initialize.
@@ -172,6 +156,9 @@ pub struct AppState {
     /// Error from the startup config load (corrupt file), shown in settings.
     pub config_error: RwLock<Option<AppError>>,
     pub config_loaded: AtomicBool,
+    /// Set before the process exits so floating-window close bookkeeping does
+    /// not overwrite the persisted `float_open` intent.
+    shutting_down: AtomicBool,
     /// Cloneable HTTP + parsing service.
     pub service: QuotaService,
     /// Drives the background monitor task.
@@ -185,7 +172,7 @@ impl AppState {
             config: Mutex::new(AppConfig::default()),
             usage: Mutex::new(UsageState::default()),
             monitor: Mutex::new(MonitorState::default()),
-            floating: Mutex::new(FloatState::default()),
+            floating: Mutex::new(FloatRuntime::default()),
             updater: Mutex::new(UpdateState::default()),
             // The initial keyring check starts in the Checking phase; the
             // background check task applies the terminal outcome.
@@ -194,6 +181,7 @@ impl AppState {
             tray_error: RwLock::new(None),
             config_error: RwLock::new(None),
             config_loaded: AtomicBool::new(false),
+            shutting_down: AtomicBool::new(false),
             service,
             monitor_tx,
         }
@@ -209,6 +197,12 @@ impl AppState {
     }
 
     /// Applies a freshly loaded/saved config to the live state.
+    ///
+    /// The floating-window fields are deliberately not copied into the
+    /// runtime: `float_open` is the persisted intent read by the controller on
+    /// launch, while the live window state is owned by
+    /// `float::controller`. Copying one into the other here is what previously
+    /// let a settings save mark an open window as closed.
     pub fn apply_config(&self, config: AppConfig) {
         *self.config.lock().expect("config mutex") = config.clone();
         self.config_loaded.store(true, Ordering::SeqCst);
@@ -216,10 +210,6 @@ impl AppState {
             let mut monitor = self.monitor.lock().expect("monitor mutex");
             monitor.enabled = config.monitor_enabled;
             monitor.interval_secs = config.monitor_interval_secs;
-        }
-        {
-            let mut floating = self.floating.lock().expect("float mutex");
-            floating.open = config.float_open;
         }
         self.push_monitor_config();
     }
@@ -254,27 +244,28 @@ impl AppState {
         }
     }
 
-    /// Applies the canonical float-mode transition to the shared state.
+    /// Applies a persisted floating-window layout and leaves the docked state.
     ///
-    /// - Full / Compact become the persisted configured mode and clear
-    ///   docking;
-    /// - Docked only flips the transient `top_docked` flag — it never
-    ///   touches the persisted mode, so undocking restores the previous
-    ///   Full/Compact.
+    /// `AppConfig.float_mode` is the single source of truth for the persisted
+    /// layout; `FloatRuntime` only carries the transient dock flag. The two
+    /// guards are taken one at a time and never nested (lock-ordering rules on
+    /// `AppState`); the config is updated first to honor the documented order.
+    pub fn apply_float_layout(&self, layout: FloatLayout) {
+        self.config.lock().expect("config mutex").float_mode = layout;
+        self.floating.lock().expect("float mutex").clear_docked();
+    }
+
+    /// Marks the process as exiting.
     ///
-    /// `AppConfig.float_mode` is the single source of truth for the
-    /// configured mode; there is deliberately no duplicate copy in
-    /// `FloatState` anymore (that duplication is what let the DTO drift
-    /// from the native window). Both guards are taken one at a time and
-    /// never nested (lock-ordering rules on `AppState`).
-    pub fn apply_float_mode(&self, mode: FloatMode) {
-        {
-            let mut floating = self.floating.lock().expect("float mutex");
-            floating.top_docked = mode == FloatMode::Docked;
-        }
-        if mode != FloatMode::Docked {
-            self.config.lock().expect("config mutex").float_mode = mode;
-        }
+    /// Floating-window close bookkeeping checks this flag so an exit-initiated
+    /// close cannot persist `float_open = false` and lose the restore intent.
+    pub fn begin_shutdown(&self) {
+        self.shutting_down.store(true, Ordering::SeqCst);
+    }
+
+    /// Whether the process is exiting.
+    pub fn is_shutting_down(&self) -> bool {
+        self.shutting_down.load(Ordering::SeqCst)
     }
 
     /// Pushes the current monitor configuration to the background task.
@@ -347,23 +338,7 @@ pub struct MonitorStatusDto {
     pub notification_error: Option<AppError>,
 }
 
-/// Snapshot of the floating window crossing the IPC boundary.
-///
-/// `configured_mode` is the persisted layout (Full or Compact — Docked is
-/// transient and never persisted) and `presentation_mode` is what the UI
-/// must render right now (Docked while the window is snapped to the monitor
-/// top, otherwise the configured mode). Keeping the two distinct means the
-/// frontend never has to derive one from the other, and the native window
-/// size always follows `presentation_mode`.
-#[derive(Debug, Clone, Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct FloatStateDto {
-    pub open: bool,
-    pub configured_mode: FloatMode,
-    pub presentation_mode: FloatMode,
-    pub top_docked: bool,
-}
-
+/// Latest usage snapshot returned by `get_usage` and emitted on quota events.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageDto {
@@ -459,16 +434,7 @@ impl AppState {
     pub fn float_dto(&self) -> FloatStateDto {
         let configured = self.config.lock().expect("config mutex").float_mode;
         let floating = self.floating.lock().expect("float mutex");
-        FloatStateDto {
-            open: floating.open,
-            configured_mode: configured,
-            presentation_mode: if floating.top_docked {
-                FloatMode::Docked
-            } else {
-                configured
-            },
-            top_docked: floating.top_docked,
-        }
+        floating.snapshot(configured)
     }
 
     /// Builds the boot-critical snapshot: config load state + credentials.
@@ -551,41 +517,5 @@ impl AppState {
             "status snapshot complete"
         );
         dto
-    }
-
-    /// Records a moved float position and schedules a debounced persistence.
-    ///
-    /// Takes the `Arc` so the spawned task can keep its own reference to the
-    /// shared state. The guard is released before `persist_config` runs:
-    /// persisting acquires the config lock and must never be called while
-    /// another guard is held (see the lock-ordering rules on `AppState`).
-    pub fn mark_float_moved(self: &Arc<Self>, app: &tauri::AppHandle, position: FloatPosition) {
-        {
-            let mut config = self.config.lock().expect("config mutex");
-            config.float_position = Some(position);
-        }
-        let generation = {
-            let mut floating = self.floating.lock().expect("float mutex");
-            floating.position_dirty = true;
-            floating.position_gen += 1;
-            floating.position_gen
-        };
-        let state = Arc::clone(self);
-        let handle = app.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(750)).await;
-            let should_persist = {
-                let mut floating = state.floating.lock().expect("float mutex");
-                if floating.position_dirty && floating.position_gen == generation {
-                    floating.position_dirty = false;
-                    true
-                } else {
-                    false
-                }
-            };
-            if should_persist {
-                crate::persistence::persist_config(&handle);
-            }
-        });
     }
 }

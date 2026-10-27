@@ -1,8 +1,13 @@
-//! Native Windows adapters for the borderless windows.
+//! Native Windows adapters for the borderless floating window.
 //!
-//! Ported from the archived Iced `window/float_window.rs` and
-//! `window/main_window.rs`: rounded window regions, physical-pixel position
-//! restore clamped to the monitor work area, and snapping to the monitor top.
+//! Ported from the archived Iced `window/float_window.rs`: rounded window
+//! regions, physical-pixel position restore clamped to the monitor work area,
+//! and snapping to the monitor top.
+//!
+//! The webview surface is opaque on Windows, so the renderer cannot draw the
+//! rounded shape itself; a window region is what remains. The region lives in
+//! window coordinates and does not follow a resize or DPI change, so the
+//! controller reapplies it on `Resized` and `ScaleFactorChanged`.
 
 use crate::config::FloatPosition;
 use raw_window_handle::HasWindowHandle;
@@ -17,9 +22,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowRect, SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
 };
 
-/// Corner radius of the floating card, in logical pixels (Full / Compact).
-const CORNER_RADIUS: f32 = 16.0;
-
 /// Returns the native `HWND` of a live window.
 fn hwnd(window: &WebviewWindow) -> Option<HWND> {
     let handle = window.window_handle().ok()?.as_raw();
@@ -31,19 +33,7 @@ fn hwnd(window: &WebviewWindow) -> Option<HWND> {
     }
 }
 
-/// Clips the undecorated floating window to a rounded rectangle using the
-/// default card radius.
-pub fn round_corners(window: &WebviewWindow) {
-    round_corners_for(window, CORNER_RADIUS);
-}
-
 /// Clips the undecorated floating window to a rounded rectangle.
-///
-/// The webview surface is opaque on Windows, so the renderer cannot draw the
-/// rounded shape itself. A window region is what remains. The region lives in
-/// window coordinates and does not follow a resize, so it is reapplied on
-/// every resize/DPI change (the float window's `Resized` handler calls this
-/// with the radius of the current presentation mode).
 pub fn round_corners_for(window: &WebviewWindow, radius: f32) {
     let Some(hwnd) = hwnd(window) else {
         return;

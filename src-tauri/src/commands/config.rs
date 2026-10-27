@@ -31,7 +31,14 @@ pub async fn save_config(
     config: AppConfig,
 ) -> Result<AppConfig, AppError> {
     let state = state.inner().clone();
-    let validated = config.validate()?;
+    let mut validated = config.validate()?;
+    // The floating-window fields are owned by `float::controller`, not by the
+    // settings form. A frontend config snapshot may predate a float open /
+    // close / move, so preserve the backend's current values before saving.
+    {
+        let current = state.config.lock().expect("config mutex");
+        validated.preserve_float_fields(&current);
+    }
 
     let store = ConfigStore::discover()?;
     let canonical = validated.clone();
@@ -43,7 +50,9 @@ pub async fn save_config(
     write.map_err(AppError::from)?;
 
     state.apply_config(validated.clone());
+    crate::float::controller::sync_size(&app);
     let _ = app.emit(crate::events::APP_STATUS, state.status_dto());
+    crate::float::controller::emit_state(&app);
     crate::tray::emit_monitor_state(&app);
     Ok(validated)
 }

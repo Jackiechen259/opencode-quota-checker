@@ -11,6 +11,7 @@ pub mod config;
 pub mod credential_task;
 pub mod error;
 mod events;
+pub mod float;
 mod icons;
 mod launcher;
 mod monitor;
@@ -167,12 +168,8 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     since = stage("window handlers installed", since);
 
     // 6. Restore the floating window when configured.
-    let float_open = state.config.lock().expect("config mutex").float_open;
-    if float_open {
-        if let Err(error) = window::float_window::open(app.handle(), state.clone()) {
-            tracing::error!(%error, "failed to restore the floating window");
-        }
-    }
+    // The controller owns `float_open`; setup only triggers the restore.
+    crate::float::controller::restore_on_startup(app.handle());
     since = stage("float restore complete", since);
 
     // 7. Initial quota refresh when configured and monitoring is enabled.

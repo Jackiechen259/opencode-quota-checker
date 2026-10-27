@@ -14,10 +14,7 @@ export function QuotaCard({ window }: { window: WindowReport }) {
   const accent = healthColors[health];
   const percent = clampPercent(window.percent);
   return (
-    <div
-      className="float-card"
-      style={{ "--quota-accent": accent } as CSSProperties}
-    >
+    <div className="float-card" style={{ "--quota-accent": accent } as CSSProperties}>
       <div className="float-card-top">
         <span className="float-card-label">
           <Dot color={accent} size={8} />

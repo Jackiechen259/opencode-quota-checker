@@ -135,6 +135,34 @@ describe("FloatWindow state architecture", () => {
     expect(screen.queryByRole("button", { name: "展开全部配额" })).not.toBeInTheDocument();
   });
 
+  it("does not let a late initial snapshot overwrite a newer event", async () => {
+    let resolveInitial!: (state: FloatStateDto) => void;
+    const lateInitial = new Promise<FloatStateDto>((resolve) => {
+      resolveInitial = resolve;
+    });
+    installInvokeRouter({
+      floatState: lateInitial,
+      usage: usage([windowReport("a", "5 小时", 4)]),
+    });
+    render(<FloatWindow />);
+    expect(screen.getByText("正在同步悬浮窗状态…")).toBeInTheDocument();
+
+    act(() => {
+      tauri.emit(EVENT.FLOAT_STATE, compactState);
+    });
+    expect(await screen.findByRole("button", { name: "展开全部配额" })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveInitial(fullState);
+      await lateInitial;
+    });
+
+    // The event is newer than the fetch that was already in flight; the
+    // layout must not fall back to Full.
+    expect(screen.getByRole("button", { name: "展开全部配额" })).toBeInTheDocument();
+    expect(screen.queryByText("OpenCode Quota Checker")).not.toBeInTheDocument();
+  });
+
   it("renders the Docked strip from presentationMode", async () => {
     installInvokeRouter({ floatState: dockedState, usage: usage([windowReport("a", "5 小时", 4)]) });
     render(<FloatWindow />);
@@ -153,6 +181,42 @@ describe("FloatWindow state architecture", () => {
     await waitFor(() => {
       expect(tauri.invoke).toHaveBeenCalledWith("set_float_mode", { mode: "full" });
     });
+  });
+});
+
+describe("FloatWindow drag regions", () => {
+  it("makes the whole header draggable while buttons stay clickable", async () => {
+    const { container } = render(<FloatWindow />);
+    await screen.findByText("OpenCode Quota Checker");
+
+    expect(container.querySelector(".float-header")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "deep",
+    );
+    // A nested bare region would stop Tauri's deep walk before the header.
+    expect(container.querySelector(".float-brand")).not.toHaveAttribute(
+      "data-tauri-drag-region",
+    );
+    expect(screen.getByRole("button", { name: "立即刷新" })).not.toHaveAttribute(
+      "data-tauri-drag-region",
+    );
+  });
+
+  it("makes the whole docked strip draggable", async () => {
+    installInvokeRouter({
+      floatState: dockedState,
+      usage: usage([windowReport("a", "5 小时", 4)]),
+    });
+    const { container } = render(<FloatWindow />);
+    await screen.findByRole("button", { name: "展开全部配额" });
+
+    expect(container.querySelector(".float-docked")).toHaveAttribute(
+      "data-tauri-drag-region",
+      "deep",
+    );
+    expect(container.querySelector(".float-docked-content")).not.toHaveAttribute(
+      "data-tauri-drag-region",
+    );
   });
 });
 

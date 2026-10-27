@@ -1,5 +1,6 @@
-// Floating window header: brand block (drag region) + window actions.
-// Buttons carry no drag-region attribute, so they always stay clickable.
+// Floating window header: the whole header is a deep drag region, so grabbing
+// the logo, title, status, spacer or any padding works. Buttons are clickable
+// elements without the attribute, so Tauri's drag script leaves them alone.
 
 import { Dot } from "../../components/common";
 import { Icons } from "../../components/icons";
@@ -48,26 +49,26 @@ export function FloatHeader({
   const status = statusOf(loading, error, hasData);
   const compact = variant === "compact";
   return (
-    <div className="float-header">
-      <div className="float-brand" data-tauri-drag-region>
+    <div className="float-header" data-tauri-drag-region="deep">
+      <div className="float-brand">
         <span className="float-logo">OC</span>
         {compact ? (
-          <span className="float-brand-title" data-tauri-drag-region title={title}>
+          <span className="float-brand-title" title={title}>
             {title}
           </span>
         ) : (
-          <div className="float-brand-text" data-tauri-drag-region>
+          <div className="float-brand-text">
             <span className="float-brand-title" title={title}>
               {title}
             </span>
-            <span className="float-brand-status" data-tauri-drag-region>
+            <span className="float-brand-status">
               <Dot color={statusDot[status]} size={7} />
               {statusText[status]}
             </span>
           </div>
         )}
       </div>
-      <span className="float-spacer" data-tauri-drag-region />
+      <span className="float-spacer" />
       <button
         type="button"
         className="float-icon-button"

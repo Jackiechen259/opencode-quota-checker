@@ -219,6 +219,30 @@ mod tests {
     }
 
     #[test]
+    fn legacy_docked_float_mode_loads_as_compact() {
+        let directory = tempfile::tempdir().expect("temporary directory is available");
+        let path = directory.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{
+                "schema_version": 2,
+                "float_mode": "docked",
+                "float_open": true
+            }"#,
+        )
+        .expect("legacy config is written");
+        let store = ConfigStore::at(path);
+
+        let config = store.load().expect("legacy docked mode still loads");
+        assert_eq!(
+            config.float_mode,
+            crate::config::model::FloatLayout::Compact,
+            "the transient docked mode must load as the persisted Compact layout"
+        );
+        assert!(config.float_open);
+    }
+
+    #[test]
     fn workspace_id_round_trips_without_the_cookie() {
         let config = AppConfig {
             opencode_workspace_id: Some("workspace-test-123".to_owned()),

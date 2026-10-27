@@ -59,14 +59,21 @@ Legend: ☐ unchecked · ☑ passed · ❌ failed (record details)
 - ☐ Toggle from the header button and the tray; checkmark stays in sync.
 - ☐ Full (392 wide; dynamic height 280–560 by quota count), Compact
   (392×168), Docked (392×48) sizes correct; height never clips cards.
+- ☐ No dark/black border around the card: the webview surface fills the native
+  window exactly (shadow disabled; only the 1px outline + rounded region).
 - ☐ Always on top over other apps.
-- ☐ Drag by the brand area (Full/Compact) or the whole strip (Docked);
+- ☐ Drag by any non-button part of the header (logo, title, status, spacer,
+  padding) in Full/Compact, and by any non-button part of the Docked strip;
   every button stays clickable.
 - ☐ Full → Compact → Full and Docked expand/close; the UI never shows
   Full inside a Compact-sized window.
 - ☐ Docked: "展开" returns to the previous Full/Compact mode; × closes.
 - ☐ Restart with `float_open`: the saved mode (Full/Compact) is restored;
   Docked is never persisted.
+- ☐ Open/close the float window, then save Settings: the tray checkmark and
+  `float_open` are not overwritten by the stale settings snapshot.
+- ☐ Quit with the float open, relaunch: it reopens. Quit with it closed:
+  it stays closed.
 - ☐ Position persists across restarts; clamped to a visible monitor.
 - ☐ Multi-monitor: moving the float to a second monitor works.
 - ☐ Mixed-DPI monitors (100–200%): no WM_DPICHANGED feedback loop, no

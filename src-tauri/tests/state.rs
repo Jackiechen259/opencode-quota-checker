@@ -7,9 +7,10 @@
 //! and therefore link cleanly on Windows.
 
 use opencode_core::QuotaService;
-use opencode_quota_checker_lib::config::{AppConfig, FloatMode};
+use opencode_quota_checker_lib::config::{AppConfig, FloatLayout};
 use opencode_quota_checker_lib::credential_task::CredentialCheckResult;
 use opencode_quota_checker_lib::error::AppError;
+use opencode_quota_checker_lib::float::state::FloatPresentation;
 use opencode_quota_checker_lib::state::{AppState, CredentialPhase, UpdateStatus};
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -72,14 +73,22 @@ fn monitor_dto_reflects_state() {
 #[test]
 fn float_dto_separates_configured_from_presentation() {
     let state = state();
-    assert_eq!(state.float_dto().configured_mode, FloatMode::Full);
-    assert_eq!(state.float_dto().presentation_mode, FloatMode::Full);
+    assert_eq!(state.float_dto().configured_mode, FloatLayout::Full);
+    assert_eq!(state.float_dto().presentation_mode, FloatPresentation::Full);
 
-    state.floating.lock().expect("float mutex").top_docked = true;
+    state.floating.lock().expect("float mutex").set_docked(true);
     let dto = state.float_dto();
     assert!(dto.top_docked);
-    assert_eq!(dto.configured_mode, FloatMode::Full);
-    assert_eq!(dto.presentation_mode, FloatMode::Docked);
+    assert_eq!(dto.configured_mode, FloatLayout::Full);
+    assert_eq!(dto.presentation_mode, FloatPresentation::Docked);
+}
+
+#[test]
+fn shutdown_flag_can_be_observed() {
+    let state = state();
+    assert!(!state.is_shutting_down());
+    state.begin_shutdown();
+    assert!(state.is_shutting_down());
 }
 
 #[test]

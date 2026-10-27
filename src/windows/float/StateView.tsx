@@ -6,7 +6,7 @@
 import { Dot } from "../../components/common";
 import { Icons } from "../../components/icons";
 
-export function FloatStateView({
+export function StateView({
   loading,
   error,
   onRetry,

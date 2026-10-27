@@ -21,7 +21,7 @@ pub fn install_close_handler(window: &WebviewWindow, app: &AppHandle) {
         if let tauri::WindowEvent::CloseRequested { .. } = event {
             tracing::info!("main window close request; exiting");
             match crate::actions::main_close_action() {
-                crate::actions::MainCloseAction::Exit => handle.exit(0),
+                crate::actions::MainCloseAction::Exit => crate::actions::quit(&handle),
                 // Unreachable by design: closing never hides. The arm exists
                 // so the close policy stays a single decision.
                 crate::actions::MainCloseAction::HideToTray => {}

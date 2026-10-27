@@ -52,8 +52,7 @@ fn app_status_dto_uses_camel_case_contract() {
         updater.banner_dismissed = true;
     }
     {
-        let mut floating = state.floating.lock().expect("float mutex");
-        floating.top_docked = true;
+        state.floating.lock().expect("float mutex").set_docked(true);
     }
     let json = serde_json::to_value(state.status_dto()).expect("dto serializes");
 

@@ -2,7 +2,7 @@
  *
  * Full / Compact / Docked are three distinct layouts (never a squashed
  * copy of each other). The native window size is owned by the Rust backend
- * (`float_window.rs` layout constants); this stylesheet only has to render
+ * (`float/layout.rs` layout constants); this stylesheet only has to render
  * fluidly inside it:
  *
  * - Full height is dynamic (min 280 / max 560 logical px). Only the quota
@@ -21,13 +21,15 @@ body[data-window="float"] {
  * Single window-surface system.
  *
  * One outline per floating window — Full / Compact / Docked share the same
- * surface language (background + 1px outline + radius). CSS shadow is
- * intentionally omitted: the native window region rounds the opaque surface
- * and, where the OS provides it, the native shadow does the elevation. The
- * previous clipped `box-shadow` inside an `overflow:hidden` gutter was the
+ * surface language (background + 1px outline + radius). The native
+ * undecorated shadow is disabled in `float::controller`: tao expands the outer
+ * window by the shadow insets, which showed up as a thick dark border around
+ * the webview on Windows. The card is therefore flat (CSS shadow is `none`)
+ * and the native window region follows the webview surface exactly.
+ * The previous clipped `box-shadow` inside an `overflow:hidden` gutter was the
  * “dark ring / double outline” source.
  *
- * Native ↔ CSS radius contract lives in `float_window::corner_radius` and the
+ * Native ↔ CSS radius contract lives in `float::layout::corner_radius` and the
  * `--radius-float*` tokens — 16px for Full/Compact, 12px for Docked. Keep
  * them in sync or corners show a dark/transparent artifact.
  */
@@ -71,6 +73,11 @@ body[data-window="float"] {
   gap: 2px;
   flex-shrink: 0;
   padding: 6px 0;
+  cursor: grab;
+}
+
+.float-header:active {
+  cursor: grabbing;
 }
 
 .float-brand {
@@ -428,6 +435,11 @@ body[data-window="float"] {
   padding: 0 8px;
   border-radius: var(--radius-float-docked);
   overflow: hidden;
+  cursor: grab;
+}
+
+.float-docked:active {
+  cursor: grabbing;
 }
 
 .float-docked-content {

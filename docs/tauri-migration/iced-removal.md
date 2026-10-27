@@ -23,7 +23,7 @@ docs/architecture/native-iced.md
   needs (`Win32_Foundation`, `Win32_Graphics_Gdi`, `Win32_UI_HiDpi`,
   `Win32_UI_WindowsAndMessaging`); drop `Data_Xml_Dom`, `UI_Notifications`,
   `Win32_System_WinRT` (Iced notification code)
-- `raw-window-handle` stays (src-tauri `window/win.rs` uses it)
+- `raw-window-handle` stays (src-tauri `float/win.rs` uses it)
 
 ## xtask
 
