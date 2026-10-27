@@ -1,6 +1,6 @@
 //! Serializable application error that crosses the Tauri IPC boundary.
 //!
-//! The auth cookie and any other secret is never included in these values:
+//! The API key and any other secret is never included in these values:
 //! `OpenCodeError` already strips the cookie from HTTP bodies and error
 //! messages, and `AppError` only forwards the sanitized `user_message` plus
 //! the technical detail string.
@@ -50,7 +50,7 @@ impl From<OpenCodeError> for AppError {
             OpenCodeError::CredentialsInvalid(_) => "credentials_invalid",
             OpenCodeError::Request(_) => "request_failed",
             OpenCodeError::AuthenticationFailed => "authentication_failed",
-            OpenCodeError::WorkspaceNotFound => "workspace_not_found",
+            OpenCodeError::NotSubscribed => "not_subscribed",
             OpenCodeError::RateLimited => "rate_limited",
             OpenCodeError::Parse(_) => "parse_failed",
             OpenCodeError::Http { .. } => "http_error",

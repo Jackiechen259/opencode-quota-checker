@@ -25,7 +25,7 @@
 //! durations and error kinds are traced.
 
 use crate::error::AppError;
-use opencode_core::{OpenCodeAuthStore, OpenCodeError};
+use opencode_core::{OpenCodeApiKeyStore, OpenCodeError};
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
 
@@ -50,7 +50,7 @@ pub enum BlockingOutcome<T> {
 
 /// Runs a synchronous operation on the blocking pool with a soft timeout.
 ///
-/// `operation` is `FnOnce` so callers can move captures (e.g. a cookie) in
+/// `operation` is `FnOnce` so callers can move captures (e.g. an API key) in
 /// without sharing state. Returns `BlockingOutcome::TimedOut` once `deadline`
 /// elapses; the blocking thread keeps running in the background and its
 /// result is dropped.
@@ -74,9 +74,9 @@ where
 /// Result of the credential availability check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialCheckResult {
-    /// A cookie is stored and readable.
+    /// An API key is stored and readable.
     Available,
-    /// No cookie is stored (normal first-run state).
+    /// No API key is stored (normal first-run state).
     Missing,
     /// The keyring itself failed; `error` carries the details.
     Error(AppError),
@@ -84,7 +84,7 @@ pub enum CredentialCheckResult {
     Timeout,
 }
 
-/// Checks whether an OpenCode auth cookie is stored, with a soft timeout.
+/// Checks whether an OpenCode API key is stored, with a soft timeout.
 pub async fn check_credentials() -> CredentialCheckResult {
     #[cfg(debug_assertions)]
     if let Some(delay) = simulated_keyring_delay() {
@@ -93,13 +93,28 @@ pub async fn check_credentials() -> CredentialCheckResult {
         return check_credentials_with(
             move || {
                 std::thread::sleep(delay);
-                OpenCodeAuthStore.load()
+                probe_api_key()
             },
             CREDENTIAL_TIMEOUT,
         )
         .await;
     }
-    check_credentials_with(|| OpenCodeAuthStore.load(), CREDENTIAL_TIMEOUT).await
+    check_credentials_with(probe_api_key, CREDENTIAL_TIMEOUT).await
+}
+
+/// Loads the API key and notes when only the retired cookie is left over.
+///
+/// The legacy entry is never sent anywhere; its presence only tells the logs
+/// (and, through the empty credential phase, the UI) that a migration is
+/// pending.
+fn probe_api_key() -> Result<String, OpenCodeError> {
+    let result = OpenCodeApiKeyStore.load();
+    if result.is_err() && OpenCodeApiKeyStore.has_legacy_cookie() {
+        tracing::info!(
+            "a retired dashboard auth cookie is still stored; an API key is required now"
+        );
+    }
+    result
 }
 
 /// Debug-build-only hook: `OQC_KEYRING_DELAY_MS` makes the boot keyring
@@ -154,27 +169,27 @@ async fn check_credentials_with(
     }
 }
 
-/// Loads the stored cookie on the blocking pool with a soft timeout.
+/// Loads the stored API key on the blocking pool with a soft timeout.
 ///
-/// Used by every quota request: the cookie read must never stall the UI, and
-/// it must complete (or time out) before the HTTP request starts.
-pub async fn load_cookie() -> Result<String, AppError> {
-    load_cookie_with(|| OpenCodeAuthStore.load(), CREDENTIAL_TIMEOUT).await
+/// Used by every quota request: the key read must never stall the UI, and it
+/// must complete (or time out) before the HTTP request starts.
+pub async fn load_api_key() -> Result<String, AppError> {
+    load_api_key_with(|| OpenCodeApiKeyStore.load(), CREDENTIAL_TIMEOUT).await
 }
 
-/// Testable core of [`load_cookie`].
-async fn load_cookie_with(
+/// Testable core of [`load_api_key`].
+async fn load_api_key_with(
     load: impl FnOnce() -> Result<String, OpenCodeError> + Send + 'static,
     deadline: Duration,
 ) -> Result<String, AppError> {
     let started = Instant::now();
     match run_blocking(load, deadline).await {
-        BlockingOutcome::Completed(Ok(cookie)) => {
+        BlockingOutcome::Completed(Ok(api_key)) => {
             tracing::info!(
                 duration_ms = started.elapsed().as_millis() as u64,
                 "credential load success"
             );
-            Ok(cookie)
+            Ok(api_key)
         }
         BlockingOutcome::Completed(Err(error)) => {
             tracing::warn!(
@@ -195,15 +210,19 @@ async fn load_cookie_with(
     }
 }
 
-/// Saves the OpenCode auth cookie on the blocking pool with a soft timeout.
+/// Saves the OpenCode API key on the blocking pool with a soft timeout.
 ///
-/// The cookie is moved into the blocking worker and never logged.
-pub async fn save_cookie(cookie: String) -> Result<(), AppError> {
-    save_cookie_with(move || OpenCodeAuthStore.save(&cookie), CREDENTIAL_TIMEOUT).await
+/// The key is moved into the blocking worker and never logged.
+pub async fn save_api_key(api_key: String) -> Result<(), AppError> {
+    save_api_key_with(
+        move || OpenCodeApiKeyStore.save(&api_key),
+        CREDENTIAL_TIMEOUT,
+    )
+    .await
 }
 
-/// Testable core of [`save_cookie`].
-async fn save_cookie_with(
+/// Testable core of [`save_api_key`].
+async fn save_api_key_with(
     save: impl FnOnce() -> Result<(), OpenCodeError> + Send + 'static,
     deadline: Duration,
 ) -> Result<(), AppError> {
@@ -236,13 +255,13 @@ async fn save_cookie_with(
     }
 }
 
-/// Clears the OpenCode auth cookie on the blocking pool with a soft timeout.
-pub async fn clear_cookie() -> Result<(), AppError> {
-    clear_cookie_with(|| OpenCodeAuthStore.clear(), CREDENTIAL_TIMEOUT).await
+/// Clears the OpenCode API key on the blocking pool with a soft timeout.
+pub async fn clear_api_key() -> Result<(), AppError> {
+    clear_api_key_with(|| OpenCodeApiKeyStore.clear(), CREDENTIAL_TIMEOUT).await
 }
 
-/// Testable core of [`clear_cookie`].
-async fn clear_cookie_with(
+/// Testable core of [`clear_api_key`].
+async fn clear_api_key_with(
     clear: impl FnOnce() -> Result<(), OpenCodeError> + Send + 'static,
     deadline: Duration,
 ) -> Result<(), AppError> {
@@ -360,7 +379,7 @@ mod tests {
 
     #[tokio::test]
     async fn check_maps_available() {
-        let result = check_credentials_with(|| Ok("cookie".to_owned()), CREDENTIAL_TIMEOUT).await;
+        let result = check_credentials_with(|| Ok("api-key".to_owned()), CREDENTIAL_TIMEOUT).await;
         assert_eq!(result, CredentialCheckResult::Available);
     }
 
@@ -406,14 +425,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_cookie_success_returns_value() {
-        let result = load_cookie_with(|| Ok("cookie".to_owned()), CREDENTIAL_TIMEOUT).await;
-        assert_eq!(result.expect("cookie loads"), "cookie");
+    async fn load_api_key_success_returns_value() {
+        let result = load_api_key_with(|| Ok("api-key".to_owned()), CREDENTIAL_TIMEOUT).await;
+        assert_eq!(result.expect("key loads"), "api-key");
     }
 
     #[tokio::test]
-    async fn load_cookie_timeout_is_a_ui_error() {
-        let result = load_cookie_with(
+    async fn load_api_key_timeout_is_a_ui_error() {
+        let result = load_api_key_with(
             || {
                 thread::sleep(SLOW_WORK);
                 Ok("late".to_owned())
@@ -435,8 +454,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn save_cookie_timeout_is_a_ui_error() {
-        let result = save_cookie_with(
+    async fn save_api_key_timeout_is_a_ui_error() {
+        let result = save_api_key_with(
             || {
                 thread::sleep(SLOW_WORK);
                 Ok(())
@@ -449,14 +468,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn clear_cookie_success_completes() {
-        let result = clear_cookie_with(|| Ok(()), CREDENTIAL_TIMEOUT).await;
+    async fn clear_api_key_success_completes() {
+        let result = clear_api_key_with(|| Ok(()), CREDENTIAL_TIMEOUT).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn clear_cookie_error_is_surfaced() {
-        let result = clear_cookie_with(
+    async fn clear_api_key_error_is_surfaced() {
+        let result = clear_api_key_with(
             || Err(OpenCodeError::CredentialsInvalid("boom".to_owned())),
             CREDENTIAL_TIMEOUT,
         )

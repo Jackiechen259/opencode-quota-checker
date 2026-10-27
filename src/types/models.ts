@@ -45,6 +45,8 @@ export interface WindowReport {
   subscribe_time: number;
   reset_time: number;
   reset_in_secs: number;
+  /** OpenCode has exhausted this window (`status: "rate-limited"`). */
+  limited?: boolean;
 }
 
 export interface UsageReport {
@@ -163,7 +165,14 @@ export interface AppStatusDto {
 /** Health bucket used by the UI, matching the archived Iced `QuotaHealth`. */
 export type QuotaHealth = "healthy" | "warning" | "critical";
 
-export function quotaHealth(percent: number): QuotaHealth {
+/**
+ * Health bucket for one window.
+ *
+ * A window OpenCode reports as exhausted is critical no matter what the
+ * percentage says: the authoritative `limited` flag wins over the heuristic.
+ */
+export function quotaHealth(percent: number, limited = false): QuotaHealth {
+  if (limited) return "critical";
   if (percent >= 90) return "critical";
   if (percent >= 70) return "warning";
   return "healthy";

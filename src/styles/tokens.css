@@ -23,6 +23,26 @@
   --border-default: #e2e8f0;
   --border-strong: #cbd5e1;
 
+  /* Window surfaces — ONE outline per window ------------------------------ */
+  /* Main window: single outer frame. Card hierarchy uses weaker tokens. */
+  --window-surface: var(--bg-surface);
+  --window-border: rgba(15, 23, 42, 0.08);
+  --window-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+
+  /* Floating widget surface — shared by Full / Compact / Docked. */
+  /* CSS shadow is intentionally not used on the float surface: the window
+     relies on the native region/radius and, where available, the OS shadow.
+     The clipped CSS shadow was the “dark ring” source. */
+  --float-surface: var(--bg-surface);
+  --float-border: rgba(15, 23, 42, 0.07);
+  --float-shadow: none;
+
+  /* Content-card hierarchy: Window > Card > nested — each weaker. */
+  --card-surface: var(--bg-surface);
+  --card-border: rgba(15, 23, 42, 0.06);
+  --card-shadow: var(--shadow-xs);
+  --card-subtle-border: transparent;
+
   /* Text ------------------------------------------------------------------- */
   --text-primary: #0f172a;
   --text-secondary: #475569;

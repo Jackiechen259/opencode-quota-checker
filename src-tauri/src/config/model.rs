@@ -64,7 +64,11 @@ pub struct AppConfig {
     pub monitor_interval_secs: u64,
     /// Per-window notification thresholds.
     pub thresholds: Thresholds,
-    /// OpenCode Go workspace identifier (non-sensitive).
+    /// OpenCode workspace identifier, sent as `x-opencode-org-id` (non-sensitive).
+    ///
+    /// Optional: a Console API key already targets the workspace it was created
+    /// in, so this is only an override (and can be recognised by the old login
+    /// page URL, `opencode.ai/workspace/<id>/go`).
     pub opencode_workspace_id: Option<String>,
     /// Main window close behavior.
     pub close_behavior: CloseBehavior,

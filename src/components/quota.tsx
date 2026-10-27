@@ -77,7 +77,7 @@ function statusText(health: "healthy" | "warning" | "critical"): string {
 
 /** One quota window card (ring + metrics + reset countdown). */
 export function QuotaCard({ window, nowMs }: { window: WindowReport; nowMs: number }) {
-  const health = quotaHealth(window.percent);
+  const health = quotaHealth(window.percent, window.limited);
   const resetSeconds = Math.max(0, Math.floor((window.reset_time - nowMs) / 1_000));
   return (
     <Card className="quota-card">
@@ -130,12 +130,12 @@ export function OverviewCard({ report }: { report: UsageReport }) {
       </Card>
     );
   }
-  const health = quotaHealth(highest.percent);
+  const health = quotaHealth(highest.percent, highest.limited);
   const accent = healthColor(health);
   const barColor = healthColor(health);
   const counts = report.windows.reduce(
     (acc, window) => {
-      const h = quotaHealth(window.percent);
+      const h = quotaHealth(window.percent, window.limited);
       acc[h] += 1;
       return acc;
     },

@@ -72,14 +72,14 @@ pub async fn run_once(app: &AppHandle) {
     crate::window::float_window::sync_float_size(app);
 
     let config = state.config.lock().expect("config mutex").clone();
-    let workspace = config.opencode_workspace_id.clone().unwrap_or_default();
+    let workspace = config.opencode_workspace_id.clone();
     let service = state.service.clone();
     let now_ms = chrono::Utc::now().timestamp_millis();
 
     let result = async {
-        let cookie = credential_task::load_cookie().await?;
+        let api_key = credential_task::load_api_key().await?;
         service
-            .fetch_quota(&workspace, &cookie)
+            .fetch_quota(&api_key, workspace.as_deref())
             .await
             .map_err(AppError::from)
     }

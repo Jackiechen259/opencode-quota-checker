@@ -85,7 +85,7 @@ describe("MainWindow startup", () => {
     render(<MainWindow />);
     // The camelCase `configLoaded: true` must open the boot gate; the page
     // must never stick on the loading text.
-    expect(await screen.findByText("尚未配置 OpenCode Go")).toBeInTheDocument();
+    expect(await screen.findByText("尚未配置 OpenCode API Key")).toBeInTheDocument();
     expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument();
   });
 
@@ -211,19 +211,19 @@ describe("MainWindow startup", () => {
 
     failing = false;
     fireEvent.click(screen.getByRole("button", { name: "重新尝试" }));
-    expect(await screen.findByText("尚未配置 OpenCode Go")).toBeInTheDocument();
+    expect(await screen.findByText("尚未配置 OpenCode API Key")).toBeInTheDocument();
     consoleError.mockRestore();
   });
 
   it("re-renders the body when the app://status event reports a new credential phase", async () => {
     render(<MainWindow />);
-    expect(await screen.findByText("尚未配置 OpenCode Go")).toBeInTheDocument();
+    expect(await screen.findByText("尚未配置 OpenCode API Key")).toBeInTheDocument();
 
     // A successful save flow emits the full status with an available phase.
     act(() => {
       tauri.emit("app://status", appStatusFixture({ configured: true }));
     });
     expect(await screen.findByText("还没有配额数据")).toBeInTheDocument();
-    expect(screen.queryByText("尚未配置 OpenCode Go")).not.toBeInTheDocument();
+    expect(screen.queryByText("尚未配置 OpenCode API Key")).not.toBeInTheDocument();
   });
 });

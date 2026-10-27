@@ -23,6 +23,11 @@ pub struct WindowReport {
     pub reset_time: i64,
     /// Seconds until reset, negative when already expired.
     pub reset_in_secs: i64,
+    /// Whether OpenCode has exhausted this window (`status: "rate-limited"`).
+    ///
+    /// Authoritative: it does not have to be inferred from [`Self::percent`].
+    #[serde(default)]
+    pub limited: bool,
 }
 
 /// Display-ready OpenCode Go usage report.
@@ -54,6 +59,7 @@ mod tests {
                 subscribe_time: 0,
                 reset_time: 1_778_806_132_000,
                 reset_in_secs: 6_132,
+                limited: false,
             }],
             fetched_at: 1_778_800_000_000,
         };

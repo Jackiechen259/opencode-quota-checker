@@ -199,16 +199,13 @@ impl AppState {
         }
     }
 
-    /// Reports whether the OpenCode workspace and auth cookie are configured.
+    /// Reports whether an OpenCode API key is configured.
+    ///
+    /// The workspace identifier is optional: a personal API key is already bound
+    /// to the workspace it was created in, and only selects the
+    /// `x-opencode-org-id` header when the user supplies one.
     pub fn configured(&self) -> bool {
         self.credentials.lock().expect("credential mutex").available
-            && self
-                .config
-                .lock()
-                .expect("config mutex")
-                .opencode_workspace_id
-                .as_deref()
-                .is_some_and(|value| !value.trim().is_empty())
     }
 
     /// Applies a freshly loaded/saved config to the live state.

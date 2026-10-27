@@ -22,7 +22,7 @@ export const api = {
 
   getUsage: () => invoke<UsageDto>("get_usage"),
   refreshUsage: () => invoke<void>("refresh_usage"),
-  getRawDashboard: () => invoke<string>("get_raw_dashboard"),
+  getRawUsage: () => invoke<string>("get_raw_usage"),
 
   getConfig: () => invoke<AppConfig>("get_config"),
   saveConfig: (config: AppConfig) => invoke<AppConfig>("save_config", { config }),
@@ -30,10 +30,11 @@ export const api = {
 
   hasCredentials: () => invoke<boolean>("has_credentials"),
   recheckCredentials: () => invoke<void>("recheck_credentials"),
-  saveCredentials: (workspaceId: string, authCookie: string) =>
-    invoke<void>("save_credentials", { workspaceId, authCookie }),
+  saveCredentials: (workspaceId: string | null, apiKey: string) =>
+    invoke<void>("save_credentials", { workspaceId, apiKey }),
+  testConnection: () => invoke<void>("test_connection"),
   clearCredentials: () => invoke<void>("clear_credentials"),
-  openLoginPage: () => invoke<void>("open_login_page"),
+  openConsolePage: () => invoke<void>("open_console_page"),
 
   getMonitorStatus: () => invoke<MonitorStatusDto>("get_monitor_status"),
 

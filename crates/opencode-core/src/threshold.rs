@@ -125,6 +125,7 @@ mod tests {
                 subscribe_time: cycle,
                 reset_time: 0,
                 reset_in_secs: 0,
+                limited: false,
             }],
             fetched_at: 0,
         }

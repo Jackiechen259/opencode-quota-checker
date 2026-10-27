@@ -11,7 +11,7 @@ OpenCode Go 配额的原生桌面监控工具（Tauri v2 + React）。展示 5 �
 
 ## 功能
 
-- 数据源：OpenCode Go（Workspace ID + auth Cookie）
+- 数据源：OpenCode Go 用量接口（Console API Key，Workspace ID 可选）
 - 主窗口仪表盘：最高负载、最近重置与窗口健康概览，以及每个配额窗口的用量卡
 - 展示 5 小时、近一周、近一月三个配额窗口的已用、总额、剩余与重置时间
 - 原生系统托盘：关闭主窗口后后台继续监控，托盘菜单可显示/隐藏主窗口、切换悬浮窗、退出
@@ -20,24 +20,25 @@ OpenCode Go 配额的原生桌面监控工具（Tauri v2 + React）。展示 5 �
 - 原生桌面通知，同一重置周期内只提醒一次
 - 自动更新：从 GitHub Releases 检查新版本（签名校验），自动下载，安装前需用户确认
 - 原始响应调试浮层与一键复制
-- auth Cookie 仅保存到系统钥匙串，配置文件不包含敏感字段
+- API Key 仅保存到系统钥匙串，配置文件不包含敏感字段
 
 ## 工作原理
 
-OpenCode Go 尚无公开的配额 API，配额数据来自登录后的工作区面板（`https://opencode.ai/workspace/<id>/go`）。应用携带 `auth` Cookie 请求该面板，并分层解析页面结构：
+配额来自 OpenCode Go 的结构化用量接口 `GET https://opencode.ai/zen/go/v1/usage`，以一个 Console API Key 作为 Bearer 令牌请求，可选携带 `x-opencode-org-id` 指定工作区：
 
-1. **SSR 策略**：读取服务端渲染的 `usagePercent` / `resetInSec`（对应 `rollingUsage` / `weeklyUsage` / `monthlyUsage`）。
-2. **DOM 策略**：回退到语义化 `data-slot` 属性（`usage-item`、`usage-label`、`usage-value`、`reset-time`）。
-3. **安全失败**：遇到不支持的页面结构返回解析错误，而不是把零用量当成真实数据。
+1. **单一 JSON 契约**：接口返回 `rolling` / `weekly` / `monthly` 三个窗口，每个带有 `percent`（已用百分比）、`status`（`ok` / `rate-limited`）与 `resetsAt`（绝对重置时刻）。详见[用量接口契约](docs/architecture/usage-api.md)。
+2. **安全失败**：无法识别的响应返回解析错误，而不是把零用量当成真实数据。
 
-OpenCode 只报告百分比，应用将其归一化到 100 分制展示（总额恒为 100，已用即报告百分比，剩余与占比据此得出）。页面结构变化时会提示解析失败，而不是展示错误数据。
+OpenCode 只报告百分比，应用将其归一化到 100 分制展示（总额恒为 100，已用即报告百分比，剩余与占比据此得出）。重置时间直接采用服务端返回的时间戳，不再由相对秒数推算；`rate-limited` 作为权威的「额度耗尽」标志参与健康判定。
 
 解析、HTTP、凭据与告警逻辑全部位于 `crates/opencode-core`（单一业务逻辑来源，不依赖任何 UI 框架）；Tauri Rust 后端负责窗口、托盘、监控任务、通知与更新；React 只渲染状态并发送命令。
 
 ## 认证
 
-- **Workspace ID**：保存在普通配置文件中（非敏感）。
-- **auth Cookie**：登录 opencode.ai 后从浏览器开发者工具中获取。它被视为密码，仅保存到系统钥匙串，随请求发送到 opencode.ai，不会写入配置文件或日志，也不会进入 WebView 状态。
+- **API Key**：在 [OpenCode Console](https://opencode.ai/console) 的 **Account › Personal API keys** 创建，建议勾选 **Usage › Read** 权限。它被视为密码，仅保存到系统钥匙串，作为 Bearer 令牌随请求发送到 opencode.ai，不会写入配置文件或日志，也不会进入 WebView 状态。
+- **Workspace ID**（可选）：保存在普通配置文件中（非敏感）。API Key 已绑定创建它的工作区，只有需要覆盖工作区时（发送 `x-opencode-org-id`）才填。
+
+> 旧版本的 `auth` Cookie 已随工作区面板停用：升级后需要改用 API Key。旧 Cookie 条目保留在钥匙串中不动，方便回退到旧版本。
 
 ## 开发
 
@@ -66,12 +67,12 @@ cargo test --workspace
 
 ## 使用
 
-1. 点击「在浏览器中登录」，在系统浏览器中打开 opencode.ai 登录页并完成 GitHub / Google 登录。
-2. 从地址栏复制 Workspace ID，在浏览器开发者工具中复制 opencode.ai 的 `auth` Cookie，填入表单保存。
-3. 刷新配额，按需在设置中调整轮询间隔与告警阈值，并打开悬浮窗。
-4. 调试时可打开原始响应浮层；分享前请检查其中可能包含的服务端信息。
+1. 点击「在浏览器中打开 Console」，在系统浏览器中完成登录并进入 **Account › Personal API keys**。
+2. 新建一个 API Key（建议勾选 **Usage › Read**），把 `oc_sk_` 开头的值粘贴到「API Key」；Workspace ID 可以留空。
+3. 保存时会立即用这个 Key 请求一次用量接口：成功即进入仪表盘，无效 / 未订阅 Go 会当场提示。
+4. 按需在设置中调整轮询间隔与告警阈值，并打开悬浮窗；调试时可打开原始响应浮层，分享前请检查其中可能包含的工作区标识。
 
-常规设置写入系统标准配置目录下的 `opencode-quota-checker/config.json`（与旧 Iced 版本同一路径，升级后设置原样保留；首次启动自动写入默认配置）。写入采用同目录临时文件与原子替换；auth Cookie 不会写入该文件。钥匙串条目（`service=opencode-quota-checker`、`account=opencode-auth`）与旧版本完全一致，升级后无需重新输入 Cookie。
+常规设置写入系统标准配置目录下的 `opencode-quota-checker/config.json`（与旧 Iced 版本同一路径，升级后设置原样保留；首次启动自动写入默认配置）。写入采用同目录临时文件与原子替换；API Key 不会写入该文件。钥匙串条目为 `service=opencode-quota-checker`、`account=opencode-api-key`；旧版本的 `account=opencode-auth`（auth Cookie）保留不动，仅用于迁移提示与回退。
 
 主窗口关闭默认最小化到托盘（托盘不可用时改为退出）。主窗口头部操作支持键盘导航，Esc 关闭调试浮层或设置。
 
@@ -108,7 +109,7 @@ cargo test --workspace
 │   ├── src/updater.rs        # 更新状态机
 │   └── capabilities/         # 窗口权限（最小权限）
 ├── docs/                     # 架构、构建与发布说明
-├── tests/                    # 页面解析 fixtures 与 HTTP 集成测试
+├── tests/                    # 用量接口 fixtures 与 HTTP 集成测试
 └── xtask/                    # 版本与发布工具
 ```
 
@@ -148,7 +149,7 @@ cargo xtask release 1.0.0 --push
 
 ## 安全
 
-- 不在日志、配置、测试 fixture 或错误信息中输出 auth Cookie。
+- 不在日志、配置、测试 fixture 或错误信息中输出 API Key。
 - HTTP 请求使用 rustls TLS，并设置有限超时及响应体错误截断。
 - 悬浮窗 capability 采用最小权限：只能读取配额状态、监听事件、移动/缩放/关闭自身窗口；无权修改凭据、更新器、文件系统或执行 shell。
 - 更新包使用 Ed25519 签名校验；私钥仅存于 GitHub Secrets。

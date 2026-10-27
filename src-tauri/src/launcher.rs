@@ -1,14 +1,13 @@
 //! Opening URLs in the system default browser.
 //!
 //! Ported from the archived Iced client (`opencode_login.rs` /
-//! `update/installer.rs::open_url`). opencode.ai authenticates through an OAuth
-//! flow hosted at `auth.opencode.ai` whose callback is pinned to
-//! `opencode.ai/auth/callback`, so the session cookie is only ever set on the
-//! opencode.ai origin. The login therefore opens in the system browser and the
-//! manual paste form captures the Workspace ID and the `auth` cookie.
+//! `update/installer.rs::open_url`). The app no longer captures a browser
+//! session cookie: the user creates a scoped API key in the OpenCode Console
+//! and pastes it into the credentials form, so this module only opens the
+//! Console.
 
-/// Entry point of the OpenCode OAuth login flow.
-pub const LOGIN_URL: &str = "https://opencode.ai/auth";
+/// OpenCode Console: where API keys are created and usage lives.
+pub const CONSOLE_URL: &str = "https://opencode.ai/console";
 
 /// Opens `url` in the system default browser.
 pub fn open_url(url: &str) -> Result<(), String> {

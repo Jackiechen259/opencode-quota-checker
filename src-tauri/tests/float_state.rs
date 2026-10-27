@@ -36,6 +36,7 @@ fn window(key: &str) -> WindowReport {
         subscribe_time: 0,
         reset_time: 0,
         reset_in_secs: 0,
+        limited: false,
     }
 }
 

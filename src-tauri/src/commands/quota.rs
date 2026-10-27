@@ -1,9 +1,9 @@
 //! Quota usage commands.
 //!
-//! The `auth` cookie never crosses the IPC boundary: it is read from the
-//! keyring inside the Rust backend (through the blocking credential layer,
-//! so a wedged Credential Manager can never stall a refresh) and only ever
-//! transmitted as a request header by `opencode-core`.
+//! The API key never crosses the IPC boundary: it is read from the keyring
+//! inside the Rust backend (through the blocking credential layer, so a wedged
+//! Credential Manager can never stall a refresh) and only ever transmitted as
+//! a bearer token by `opencode-core`.
 
 use crate::credential_task;
 use crate::error::AppError;
@@ -37,12 +37,12 @@ pub fn refresh_usage(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<
     Ok(())
 }
 
-/// Fetches the raw dashboard HTML for the debug overlay.
+/// Fetches the raw usage JSON for the debug overlay.
 ///
-/// The response may contain server-side data; the frontend shows a warning.
-/// The `auth` cookie itself is never part of the returned value.
+/// The response may contain workspace identifiers; the frontend shows a
+/// warning. The API key itself is never part of the returned value.
 #[tauri::command]
-pub async fn get_raw_dashboard(
+pub async fn get_raw_usage(
     app: AppHandle,
     state: State<'_, Arc<AppState>>,
 ) -> Result<String, AppError> {
@@ -58,21 +58,18 @@ pub async fn get_raw_dashboard(
         }
         usage.raw_loading = true;
     }
-    let config = state.config.lock().expect("config mutex").clone();
-    let workspace = config.opencode_workspace_id.clone().unwrap_or_default();
-    if workspace.trim().is_empty() {
-        let mut usage = state.usage.lock().expect("usage mutex");
-        usage.raw_loading = false;
-        return Err(AppError::from(
-            opencode_core::OpenCodeError::CredentialsMissing,
-        ));
-    }
-
+    let workspace = state
+        .config
+        .lock()
+        .expect("config mutex")
+        .opencode_workspace_id
+        .clone();
     let service = state.service.clone();
+
     let result = async {
-        let cookie = credential_task::load_cookie().await?;
+        let api_key = credential_task::load_api_key().await?;
         service
-            .fetch_raw_dashboard(&workspace, &cookie)
+            .fetch_raw_usage(&api_key, workspace.as_deref())
             .await
             .map_err(AppError::from)
     }
@@ -88,6 +85,7 @@ pub async fn get_raw_dashboard(
         }
         Err(error) => {
             usage.error = Some(error.clone());
+            drop(usage);
             let _ = app.emit(crate::events::QUOTA_ERROR, &error);
             Err(error)
         }

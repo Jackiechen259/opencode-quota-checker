@@ -1,8 +1,8 @@
-// Credentials page: OpenCode Go Workspace ID + auth cookie.
+// Credentials page: OpenCode Console API key.
 //
-// The cookie is a session secret: it lives in the password input, travels to
-// the Rust command once, and is cleared from React state immediately after a
-// successful save. It is never stored in the webview or written to logs.
+// The key is a secret: it lives in the password input, travels to the Rust
+// command once, and is cleared from React state immediately after a successful
+// save. It is never stored in the webview or written to logs.
 
 import { useState } from "react";
 import { AppLogo, Notice } from "../components/common";
@@ -28,12 +28,13 @@ export function Credentials({
   onSaved,
 }: Props) {
   const [workspace, setWorkspace] = useState("");
-  const [cookie, setCookie] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [mutating, setMutating] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
-  const [loginNotice, setLoginNotice] = useState<string | null>(null);
+  const [consoleNotice, setConsoleNotice] = useState<string | null>(null);
 
-  const canSave = !mutating && workspace.trim().length > 0 && cookie.trim().length > 0;
+  // Only the API key is required: a personal key already targets one workspace.
+  const canSave = !mutating && apiKey.trim().length > 0;
 
   const keyringFailed = phase === "error" || phase === "timeout";
 
@@ -42,10 +43,11 @@ export function Credentials({
     setMutating(true);
     setError(null);
     try {
-      await api.saveCredentials(workspace.trim(), cookie);
+      const trimmedWorkspace = workspace.trim();
+      await api.saveCredentials(trimmedWorkspace.length > 0 ? trimmedWorkspace : null, apiKey);
       // The secret is cleared from the webview immediately after saving.
-      setCookie("");
-      setWorkspace((value) => value.trim());
+      setApiKey("");
+      setWorkspace(trimmedWorkspace);
       onSaved();
     } catch (caught) {
       setError(caught as AppError);
@@ -54,12 +56,12 @@ export function Credentials({
     }
   };
 
-  const openLogin = async () => {
+  const openConsole = async () => {
     setError(null);
     try {
-      await api.openLoginPage();
-      setLoginNotice(
-        "已在浏览器中打开 opencode.ai 登录页。请完成 GitHub / Google 登录，打开你的工作区，将地址栏的 Workspace ID 填入上方，并在浏览器开发者工具中复制 auth Cookie 填入下方，再点击保存。",
+      await api.openConsolePage();
+      setConsoleNotice(
+        "已在浏览器中打开 OpenCode Console。请进入 Account › Personal API keys 创建一个 Key（建议勾选 Usage › Read 权限），复制后粘贴到下方再保存。",
       );
     } catch (caught) {
       setError(caught as AppError);
@@ -72,33 +74,37 @@ export function Credentials({
         <span className="credentials-logo">
           <AppLogo size={44} />
         </span>
-        <div className="credentials-title">尚未配置 OpenCode Go</div>
+        <div className="credentials-title">尚未配置 OpenCode API Key</div>
         <div className="credentials-detail">
-          OpenCode Go 尚无公开的配额 API，配额数据来自登录后的工作区面板。Workspace
-          ID 保存在普通配置中，Auth Cookie 仅保存到系统钥匙串。
+          OpenCode 提供结构化的用量接口，应用用一个 Console API Key 读取 5 小时、近一周与近一月的
+          配额。Workspace ID 保存在普通配置中且可以留空，API Key 仅保存到系统钥匙串。
         </div>
-        <button type="button" className="btn btn-primary credentials-login" onClick={openLogin}>
-          在浏览器中登录
+        <button
+          type="button"
+          className="btn btn-primary credentials-login"
+          onClick={openConsole}
+        >
+          在浏览器中打开 Console
         </button>
         <div className="credentials-or">或手动填写：</div>
         <input
           className="text-input"
-          placeholder="Workspace ID"
+          placeholder="Workspace ID（可选）"
           value={workspace}
           onChange={(event) => setWorkspace(event.target.value)}
           autoComplete="off"
         />
         <input
           className="text-input"
-          placeholder="Auth Cookie"
+          placeholder="API Key（oc_sk_...）"
           type="password"
-          value={cookie}
-          onChange={(event) => setCookie(event.target.value)}
+          value={apiKey}
+          onChange={(event) => setApiKey(event.target.value)}
           autoComplete="off"
           spellCheck={false}
         />
         <div className="credentials-warning">
-          请将 Auth Cookie 视为密码保管。它会随请求发送到 opencode.ai，不会写入配置或日志。
+          请将 API Key 视为密码保管。它会随请求发送到 opencode.ai，不会写入配置或日志。
         </div>
         <button
           type="button"
@@ -106,13 +112,14 @@ export function Credentials({
           disabled={!canSave}
           onClick={save}
         >
-          {mutating ? "保存中…" : "保存到系统钥匙串"}
+          {mutating ? "校验并保存中…" : "保存到系统钥匙串"}
         </button>
         <div className="credentials-help">
-          手动获取方式：登录 opencode.ai → 打开 OpenCode Go 工作区 → 从地址栏复制
-          Workspace ID → 在浏览器开发者工具中找到 opencode.ai 的 auth Cookie 值。
+          手动获取方式：登录 opencode.ai → 打开 Console → Account → Personal API keys →
+          新建 Key（建议勾选 Usage › Read）→ 复制以 oc_sk_ 开头的值。
+          如果你之前填写的是 auth Cookie，它已随旧版工作区面板一起停用，需要改用 API Key。
         </div>
-        {loginNotice ? <div className="credentials-login-notice">{loginNotice}</div> : null}
+        {consoleNotice ? <div className="credentials-login-notice">{consoleNotice}</div> : null}
         {error ? <Notice kind="error">{error.user}</Notice> : null}
         {keyringFailed && statusError ? <Notice kind="error">{statusError.user}</Notice> : null}
         {keyringFailed ? (

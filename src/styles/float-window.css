@@ -17,7 +17,20 @@ body[data-window="float"] {
   background: transparent;
 }
 
-/* Shell --------------------------------------------------------------------- */
+/* Shell ---------------------------------------------------------------------
+ * Single window-surface system.
+ *
+ * One outline per floating window — Full / Compact / Docked share the same
+ * surface language (background + 1px outline + radius). CSS shadow is
+ * intentionally omitted: the native window region rounds the opaque surface
+ * and, where the OS provides it, the native shadow does the elevation. The
+ * previous clipped `box-shadow` inside an `overflow:hidden` gutter was the
+ * “dark ring / double outline” source.
+ *
+ * Native ↔ CSS radius contract lives in `float_window::corner_radius` and the
+ * `--radius-float*` tokens — 16px for Full/Compact, 12px for Docked. Keep
+ * them in sync or corners show a dark/transparent artifact.
+ */
 
 .float-window {
   width: 100%;
@@ -26,18 +39,19 @@ body[data-window="float"] {
   overflow: hidden;
 }
 
-.float-window--full .float-inner,
-.float-window--compact .float-inner {
-  border-radius: var(--radius-float);
+/* Shared surface — the single outline. Full/Compact/Docked only override
+   radius and interior layout, never the surface itself. */
+.float-inner,
+.float-docked {
+  background: var(--float-surface);
+  border: 1px solid var(--float-border);
+  box-shadow: var(--float-shadow);
 }
 
 .float-inner {
   width: 100%;
   height: 100%;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-float);
-  box-shadow: var(--shadow-floating);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -185,7 +199,7 @@ body[data-window="float"] {
   padding: 4px 10px;
   border-radius: var(--radius-pill);
   background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
+  border: 1px solid transparent;
   color: var(--accent);
   font-size: 11px;
   font-weight: 500;
@@ -254,7 +268,7 @@ body[data-window="float"] {
   padding: 12px 14px;
   border-radius: 12px;
   background: var(--bg-surface-subtle);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid transparent;
   flex-shrink: 0;
 }
 
@@ -401,7 +415,9 @@ body[data-window="float"] {
   white-space: nowrap;
 }
 
-/* Docked layout ------------------------------------------------------------- */
+/* Docked layout -------------------------------------------------------------
+ * Docked shares the float surface — only radius + layout differ.
+ */
 
 .float-docked {
   width: 100%;
@@ -410,10 +426,7 @@ body[data-window="float"] {
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-float-docked);
-  box-shadow: var(--shadow-floating);
   overflow: hidden;
 }
 

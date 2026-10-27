@@ -133,7 +133,7 @@ button:focus:not(:focus-visible) {
 .btn-secondary {
   background: var(--bg-surface);
   color: var(--text-secondary);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--card-border);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -142,7 +142,7 @@ button:focus:not(:focus-visible) {
 }
 
 .btn-secondary:active:not(:disabled) {
-  background: var(--border-default);
+  background: var(--bg-surface-hover);
 }
 
 .btn-soft {
@@ -169,7 +169,7 @@ button:focus:not(:focus-visible) {
 
 .text-input {
   width: 100%;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -210,31 +210,31 @@ button:focus:not(:focus-visible) {
 .badge-neutral {
   background: var(--bg-surface-hover);
   color: var(--text-secondary);
-  border-color: var(--border-subtle);
+  border-color: transparent;
 }
 
 .badge-primary {
   background: var(--accent-soft);
   color: var(--accent);
-  border-color: var(--accent-border);
+  border-color: transparent;
 }
 
 .badge-success {
   background: var(--success-soft);
   color: var(--success-text);
-  border-color: var(--success-border);
+  border-color: transparent;
 }
 
 .badge-warning {
   background: var(--warning-soft);
   color: var(--warning-text);
-  border-color: var(--warning-border);
+  border-color: transparent;
 }
 
 .badge-danger {
   background: var(--danger-soft);
   color: var(--danger-text);
-  border-color: var(--danger-border);
+  border-color: transparent;
 }
 
 /* Notices ------------------------------------------------------------------ */

@@ -1,18 +1,23 @@
-//! HTTP client for the OpenCode Go workspace dashboard.
+//! HTTP client for the OpenCode Go usage API.
 //!
-//! OpenCode Go has no documented public quota API, so quota is read from the
-//! authenticated HTML dashboard. The `auth` cookie is sent as a request header
-//! and is never included in returned values or error messages.
+//! `GET https://opencode.ai/zen/go/v1/usage` returns the three Go allowance
+//! windows as JSON. It authenticates with an OpenCode Console API key
+//! (`oc_sk_...`) sent as a bearer token; the key is never included in returned
+//! values or error messages.
 
 use crate::OpenCodeError;
 use std::time::Duration;
 use url::Url;
-use urlencoding::encode;
 
 const DEFAULT_ENDPOINT: &str = "https://opencode.ai";
+const USAGE_PATH: &str = "/zen/go/v1/usage";
 const TIMEOUT: Duration = Duration::from_secs(15);
 
-/// Reusable client for the OpenCode Go dashboard endpoint.
+/// User agent required by the Go terms: clients must identify themselves
+/// instead of presenting as a generic HTTP library.
+const USER_AGENT: &str = concat!("opencode-quota-checker/", env!("CARGO_PKG_VERSION"));
+
+/// Reusable client for the OpenCode Go usage endpoint.
 #[derive(Clone, Debug)]
 pub struct OpenCodeClient {
     http: reqwest::Client,
@@ -40,7 +45,7 @@ impl OpenCodeClient {
     ) -> Result<Self, OpenCodeError> {
         if endpoint.host_str().is_none() {
             return Err(OpenCodeError::Config(
-                "dashboard endpoint must include a host".to_owned(),
+                "usage endpoint must include a host".to_owned(),
             ));
         }
         let http = reqwest::Client::builder()
@@ -50,28 +55,35 @@ impl OpenCodeClient {
         Ok(Self { http, endpoint })
     }
 
-    /// Fetches the authenticated workspace dashboard and returns its HTML body.
+    /// Fetches the raw usage JSON for the workspace behind `api_key`.
     ///
-    /// The `auth_cookie` is only ever transmitted as a request header. Failed
-    /// responses map to typed errors and never leak the cookie.
-    pub async fn fetch_dashboard(
+    /// `api_key` is a secret and only ever transmitted as the `Authorization`
+    /// header. `workspace_id` selects the workspace through `x-opencode-org-id`
+    /// and is omitted when empty, because a personal API key is already bound to
+    /// the workspace it was created in.
+    pub async fn fetch_usage(
         &self,
-        workspace_id: &str,
-        auth_cookie: &str,
+        api_key: &str,
+        workspace_id: Option<&str>,
     ) -> Result<String, OpenCodeError> {
-        let path = format!("/workspace/{}/go", encode(workspace_id));
-        let url = self
-            .endpoint
-            .join(&path)
-            .map_err(|error| OpenCodeError::Config(format!("invalid dashboard path: {error}")))?;
+        let url = self.endpoint.join(USAGE_PATH).map_err(|error| {
+            OpenCodeError::Config(format!("invalid usage endpoint path: {error}"))
+        })?;
 
-        let response = self
+        let mut request = self
             .http
             .get(url)
-            .header("Accept", "text/html")
-            .header("Cookie", format!("auth={auth_cookie}"))
-            .send()
-            .await?;
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .bearer_auth(api_key);
+        if let Some(workspace_id) = workspace_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            request = request.header("x-opencode-org-id", workspace_id);
+        }
+
+        let response = request.send().await?;
         let status = response.status();
         let body = response.text().await?;
 
@@ -79,8 +91,10 @@ impl OpenCodeClient {
             return Ok(body);
         }
         Err(match status.as_u16() {
-            401 | 403 => OpenCodeError::AuthenticationFailed,
-            404 => OpenCodeError::WorkspaceNotFound,
+            401 => OpenCodeError::AuthenticationFailed,
+            // A key that cannot read the workspace's Go allowance either belongs
+            // to a workspace without a Go subscription or lacks the permission.
+            403 => OpenCodeError::NotSubscribed,
             429 => OpenCodeError::RateLimited,
             _ => OpenCodeError::Http {
                 status,

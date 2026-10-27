@@ -20,6 +20,28 @@ const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 /// Progress events are throttled to avoid flooding the frontend.
 const PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(200);
 
+/// The only published Windows update channel (NSIS, per-user install).
+///
+/// Without an explicit target the plugin derives the installer kind from a
+/// marker the bundler patches into the packaged executable
+/// (`__TAURI_BUNDLE_TYPE_VAR_NSS`). An executable that never went through the
+/// bundler — e.g. a `tauri build --no-bundle` binary copied into the install
+/// directory — keeps the `VAR_UNK` marker, the plugin falls back to the
+/// generic `windows-x86_64` manifest entry, and that entry points at the MSI,
+/// which installs a second copy instead of updating this one.
+const WINDOWS_UPDATER_TARGET: &str = "windows-x86_64-nsis";
+
+/// Builds the platform updater with the Windows target pinned.
+fn platform_updater(
+    app: &AppHandle,
+) -> Result<tauri_plugin_updater::Updater, tauri_plugin_updater::Error> {
+    #[cfg(windows)]
+    let builder = app.updater_builder().target(WINDOWS_UPDATER_TARGET);
+    #[cfg(not(windows))]
+    let builder = app.updater_builder();
+    builder.build()
+}
+
 /// Spawns the periodic background check loop. The startup check is triggered
 /// separately after the config has been loaded.
 pub fn spawn_auto_check(app: AppHandle) {
@@ -57,7 +79,7 @@ pub async fn check(app: &AppHandle) {
             "update checks require a packaged build".to_owned(),
         ))
     } else {
-        match app.updater() {
+        match platform_updater(app) {
             Ok(updater) => updater
                 .check()
                 .await
@@ -242,4 +264,20 @@ pub fn dismiss(app: &AppHandle) {
 fn emit(app: &AppHandle) {
     let state = app.state::<Arc<AppState>>().inner().clone();
     let _ = app.emit(events::UPDATE_STATE, state.update_dto());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_target_is_pinned_to_nsis() {
+        assert_eq!(WINDOWS_UPDATER_TARGET, "windows-x86_64-nsis");
+        // The manifest published by tauri-action must keep carrying this key;
+        // latest.json lists `<os>-<arch>-<installer>` alongside the generic
+        // `<os>-<arch>` fallback.
+        assert!(WINDOWS_UPDATER_TARGET.starts_with("windows-x86_64-"));
+        assert!(WINDOWS_UPDATER_TARGET.ends_with("-nsis"));
+    }
 }

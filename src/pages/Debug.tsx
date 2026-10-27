@@ -1,7 +1,7 @@
 // Raw-response debug overlay: view / copy / close.
 //
-// The raw dashboard HTML may contain server-side data, so a warning stays
-// visible; the `auth` cookie and any request secrets are never part of it
+// The raw usage JSON may contain workspace identifiers, so a warning stays
+// visible; the API key and any request secrets are never part of it
 // (opencode-core strips them before returning).
 
 import { useState } from "react";
@@ -25,7 +25,7 @@ export function Debug({ onClose, onToast }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const body = await api.getRawDashboard();
+      const body = await api.getRawUsage();
       setRaw(body);
     } catch (caught) {
       setError(caught as AppError);

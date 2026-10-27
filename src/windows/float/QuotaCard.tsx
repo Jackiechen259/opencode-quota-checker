@@ -10,7 +10,7 @@ import { clampPercent, compactNumber, healthColors, progressWidth } from "./floa
 import { ResetCountdown } from "./tickers";
 
 export function QuotaCard({ window }: { window: WindowReport }) {
-  const health = quotaHealth(window.percent);
+  const health = quotaHealth(window.percent, window.limited);
   const accent = healthColors[health];
   const percent = clampPercent(window.percent);
   return (

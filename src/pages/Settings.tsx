@@ -206,7 +206,7 @@ export function Settings({
   const [weekly, setWeekly] = useState("");
   const [monthly, setMonthly] = useState("");
   const [workspace, setWorkspace] = useState("");
-  const [cookie, setCookie] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [mutatingCredentials, setMutatingCredentials] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
@@ -275,14 +275,34 @@ export function Settings({
   };
 
   const saveConnection = async () => {
-    if (!workspace.trim() || !cookie.trim() || mutatingCredentials) return;
+    if (!apiKey.trim() || mutatingCredentials) return;
     setMutatingCredentials(true);
     setError(null);
     setNotice(null);
     try {
-      await api.saveCredentials(workspace.trim(), cookie);
-      setCookie("");
-      setNotice("连接已保存到系统钥匙串。");
+      const trimmedWorkspace = workspace.trim();
+      await api.saveCredentials(trimmedWorkspace.length > 0 ? trimmedWorkspace : null, apiKey);
+      setApiKey("");
+      setNotice("连接已校验并保存到系统钥匙串。");
+      onRefreshStatus();
+    } catch (caught) {
+      // The key is stored even when the probe fails; refresh so the panel
+      // reflects what the backend actually has.
+      setError(caught as AppError);
+      onRefreshStatus();
+    } finally {
+      setMutatingCredentials(false);
+    }
+  };
+
+  const testConnection = async () => {
+    if (mutatingCredentials) return;
+    setMutatingCredentials(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.testConnection();
+      setNotice("连接正常，已读取到最新用量。");
       onRefreshStatus();
     } catch (caught) {
       setError(caught as AppError);
@@ -350,7 +370,10 @@ export function Settings({
           ) : undefined
         }
       >
-        <FormField label="Workspace ID">
+        <FormField
+          label="Workspace ID"
+          hint="可选。API Key 已绑定创建工作区，仅在需要覆盖时才填写。"
+        >
           <input
             className="text-input"
             placeholder="ws_xxxxxxxxxxxxx"
@@ -359,26 +382,46 @@ export function Settings({
             autoComplete="off"
           />
         </FormField>
-        <FormField label="Auth Cookie">
+        <FormField
+          label="API Key"
+          hint="在 OpenCode Console → Account → Personal API keys 创建，建议勾选 Usage › Read 权限。"
+        >
           <input
             className="text-input"
-            placeholder="粘贴 auth Cookie"
+            placeholder="oc_sk_..."
             type="password"
-            value={cookie}
-            onChange={(event) => setCookie(event.target.value)}
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
             autoComplete="off"
             spellCheck={false}
           />
         </FormField>
         <div className="settings-security-hint">
           <div>🔒 凭证安全保存在系统钥匙串中</div>
-          <div className="settings-security-hint-sub">仅在请求 OpenCode API 时使用。</div>
+          <div className="settings-security-hint-sub">
+            仅作为请求头发送到 opencode.ai，不会写入配置或日志。
+          </div>
         </div>
         <div className="settings-row-right">
           <button
             type="button"
+            className="btn btn-soft"
+            onClick={() => void api.openConsolePage()}
+          >
+            打开 Console
+          </button>
+          <button
+            type="button"
+            className="btn btn-soft"
+            disabled={mutatingCredentials || !status?.credentials.available}
+            onClick={testConnection}
+          >
+            测试连接
+          </button>
+          <button
+            type="button"
             className="btn btn-primary"
-            disabled={mutatingCredentials || !workspace.trim() || !cookie.trim()}
+            disabled={mutatingCredentials || !apiKey.trim()}
             onClick={saveConnection}
           >
             {mutatingCredentials ? "保存中…" : "保存连接"}
@@ -515,7 +558,7 @@ export function Settings({
         <div className="settings-danger-row">
           <div>
             <div className="settings-danger-label">清除所有连接凭证</div>
-            <div className="settings-danger-hint">删除钥匙串中的 Auth Cookie 并停止监控。</div>
+            <div className="settings-danger-hint">删除钥匙串中的 API Key 并停止监控。</div>
           </div>
           <span style={{ flex: 1 }} />
           <button
@@ -532,7 +575,7 @@ export function Settings({
       {confirmClear ? (
         <ConfirmDialog
           title="清除连接凭证"
-          body="将删除系统钥匙串中的 Auth Cookie 并停止监控。此操作无法撤销。"
+          body="将删除系统钥匙串中的 API Key 并停止监控。此操作无法撤销。"
           confirmLabel="确认清除"
           cancelLabel="取消"
           onConfirm={clearConnection}
