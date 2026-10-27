@@ -126,6 +126,12 @@
 
   /* Layout ----------------------------------------------------------------- */
   --titlebar-height: 32px;
+  /* Caption buttons (minimize / maximize / close). Three of them sit flush
+   * against the top-right corner, so the resize-handle strip must stop
+   * exactly where they begin — see `--titlebar-controls-width` usage in
+   * main-window.css. Keep this in sync with the number of controls. */
+  --titlebar-control-width: 46px;
+  --titlebar-controls-width: calc(var(--titlebar-control-width) * 3);
   --header-height: 48px;
   --footer-height: 30px;
   --main-frame-radius: var(--radius-frame);

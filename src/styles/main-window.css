@@ -30,7 +30,19 @@
  * Positioned fixed at the viewport edges so they sit above the rounded
  * main-frame (which has overflow:hidden) and are never clipped. Edges are
  * 6px, corners 12px. Cursors reflect the resize axis. Disabled when
- * maximized: the component returns null (see WindowResizeHandles.tsx). */
+ * maximized: the component returns null (see WindowResizeHandles.tsx).
+ *
+ * STACKING CONTRACT — handles must lose to the caption buttons.
+ * These handles are `position: fixed; z-index: 50` and participate in the
+ * ROOT stacking context. `.titlebar-controls` is lifted to z-index 60 in that
+ * same context, so the minimize/maximize/close buttons always win the hit
+ * test. This only works while NOTHING between `.main-window` and
+ * `.titlebar-controls` creates a stacking context (i.e. no `z-index` on
+ * `.main-frame` or `.titlebar`) — a stacking context there would trap the
+ * controls below level 50 and silently make the window controls dead at the
+ * corners, which is exactly how the close button used to stop working:
+ * the top-right 12×12 px "resize north-east" handle covered it, so aiming at
+ * the corner (as Windows users do) started a resize instead of a close. */
 
 .resize-handle {
   position: fixed;
@@ -39,10 +51,12 @@
   touch-action: none;
 }
 
+/* The top edge stops where the caption buttons begin: that strip belongs to
+ * the buttons, and a resize started from a click on "close" is never wanted. */
 .resize-handle-n {
   top: 0;
   left: 12px;
-  right: 12px;
+  right: var(--titlebar-controls-width);
   height: 6px;
   cursor: ns-resize;
 }
@@ -79,12 +93,12 @@
   cursor: nwse-resize;
 }
 
+/* The north-east corner is occupied by the close button: a diagonal-resize
+ * handle there can only ever steal the click that is supposed to quit. The
+ * element stays in the DOM (the component contract is still 8 handles) but is
+ * permanently inert. */
 .resize-handle-ne {
-  top: 0;
-  right: 0;
-  width: 12px;
-  height: 12px;
-  cursor: nesw-resize;
+  display: none;
 }
 
 .resize-handle-sw {
@@ -138,11 +152,13 @@
   align-items: stretch;
   background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-header) 100%);
   flex-shrink: 0;
-  /* Create stacking context; controls must sit above resize handles
-   * (fixed z-index 50) so caption buttons remain clickable at corners
-   * where resize handles would otherwise intercept. */
+  /* Positioned so `.titlebar-controls` can be lifted above the resize
+   * handles, but deliberately WITHOUT a `z-index`: any z-index here creates a
+   * stacking context, and `.titlebar-controls` (z-index 60) would then be
+   * scoped inside it — permanently below the fixed resize handles (z-index
+   * 50) and therefore unclickable at the window corners. See the stacking
+   * contract on `.resize-handle` above. */
   position: relative;
-  z-index: 1;
 }
 
 .titlebar-brand {
@@ -166,6 +182,9 @@
   cursor: default;
 }
 
+/* Caption buttons win the hit test over the fixed resize handles (level 50 in
+ * the root stacking context). This only holds because `.titlebar` itself has
+ * no z-index — see its comment. */
 .titlebar-controls {
   display: flex;
   position: relative;
@@ -173,7 +192,7 @@
 }
 
 .titlebar-control {
-  width: 46px;
+  width: var(--titlebar-control-width);
   height: var(--titlebar-height);
   display: flex;
   align-items: center;

@@ -44,7 +44,13 @@ pub async fn get_app_status(app: AppHandle) -> AppStatusDto {
 }
 
 /// Terminates the whole application: monitor task, windows, webviews, process.
+///
+/// `async` for the same reason as the status commands: a synchronous command
+/// runs on the main thread, and the exit request it posts is *processed by*
+/// that thread. Letting it run on the async runtime keeps the two off the same
+/// call stack, so quitting can never be delayed by (or deadlock against) the
+/// event loop it is asking to shut down.
 #[tauri::command]
-pub fn quit_app(app: AppHandle) {
+pub async fn quit_app(app: AppHandle) {
     crate::actions::quit(&app);
 }

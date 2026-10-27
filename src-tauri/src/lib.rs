@@ -158,20 +158,11 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. Window behavior: the caption × and Alt+F4 always terminate the
     // process. Hiding to the tray is a separate, explicit action (header
-    // menu / tray menu); closing and hiding never share a path.
+    // menu / tray menu); closing and hiding never share a path. The handler
+    // lives in `main_window` so a window recreated by tray recovery gets the
+    // same policy instead of silently losing the ability to quit.
     if let Some(main_window) = app.get_webview_window("main") {
-        let handle = app.handle().clone();
-        main_window.on_window_event(move |event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                tracing::info!("main window close request; exiting");
-                match crate::actions::main_close_action() {
-                    crate::actions::MainCloseAction::Exit => handle.exit(0),
-                    // Unreachable by design: closing never hides. The arm
-                    // exists so the close policy stays a single decision.
-                    crate::actions::MainCloseAction::HideToTray => {}
-                }
-            }
-        });
+        window::main_window::install_close_handler(&main_window, app.handle());
     }
     since = stage("window handlers installed", since);
 
