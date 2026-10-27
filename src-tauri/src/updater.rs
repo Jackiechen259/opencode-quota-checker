@@ -29,6 +29,7 @@ const PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(200);
 /// directory — keeps the `VAR_UNK` marker, the plugin falls back to the
 /// generic `windows-x86_64` manifest entry, and that entry points at the MSI,
 /// which installs a second copy instead of updating this one.
+#[cfg(windows)]
 const WINDOWS_UPDATER_TARGET: &str = "windows-x86_64-nsis";
 
 /// Builds the platform updater with the Windows target pinned.
@@ -268,16 +269,14 @@ fn emit(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[cfg(windows)]
     #[test]
     fn windows_target_is_pinned_to_nsis() {
-        assert_eq!(WINDOWS_UPDATER_TARGET, "windows-x86_64-nsis");
+        assert_eq!(super::WINDOWS_UPDATER_TARGET, "windows-x86_64-nsis");
         // The manifest published by tauri-action must keep carrying this key;
         // latest.json lists `<os>-<arch>-<installer>` alongside the generic
         // `<os>-<arch>` fallback.
-        assert!(WINDOWS_UPDATER_TARGET.starts_with("windows-x86_64-"));
-        assert!(WINDOWS_UPDATER_TARGET.ends_with("-nsis"));
+        assert!(super::WINDOWS_UPDATER_TARGET.starts_with("windows-x86_64-"));
+        assert!(super::WINDOWS_UPDATER_TARGET.ends_with("-nsis"));
     }
 }
