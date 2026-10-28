@@ -52,6 +52,8 @@ Legend: ☐ unchecked · ☑ passed · ❌ failed (record details)
 - ☐ Menu: 打开主窗口 / 隐藏主窗口 / 显示悬浮窗 (checkmark) / 退出.
 - ☐ Close (×) with `MinimizeToTray`: window hides, process keeps running,
   tray restore works, monitoring continues.
+- ☐ Close behavior `MinimizeToTaskbar`: window minimizes to a taskbar button,
+  restoring from the taskbar returns the same webview, monitoring continues.
 - ☐ Close behavior `Exit`: closing the window exits the whole app.
 - ☐ 退出 truly exits: no process or tray remnant.
 

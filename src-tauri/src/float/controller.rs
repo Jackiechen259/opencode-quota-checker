@@ -157,7 +157,7 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
     attach_window_handlers(&window, app);
 
     #[cfg(target_os = "windows")]
-    crate::float::win::round_corners_for(&window, layout::corner_radius(presentation));
+    crate::window::win::round_corners(&window, layout::corner_radius(presentation));
 
     if let Err(error) = window.show() {
         // Do not leave an invisible "open" window behind: a failed show must
@@ -478,5 +478,5 @@ fn refresh_region(app: &AppHandle) {
         .lock()
         .expect("float mutex")
         .presentation(layout);
-    crate::float::win::round_corners_for(&window, layout::corner_radius(presentation));
+    crate::window::win::round_corners(&window, layout::corner_radius(presentation));
 }

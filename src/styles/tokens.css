@@ -126,16 +126,17 @@
 
   /* Layout ----------------------------------------------------------------- */
   --titlebar-height: 32px;
-  /* Caption buttons (minimize / maximize / close). Three of them sit flush
-   * against the top-right corner, so the resize-handle strip must stop
-   * exactly where they begin — see `--titlebar-controls-width` usage in
-   * main-window.css. Keep this in sync with the number of controls. */
+  /* Caption buttons (minimize / maximize / close): native-Windows 46×32 hit
+   * areas, flush against the top-right corner. The hover fill is the whole
+   * segment, so the close red reaches the window edges; the native window
+   * region (`window::win` in src-tauri) and the matching CSS frame corner
+   * clip it with one shared arc. The resize-handle strip must stop where the
+   * buttons begin; keep the count and `--titlebar-controls-width` in sync. */
   --titlebar-control-width: 46px;
   --titlebar-controls-width: calc(var(--titlebar-control-width) * 3);
   --header-height: 48px;
   --footer-height: 30px;
   --main-frame-radius: var(--radius-frame);
-  --main-frame-inset: 1px;
 
   /* ------------------------------------------------------------------ */
   /* Legacy aliases (archived Iced theme names).                         */

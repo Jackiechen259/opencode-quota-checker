@@ -1,75 +1,20 @@
 //! Native Windows adapters for the borderless floating window.
 //!
-//! Ported from the archived Iced `window/float_window.rs`: rounded window
-//! regions, physical-pixel position restore clamped to the monitor work area,
-//! and snapping to the monitor top.
-//!
-//! The webview surface is opaque on Windows, so the renderer cannot draw the
-//! rounded shape itself; a window region is what remains. The region lives in
-//! window coordinates and does not follow a resize or DPI change, so the
-//! controller reapplies it on `Resized` and `ScaleFactorChanged`.
+//! Physical-pixel position restore clamped to the monitor work area and
+//! snapping to the monitor top. Rounded-window shaping lives in the shared
+//! [`crate::window::win`] helper because the main window needs the same
+//! native region.
 
 use crate::config::FloatPosition;
-use raw_window_handle::HasWindowHandle;
+use crate::window::win::hwnd;
 use tauri::WebviewWindow;
 use windows::Win32::Foundation::{HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
-    CreateRoundRectRgn, DeleteObject, GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow,
-    SetWindowRgn, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
-use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowRect, SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
 };
-
-/// Returns the native `HWND` of a live window.
-fn hwnd(window: &WebviewWindow) -> Option<HWND> {
-    let handle = window.window_handle().ok()?.as_raw();
-    match handle {
-        raw_window_handle::RawWindowHandle::Win32(handle) => {
-            Some(HWND(handle.hwnd.get() as *mut _))
-        }
-        _ => None,
-    }
-}
-
-/// Clips the undecorated floating window to a rounded rectangle.
-pub fn round_corners_for(window: &WebviewWindow, radius: f32) {
-    let Some(hwnd) = hwnd(window) else {
-        return;
-    };
-    let mut rect = RECT::default();
-    // SAFETY: `hwnd` is a valid live window handle and the pointer refers to
-    // an initialized stack value.
-    if unsafe { GetWindowRect(hwnd, &mut rect) }.is_err() {
-        return;
-    }
-    // SAFETY: `hwnd` is a valid live window handle.
-    let dpi = unsafe { GetDpiForWindow(hwnd) };
-    let scale = if dpi == 0 { 1.0 } else { dpi as f32 / 96.0 };
-    // The region bounds are exclusive, and `CreateRoundRectRgn` takes the
-    // size of the ellipse its corners are cut from rather than a radius.
-    let ellipse = (radius * scale * 2.0).round() as i32;
-    // SAFETY: plain value arguments; the returned handle is checked below.
-    let region = unsafe {
-        CreateRoundRectRgn(
-            0,
-            0,
-            rect.right - rect.left + 1,
-            rect.bottom - rect.top + 1,
-            ellipse,
-            ellipse,
-        )
-    };
-    if region.is_invalid() {
-        return;
-    }
-    // SAFETY: the window takes ownership of the region once the call
-    // succeeds, so it is only deleted here when it was rejected.
-    if unsafe { SetWindowRgn(hwnd, Some(region), true) } == 0 {
-        let _ = unsafe { DeleteObject(region.into()) };
-    }
-}
 
 /// Returns the work-area top of the monitor under the window, in physical
 /// (virtual-desktop) pixels.

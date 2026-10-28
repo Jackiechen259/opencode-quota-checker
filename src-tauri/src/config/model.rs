@@ -9,12 +9,22 @@ use serde::{Deserialize, Serialize};
 pub const SCHEMA_VERSION: u32 = 2;
 
 /// Behavior when the main window receives a close request.
+///
+/// The selected behavior is applied by `actions::resolve_close_action`; the
+/// dialog-free default is the tray, which keeps background monitoring alive
+/// and matches the pre-Tauri client.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CloseBehavior {
-    /// Keep the daemon alive and recover it from the tray.
+    /// Keep the daemon alive; hide the window and recover it from the tray.
+    ///
+    /// Falls back to [`CloseBehavior::Exit`] when the tray is unavailable:
+    /// a hidden window with no tray icon would strand the process.
     #[default]
     MinimizeToTray,
+    /// Keep the daemon alive; minimize the window to the taskbar, where the
+    /// user can restore it with the regular taskbar button.
+    MinimizeToTaskbar,
     /// Exit the process.
     Exit,
 }
@@ -185,6 +195,31 @@ mod tests {
         };
         let json = serde_json::to_string(&config).expect("config serializes");
         assert!(json.contains(r#""float_mode":"compact""#));
+    }
+
+    #[test]
+    fn close_behavior_serializes_with_stable_names() {
+        // The names are part of the persisted schema and the IPC contract:
+        // the frontend `CloseBehavior` union and the settings radio values
+        // must stay in sync with them.
+        for (behavior, name) in [
+            (CloseBehavior::MinimizeToTray, "minimize_to_tray"),
+            (CloseBehavior::MinimizeToTaskbar, "minimize_to_taskbar"),
+            (CloseBehavior::Exit, "exit"),
+        ] {
+            let json = serde_json::to_string(&behavior).expect("behavior serializes");
+            assert_eq!(json, format!("\"{name}\""));
+            let parsed: CloseBehavior = serde_json::from_str(&json).expect("behavior deserializes");
+            assert_eq!(parsed, behavior);
+        }
+    }
+
+    #[test]
+    fn close_behavior_defaults_to_tray() {
+        // An absent field (older config file) must resolve to the documented
+        // default instead of failing the load.
+        let config: AppConfig = serde_json::from_str("{}").expect("empty config loads");
+        assert_eq!(config.close_behavior, CloseBehavior::MinimizeToTray);
     }
 
     #[test]

@@ -12,7 +12,13 @@ export type FloatMode = "full" | "compact" | "docked";
  * presentation (snapped to the monitor top) and must never be written.
  */
 export type PersistedFloatMode = Exclude<FloatMode, "docked">;
-export type CloseBehavior = "minimize_to_tray" | "exit";
+/**
+ * What the caption × / Alt+F4 does with the main window.
+ *
+ * Mirrors the Rust `CloseBehavior` enum; the persisted values are the wire
+ * format and must never be renamed.
+ */
+export type CloseBehavior = "minimize_to_tray" | "minimize_to_taskbar" | "exit";
 export type CredentialPhase =
   | "checking"
   | "available"

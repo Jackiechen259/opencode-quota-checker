@@ -6,22 +6,28 @@
  *
  * Main (normal):
  *   native window (undecorated, square)
- *     └── .main-window — layout + 1px technical inset (visually invisible)
- *         └── .main-frame — THE window surface (background + radius + 1 light
- *                            outline + soft window shadow)
+ *     └── .main-window — layout surface, edge to edge
+ *         └── .main-frame — THE window surface (background + radius +
+ *                            soft window shadow + 1px outline overlay)
  *
- * The inset is retained for DPI corner anti-aliasing but made invisible by
- * giving .main-window the same surface color as .main-frame. This removes the
- * previous three-layer ring (app ring + white gap + grey border).
+ * The surface fills the native window (no inset, no border) so the caption
+ * buttons can be flush with its top/right edges. The 1px outline is an inset
+ * overlay (`.main-frame::after`) instead of a border: a border sits outside
+ * the clip box, so it would leave a light seam under the close button's
+ * full-bleed red hover — the exact misalignment this frame used to show.
  *
- * Maximized: inset removed, radius/border/shadow stripped (flush with screen).
+ * On Windows the HWND itself is clipped to the same 12px arc by
+ * `window::win::round_corners`; without that native region the square window
+ * corner keeps a white wedge outside the CSS radius. Keep
+ * `MAIN_WINDOW_CORNER_RADIUS` in sync with `--radius-frame`.
+ *
+ * Maximized: radius/outline/shadow stripped (flush with screen).
  */
 
 .main-window {
   width: 100%;
   height: 100%;
   background: var(--window-surface);
-  padding: var(--main-frame-inset);
   display: flex;
   position: relative;
 }
@@ -121,21 +127,33 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  position: relative;
   background: var(--window-surface);
   border-radius: var(--main-frame-radius);
-  border: 1px solid var(--window-border);
   overflow: hidden;
   box-shadow: var(--window-shadow);
 }
 
-.main-window-maximized {
-  padding: 0;
+/* The single outer outline. Painted above the content (level 70 in the root
+ * stacking context, over the level-60 caption controls) so it survives the
+ * titlebar gradient, but it is only 1px and never intercepts input. */
+.main-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--window-border);
+  pointer-events: none;
+  z-index: 70;
 }
 
 .main-window-maximized .main-frame {
   border-radius: 0;
-  border: none;
   box-shadow: none;
+}
+
+.main-window-maximized .main-frame::after {
+  display: none;
 }
 
 /* Title bar -------------------------------------------------------------------
@@ -198,9 +216,17 @@
   align-items: center;
   justify-content: center;
   color: var(--text-primary);
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
+/* Native-Windows caption hover: the FULL 46×32 segment, not an inset pill.
+ * The button is flush with the frame edge (the frame has no border/inset), so
+ * the background reaches the window's top/right edges; `overflow:hidden` on
+ * the frame clips only the top-right corner to the window radius. That is
+ * what makes the red close fill line up with the edge instead of leaving the
+ * old 1px seam. */
 .titlebar-control:hover {
   background: var(--color-titlebar-hover);
 }
@@ -209,6 +235,16 @@
   background: var(--color-titlebar-pressed);
 }
 
+/* Keyboard focus must stay inside the segment: the segment itself is flush
+ * with the frame, so the global outer outline would be clipped. */
+.titlebar-control:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* The close button owns the top-right corner: its full-bleed hover ends at
+ * the native window edge, whose region uses the same 12px arc as the frame.
+ * No own radius, no glow — the whole segment is the native shape. */
 .titlebar-control-close:hover {
   background: var(--color-titlebar-close-hover);
   color: #fff;
@@ -1262,6 +1298,80 @@
   color: var(--text-tertiary);
 }
 
+/* Single-choice radio cards (close behavior). The native input keeps the
+ * platform keyboard/AT semantics; only its accent color is themed. */
+.settings-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.settings-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.settings-choice:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-surface-subtle);
+}
+
+.settings-choice-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.settings-choice-selected:hover {
+  background: var(--accent-soft);
+}
+
+.settings-choice-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.settings-choice-disabled:hover {
+  border-color: var(--border-default);
+  background: var(--bg-surface);
+}
+
+.settings-choice-input {
+  width: 15px;
+  height: 15px;
+  margin: 1px 0 0;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+  cursor: inherit;
+}
+
+.settings-choice-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-choice-label {
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-choice-hint {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
 .toggle {
   width: 40px;
   height: 22px;
@@ -1347,7 +1457,8 @@
 .settings-danger-zone {
   border-color: var(--danger-border);
   background: linear-gradient(180deg, var(--bg-surface) 0%, var(--danger-soft) 260%);
-  grid-column: 1 / -1;
+  /* Shares the second row with the updates card (three-column layout). */
+  grid-column: span 2;
 }
 
 .settings-danger-title {
@@ -1486,16 +1597,20 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Two columns: update and danger share the second row instead of leaving a
-     full-width update card with a switch stranded on the far right. */
+  /* Two columns: the window card and the updates card share the second row,
+     and the danger zone keeps the full third row. */
   .settings-danger-zone {
-    grid-column: auto;
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 899px) {
   .settings-page {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-danger-zone {
+    grid-column: 1 / -1;
   }
 }
 

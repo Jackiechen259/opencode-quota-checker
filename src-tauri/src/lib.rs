@@ -158,13 +158,14 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     state.push_monitor_config();
     since = stage("monitor spawned", since);
 
-    // 5. Window behavior: the caption × and Alt+F4 always terminate the
-    // process. Hiding to the tray is a separate, explicit action (header
-    // menu / tray menu); closing and hiding never share a path. The handler
-    // lives in `main_window` so a window recreated by tray recovery gets the
-    // same policy instead of silently losing the ability to quit.
+    // 5. Window behavior: the caption × and Alt+F4 follow the persisted
+    // `close_behavior` policy (minimize to taskbar / hide to tray / exit).
+    // The handler lives in `main_window` so a window recreated by tray
+    // recovery gets the same policy instead of silently losing the ability
+    // to quit.
     if let Some(main_window) = app.get_webview_window("main") {
         window::main_window::install_close_handler(&main_window, app.handle());
+        window::main_window::install_window_shape(&main_window, app.handle());
     }
     since = stage("window handlers installed", since);
 

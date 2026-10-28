@@ -36,7 +36,8 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started · ➖ not applicable
 | Custom title bar (drag, double-click, min/max/close) | Iced `view/title_bar.rs` | React `components/titlebar` + Tauri window API | ✅ |
 | Window maximize state tracking | Iced events | Tauri `onResized`/`onMoved` + `isMaximized` | ✅ |
 | Native edge resize of borderless window | winit WNDPROC subclass (`WM_NCHITTEST`) | Tauri `decorations:false` + tao native frame (verify on Windows) | 🚧 |
-| Close-to-tray (`MinimizeToTray`) | Iced close request routing | Tauri `onCloseRequested` prevent + hide | ✅ |
+| Close behavior `MinimizeToTray` (default) | Iced close request routing | React radio → `save_config`; Tauri `onCloseRequested` prevent + hide | ✅ |
+| Close behavior `MinimizeToTaskbar` | — (new option) | React radio → `save_config`; Tauri `onCloseRequested` prevent + `minimize()` | ✅ |
 | Close behavior `Exit` | Iced | Tauri allow close → app exit | ✅ |
 | Tray menu (Show/Hide Main, Toggle Float, Quit) | `tray-icon` + mpsc | Tauri tray + menu events | ✅ |
 | Tray left-click shows main | — (menu only) | Tauri `TrayIconEvent::Click` | ✅ |

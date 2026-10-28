@@ -25,6 +25,7 @@ import type {
   AppConfig,
   AppError,
   AppStatusDto,
+  CloseBehavior,
   UpdateStateDto,
   UpdateStatus,
 } from "../types/models";
@@ -46,6 +47,7 @@ type PendingKey =
   | "apply-monitor"
   | "start-monitor"
   | "stop-monitor"
+  | "save-close-behavior"
   | "toggle-update-checks"
   | "toggle-auto-download"
   | "check-update"
@@ -180,6 +182,58 @@ function ToggleRow({
         <span className="toggle-knob" />
       </button>
     </div>
+  );
+}
+
+type CloseBehaviorOptionProps = {
+  value: CloseBehavior;
+  label: string;
+  hint: string;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: (value: CloseBehavior) => void;
+};
+
+/**
+ * One option of the "关闭主窗口时" radio group.
+ *
+ * A native radio input is used instead of a styled button: it keeps the
+ * platform arrow-key/tab behavior and exposes the checked state to assistive
+ * technology without hand-rolled ARIA state.
+ */
+function CloseBehaviorOption({
+  value,
+  label,
+  hint,
+  selected,
+  disabled,
+  onSelect,
+}: CloseBehaviorOptionProps) {
+  return (
+    <label
+      className={[
+        "settings-choice",
+        selected ? "settings-choice-selected" : "",
+        disabled ? "settings-choice-disabled" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <input
+        type="radio"
+        className="settings-choice-input"
+        name="close-behavior"
+        value={value}
+        checked={selected}
+        disabled={disabled}
+        aria-label={label}
+        onChange={() => onSelect(value)}
+      />
+      <span className="settings-choice-copy">
+        <span className="settings-choice-label">{label}</span>
+        <span className="settings-choice-hint">{hint}</span>
+      </span>
+    </label>
   );
 }
 
@@ -358,6 +412,30 @@ export function validateMonitorForm(
   return null;
 }
 
+/** Options of the close-behavior radio group; values are the persisted wire
+ * format shared with the Rust `CloseBehavior` enum. */
+const CLOSE_BEHAVIOR_OPTIONS: ReadonlyArray<{
+  value: CloseBehavior;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "minimize_to_taskbar",
+    label: "最小化到任务栏",
+    hint: "窗口收进任务栏，点击任务栏按钮即可恢复；后台监控继续运行。",
+  },
+  {
+    value: "minimize_to_tray",
+    label: "隐藏到系统托盘",
+    hint: "窗口从任务栏和桌面隐藏，只保留托盘图标；可从托盘菜单恢复。",
+  },
+  {
+    value: "exit",
+    label: "退出应用",
+    hint: "结束进程并停止后台监控，下次需要重新启动应用。",
+  },
+];
+
 export function Settings({
   status,
   config,
@@ -457,6 +535,9 @@ export function Settings({
   const credentialsAvailable = credentials?.available ?? false;
   const credentialsMissing = credentials?.phase === "missing";
   const monitorEnabled = config.monitor_enabled;
+  // An unknown status is treated as "tray available": disabling the option
+  // on a transiently missing status would block a valid preference.
+  const trayAvailable = status?.trayAvailable ?? true;
 
   const workspaceValue = workspace.trim();
   const storedWorkspace = config.opencode_workspace_id ?? "";
@@ -707,6 +788,14 @@ export function Settings({
     });
   };
 
+  const saveCloseBehavior = (behavior: CloseBehavior) => {
+    if (behavior === config.close_behavior) return;
+    void run("save-close-behavior", async () => {
+      await persist((current) => ({ ...current, close_behavior: behavior }));
+      setNotice("关闭行为已保存。");
+    });
+  };
+
   const saveConnectionLabel = isPending("save-connection")
     ? "保存中…"
     : apiKeyPresent
@@ -728,7 +817,7 @@ export function Settings({
       <div className="settings-header">
         <div>
           <div className="settings-title">设置</div>
-          <div className="settings-subtitle">管理 OpenCode 连接和额度监控规则</div>
+          <div className="settings-subtitle">管理 OpenCode 连接、额度监控与窗口行为</div>
         </div>
         <span style={{ flex: 1 }} />
         <button type="button" className="icon-button" title="关闭" aria-label="关闭" onClick={onClose}>
@@ -973,6 +1062,41 @@ export function Settings({
             onRetryCheck={checkForUpdate}
           />
         ) : null}
+      </SettingsCard>
+
+      <SettingsCard
+        icon={<Icons.Window size={16} />}
+        title="窗口行为"
+        subtitle="关闭主窗口后如何继续运行"
+        trailing={
+          trayAvailable ? undefined : <StatusBadge tone="warning">托盘不可用</StatusBadge>
+        }
+      >
+        <FormField
+          label="关闭主窗口时"
+          hint={
+            trayAvailable
+              ? "× 与 Alt+F4 都按此设置执行；后台监控在最小化或隐藏时继续运行。"
+              : "当前系统托盘不可用：「隐藏到系统托盘」会退回到「退出应用」，避免窗口无法找回。"
+          }
+        >
+          <div className="settings-choices" role="radiogroup" aria-label="关闭主窗口时">
+            {CLOSE_BEHAVIOR_OPTIONS.map((option) => (
+              <CloseBehaviorOption
+                key={option.value}
+                value={option.value}
+                label={option.label}
+                hint={option.hint}
+                selected={config.close_behavior === option.value}
+                disabled={
+                  isPending("save-close-behavior") ||
+                  (option.value === "minimize_to_tray" && !trayAvailable)
+                }
+                onSelect={saveCloseBehavior}
+              />
+            ))}
+          </div>
+        </FormField>
       </SettingsCard>
 
       <section className="settings-card settings-danger-zone">

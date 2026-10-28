@@ -1,7 +1,8 @@
 //! System tray: menu, left-click behavior, and lifecycle.
 //!
 //! Ported from the archived Iced `platform/tray.rs`. The tray keeps the
-//! daemon reachable while the main window is hidden (close-to-tray).
+//! daemon reachable while the main window is hidden — either by the
+//! `minimize_to_tray` close behavior or by the explicit "隐藏主窗口" action.
 
 use crate::state::AppState;
 use std::sync::Arc;

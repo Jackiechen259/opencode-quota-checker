@@ -364,6 +364,57 @@ describe("Settings connection buttons", () => {
   });
 });
 
+describe("Settings close behavior", () => {
+  it("saves the chosen close behavior through one canonical config write", async () => {
+    installRouter({ config: configFixture({ close_behavior: "minimize_to_tray" }) });
+    const { onConfigSaved } = renderSettings({ config: storedConfig });
+
+    expect(screen.getByRole("radio", { name: "隐藏到系统托盘" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("radio", { name: "最小化到任务栏" }));
+
+    await waitFor(() => expect(saveConfigCalls).toHaveLength(1));
+    expect(saveConfigCalls[0]).toMatchObject({
+      close_behavior: "minimize_to_taskbar",
+      monitor_interval_secs: 300,
+      auto_download_updates: true,
+    });
+    expect(onConfigSaved).toHaveBeenCalledWith(
+      expect.objectContaining({ close_behavior: "minimize_to_taskbar" }),
+    );
+    expect(await screen.findByText("关闭行为已保存。")).toBeInTheDocument();
+  });
+
+  it("keeps the tray option available while the tray works", () => {
+    installRouter({ config: configFixture() });
+    renderSettings({ config: storedConfig });
+
+    expect(screen.getByRole("radio", { name: "隐藏到系统托盘" })).toBeEnabled();
+    expect(screen.getByRole("radio", { name: "退出应用" })).toBeEnabled();
+  });
+
+  it("disables the tray option when no tray icon exists", () => {
+    installRouter({ config: configFixture() });
+    renderSettings({
+      config: storedConfig,
+      status: appStatusFixture({
+        configured: true,
+        credentials: { phase: "available", available: true, error: null },
+        trayAvailable: false,
+        trayError: "no appindicator",
+      }),
+    });
+
+    // Hiding without a tray icon would strand the process, so the option is
+    // blocked and the fallback (exit) is explained in the field hint.
+    expect(screen.getByRole("radio", { name: "隐藏到系统托盘" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "最小化到任务栏" })).toBeEnabled();
+    expect(
+      screen.getByText(/「隐藏到系统托盘」会退回到「退出应用」/),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("Settings update buttons", () => {
   it("shows the real update state and keeps auto-download independent of auto-check", async () => {
     installRouter({

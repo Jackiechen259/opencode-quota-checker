@@ -3,6 +3,9 @@
 // Layout, from left to right: app icon, app name, a draggable spacer, then
 // the minimize / maximize-restore / close window controls — the same
 // dimensions as a native Windows caption (32 px strip, 46 px buttons).
+// The hover fill is the full 46×32 segment: the frame has no border/inset,
+// so the close red reaches the window edges and is clipped only by the
+// native rounded window region, like a native Windows caption button.
 //
 // Drag regions: only `titlebar-brand` and `titlebar-spacer` are
 // `data-tauri-drag-region`. The controls container is deliberately NOT a
