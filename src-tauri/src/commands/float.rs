@@ -41,3 +41,13 @@ pub fn set_float_mode(app: AppHandle, mode: FloatLayout) -> Result<(), String> {
     controller::set_layout(&app, mode);
     Ok(())
 }
+
+/// Applies the content-fitted width measured by the Docked view.
+///
+/// The backend still owns the native size: this only records the requested
+/// width and resizes while the window is Docked (clamped in `float::layout`).
+#[tauri::command]
+pub fn set_float_docked_width(app: AppHandle, width: f64) -> Result<(), String> {
+    controller::set_docked_width(&app, width);
+    Ok(())
+}

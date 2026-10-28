@@ -50,12 +50,23 @@ Key points:
 
 ## 2. State model
 
-There are exactly two inputs:
+There are exactly two presentation inputs:
 
 | Input | Stored in | Lifetime |
 |---|---|---|
 | `FloatLayout` (`full` / `compact`) | `AppConfig.float_mode` | Persisted |
 | `docked` | `FloatRuntime` | Transient |
+
+The Docked width is a third, size-only input:
+
+| Input | Stored in | Lifetime |
+|---|---|---|
+| Measured Docked window width | `FloatRuntime.docked_width` | Transient |
+
+The webview measures its rendered content (text widths depend on the platform
+fonts) and reports the total window width through `set_float_docked_width`.
+The controller clamps it and uses it only while Docked; it never changes the
+presentation and never appears in the DTO or the config.
 
 `FloatPresentation` (`full` / `compact` / `docked`) is derived once:
 
@@ -63,12 +74,14 @@ There are exactly two inputs:
 if docked { Docked } else { layout.into() }
 ```
 
-Everything else is a function of that presentation:
+The presentation drives the layout, the Windows radius and the DTO:
 
 ```text
 FloatLayout + docked ──> presentation ──> native size
                                       ├─> Windows corner radius (16 / 12 px)
                                       └─> FloatStateDto.presentationMode
+
+Docked window width ──> native width (Docked only; no DTO, no config)
 ```
 
 Invariants:
@@ -82,6 +95,8 @@ Invariants:
 - `float_open` is the persisted *intent* read on launch; `FloatRuntime.open`
   is the live state. `controller::set_open` updates both, and no other code
   writes either.
+- The Docked width is transient and presentation-neutral: it only feeds the
+  native width while `docked == true`.
 
 `FloatStateDto` keeps the original JSON contract:
 
@@ -97,18 +112,31 @@ Invariants:
 |---|---|
 | Full | 392 × `clamp(134 + 96 × cards, 280, 560)` |
 | Compact | 392 × 168 |
-| Docked | 392 × 48 |
+| Docked | `clamp(measured content + 46, 96, 392)` × 24 |
 
 The Full height is computed from the number of quota windows. Before the first
 report the loading skeleton reserves two cards; a report with zero windows
 still reserves one.
+
+Docked is content-fitted so the thin strip does not leave a wide empty band on
+screen. The webview measures an out-of-flow copy of the strip content at its
+natural width, adds the 46 px chrome (8 px padding × 2, 1 px outline × 2, two
+4 px gaps and the 20 px close button) and reports the total through
+`set_float_docked_width`; `float::controller` clamps it to 96..392 px. The
+width lives only in `FloatRuntime` and is re-measured whenever the label,
+percentage or remaining quota changes.
+
+Docked is deliberately the smallest presentation: a single 24 px line (1 px
+outline plus the 20 px close button) so the always-on-top strip covers as
+little as possible of the windows behind it. At that height the 12 px corner
+radius renders as a capsule.
 
 Docking is a hysteresis decision in physical coordinates:
 
 - window top within 18 px (DPI-scaled) of the monitor work-area top → dock;
 - while docked, release only beyond 24 px.
 
-The 18/24 hysteresis prevents the 48 px dock size change from immediately
+The 18/24 hysteresis prevents the dock size change from immediately
 undocking (or oscillating) at the boundary. On every `Moved` event the
 controller:
 
@@ -170,7 +198,17 @@ Dragging uses Tauri's deep drag region rather than bare attributes:
   status line, spacer and padding all drag the window;
 - `.float-docked` does the same for the one-line strip;
 - buttons have no drag attribute and are excluded by Tauri's clickable-element
-  check, so refresh / mode / close remain clickable.
+  check, so refresh / mode / close remain clickable (the docked strip only
+  contains ×).
+
+Docked is a read-only status strip: a health dot, the highest-risk window
+label, a 56 × 4 px usage progress bar, the percent and the remaining quota. It
+deliberately has no expand button — docking is transient, so dragging the
+strip beyond the 24 px release band un-docks it and restores the configured
+Full/Compact layout. `DockedView` also measures an out-of-flow
+`max-content` clone of that content after every report change and calls
+`set_float_docked_width`, so the native width hugs the label, percent and
+remaining quota instead of a fixed 392 px.
 
 A bare `data-tauri-drag-region` only drags when the event target is that exact
 element; a nested span or logo would silently create a dead zone. That was the
@@ -208,16 +246,19 @@ persist `float_open = false`, so the next launch can restore the window.
 
 Pure logic is tested on every platform:
 
-- `float/layout.rs`: height clamp/card count, fixed sizes, docking hysteresis
-  at 1.0/1.5 DPI, non-positive scale, position clamp, radius mapping.
-- `float/state.rs`: presentation derivation, mode transitions, move
-  generations, pending-position cancellation.
+- `float/layout.rs`: height clamp/card count, fixed sizes, Docked width
+  clamp/fallback, docking hysteresis at 1.0/1.5 DPI, non-positive scale,
+  position clamp, radius mapping.
+- `float/state.rs`: presentation derivation, mode transitions, Docked width
+  change detection, move generations, pending-position cancellation.
 - `config`: legacy `"docked"` loads as Compact; float fields survive a
   settings round-trip.
 - `src-tauri/tests/float_state.rs`: DTO/mode contract against `AppState`.
 - `src/windows/float/FloatWindow.test.tsx`: boot shell, all three views,
   event-driven mode switch, stale initial snapshot, controls, empty/error
   states, long labels, extreme percentages.
+- `src/windows/float/floatLayout.test.ts`: the `dockedWindowWidth` helper
+  (chrome + rounding, unmeasurable content).
 
 Manual Windows checks (see `docs/tauri-migration/smoke-test.md`): top-most,
 drag, dock hysteresis, mode/position/open restore, mixed-DPI rounded corners,

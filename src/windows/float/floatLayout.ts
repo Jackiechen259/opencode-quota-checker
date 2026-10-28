@@ -44,6 +44,27 @@ export function clampPercent(percent: number): number {
   return Math.min(100, Math.max(0, percent));
 }
 
+/** Horizontal chrome around the Docked content, in CSS px.
+ *
+ * 8 px padding × 2 + 1 px outline × 2 + two 4 px flex gaps + the 20 px close
+ * button. Keep in sync with `.float-docked` / `.float-docked-close` in
+ * `float-window.css`; the Rust controller clamps the total to 96..392. */
+export const DOCKED_CHROME_WIDTH = 46;
+
+/** Extra pixels so a fractional measurement cannot clip the close button. */
+const DOCKED_WIDTH_SLACK = 2;
+
+/**
+ * Native window width that hugs the measured Docked content.
+ *
+ * Returns `null` when the DOM has no layout (unit tests, hidden window), so
+ * callers never send a meaningless 0 px width to the backend.
+ */
+export function dockedWindowWidth(contentWidth: number): number | null {
+  if (!Number.isFinite(contentWidth) || contentWidth <= 0) return null;
+  return Math.ceil(contentWidth) + DOCKED_CHROME_WIDTH + DOCKED_WIDTH_SLACK;
+}
+
 /** Whole-number remaining quota ("960", "1,000"). */
 export function compactNumber(value: number): string {
   return Math.round(value).toLocaleString("en-US");

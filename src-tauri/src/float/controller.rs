@@ -53,6 +53,24 @@ fn quota_count_of(state: &AppState) -> usize {
     layout::quota_count(usage.report.as_ref())
 }
 
+/// Native size for a presentation, applying the last measured Docked width.
+///
+/// The webview measures the Docked content and reports the total window
+/// width; until it does (and again after an undock/redock) the stored width
+/// or the default `FLOAT_WIDTH` is used.
+fn size_for(state: &AppState, presentation: FloatPresentation) -> (f64, f64) {
+    if presentation == FloatPresentation::Docked {
+        let width = state
+            .floating
+            .lock()
+            .expect("float mutex")
+            .docked_width()
+            .unwrap_or(layout::FLOAT_WIDTH);
+        return layout::docked_size(width);
+    }
+    layout::size(presentation, quota_count_of(state))
+}
+
 /// Canonical floating-window snapshot.
 pub fn snapshot(app: &AppHandle) -> FloatStateDto {
     state(app).float_dto()
@@ -108,7 +126,7 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
         .lock()
         .expect("float mutex")
         .presentation(layout);
-    let (width, height) = layout::size(presentation, quota_count_of(&state));
+    let (width, height) = size_for(&state, presentation);
 
     let builder =
         WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::App("index.html".into()))
@@ -187,6 +205,24 @@ pub fn set_layout(app: &AppHandle, layout: FloatLayout) {
     persist_config(app);
 }
 
+/// Applies the Docked width measured by the webview.
+///
+/// The webview measures its own content (text widths depend on the platform
+/// fonts) and reports the total window width. The controller clamps that value
+/// and re-applies the native size; nothing is persisted and the DTO is
+/// unchanged, so no event is needed.
+pub fn set_docked_width(app: &AppHandle, width: f64) {
+    let state = state(app);
+    let changed = state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .set_docked_width(width);
+    if changed {
+        sync_size(app);
+    }
+}
+
 /// Re-applies the native size for the current presentation and usage state.
 ///
 /// Idempotent; called after every quota refresh, after config changes and
@@ -203,7 +239,7 @@ pub fn sync_size(app: &AppHandle) {
         .lock()
         .expect("float mutex")
         .presentation(layout);
-    let (width, height) = layout::size(presentation, quota_count_of(&state));
+    let (width, height) = size_for(&state, presentation);
     if let Err(error) = window.set_size(LogicalSize::new(width, height)) {
         tracing::warn!(%error, "failed to sync the floating window size");
     }
@@ -340,7 +376,7 @@ fn on_moved(app: &AppHandle, position: &PhysicalPosition<i32>) {
         } else {
             FloatPresentation::from(layout)
         };
-        let (width, height) = layout::size(presentation, quota_count_of(&state));
+        let (width, height) = size_for(&state, presentation);
         if let Err(error) = window.set_size(LogicalSize::new(width, height)) {
             tracing::warn!(%error, "failed to resize the floating window for docking");
         }

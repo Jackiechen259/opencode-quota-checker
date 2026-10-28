@@ -42,6 +42,8 @@ export const api = {
   openFloatWindow: () => invoke<void>("open_float_window"),
   closeFloatWindow: () => invoke<void>("close_float_window"),
   setFloatMode: (mode: PersistedFloatMode) => invoke<void>("set_float_mode", { mode }),
+  setFloatDockedWidth: (width: number) =>
+    invoke<void>("set_float_docked_width", { width }),
 
   getUpdateState: () => invoke<UpdateStateDto>("get_update_state"),
   checkForUpdate: () => invoke<void>("check_for_update"),

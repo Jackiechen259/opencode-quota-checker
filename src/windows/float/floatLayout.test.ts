@@ -2,9 +2,11 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  DOCKED_CHROME_WIDTH,
   MIN_FILL_PERCENT,
   clampPercent,
   compactNumber,
+  dockedWindowWidth,
   highestWindow,
   progressWidth,
   resetSeconds,
@@ -68,6 +70,20 @@ describe("compactNumber", () => {
   it("formats whole remaining quota without decimals", () => {
     expect(compactNumber(960)).toBe("960");
     expect(compactNumber(1000)).toBe("1,000");
+  });
+});
+
+describe("dockedWindowWidth", () => {
+  it("adds the strip chrome and rounds the content up", () => {
+    expect(dockedWindowWidth(200)).toBe(200 + DOCKED_CHROME_WIDTH + 2);
+    expect(dockedWindowWidth(200.2)).toBe(201 + DOCKED_CHROME_WIDTH + 2);
+  });
+
+  it("refuses to size a strip with no measurable content", () => {
+    expect(dockedWindowWidth(0)).toBeNull();
+    expect(dockedWindowWidth(-10)).toBeNull();
+    expect(dockedWindowWidth(Number.NaN)).toBeNull();
+    expect(dockedWindowWidth(Number.POSITIVE_INFINITY)).toBeNull();
   });
 });
 

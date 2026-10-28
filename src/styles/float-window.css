@@ -424,7 +424,15 @@ body[data-window="float"] {
 
 /* Docked layout -------------------------------------------------------------
  * Docked shares the float surface — only radius + layout differ.
- */
+ *
+ * The native window is only 24 logical px tall (`float::layout::
+ * DOCKED_HEIGHT`) so the always-on-top strip covers as little of other
+ * windows as possible. Every control here must fit that height: the 20 px
+ * close button plus the 1 px outline top and bottom.
+ *
+ * Its width is content-fitted by the controller: the webview reports the
+ * content plus chrome (`DOCKED_CHROME_WIDTH` in `floatLayout.ts`). Keep the
+ * padding, gap and close-button sizes below in sync with that constant. */
 
 .float-docked {
   width: 100%;
@@ -484,14 +492,42 @@ body[data-window="float"] {
   white-space: nowrap;
 }
 
+/* Mini progress meter inside the one-line strip.
+ *
+ * The Docked strip is a single 24 px line, so the usage bar is a 56 × 4 px
+ * pill between the label and the percent instead of the card's 6 px
+ * full-width track. It may shrink to 32 px when a long label competes for the
+ * row, but never disappears: the percent and remaining text stay alongside it.
+ *
+ * The definite `width` (instead of a 56 px `flex-basis`) is deliberate:
+ * Chromium computes a shrinkable flex item's max-content contribution from
+ * its `min-width`, and a `flex-basis` bar made the whole strip reserve 32 px
+ * instead of 56 px, truncating the label even in a half-empty strip. */
+.float-docked-progress {
+  flex: 0 1 auto;
+  width: 56px;
+  min-width: 32px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-track);
+  overflow: hidden;
+}
+
+.float-docked-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width 300ms ease;
+}
+
 .float-docked-button {
-  height: 28px;
+  height: 20px;
   padding: 0 10px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 11px;
@@ -509,7 +545,7 @@ body[data-window="float"] {
 }
 
 .float-docked-close {
-  width: 28px;
+  width: 20px;
   padding: 0;
   background: transparent;
   color: var(--text-secondary);

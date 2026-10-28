@@ -14,7 +14,17 @@ pub const FLOAT_WIDTH: f64 = 392.0;
 /// Compact card height (the hero row flexes to fill the extra space).
 pub const COMPACT_HEIGHT: f64 = 168.0;
 /// Docked strip height.
-pub const DOCKED_HEIGHT: f64 = 48.0;
+///
+/// A single thin status line, kept as short as the content allows (the close
+/// button is 20 px; 1 px outline above and below) so the always-on-top strip
+/// covers as little of other windows as possible. The 12 px radius makes the
+/// docked surface a capsule at this height.
+pub const DOCKED_HEIGHT: f64 = 24.0;
+/// Narrowest logical width the Docked strip may use.
+///
+/// The width normally comes from the webview's content measurement (see
+/// `docked_size`); this floor only guards against a missing or bad report.
+pub const DOCKED_MIN_WIDTH: f64 = 96.0;
 /// Full mode lower bound: never shrink below the skeleton/empty layout.
 pub const FULL_MIN_HEIGHT: f64 = 280.0;
 /// Full mode upper bound: beyond this the quota list scrolls.
@@ -46,6 +56,9 @@ pub fn full_height(quota_count: usize) -> f64 {
 }
 
 /// Logical size for a presentation mode under the current usage state.
+///
+/// Docked uses the default `FLOAT_WIDTH`; [`docked_size`] applies the
+/// content-fitted width reported by the webview.
 pub fn size(presentation: FloatPresentation, quota_count: usize) -> (f64, f64) {
     let height = match presentation {
         FloatPresentation::Full => full_height(quota_count),
@@ -53,6 +66,26 @@ pub fn size(presentation: FloatPresentation, quota_count: usize) -> (f64, f64) {
         FloatPresentation::Docked => DOCKED_HEIGHT,
     };
     (FLOAT_WIDTH, height)
+}
+
+/// Clamps a frontend-measured Docked width into the legal window range.
+///
+/// A non-finite report falls back to the full width instead of poisoning the
+/// native size calculation.
+pub fn clamp_docked_width(width: f64) -> f64 {
+    if width.is_finite() {
+        width.clamp(DOCKED_MIN_WIDTH, FLOAT_WIDTH)
+    } else {
+        FLOAT_WIDTH
+    }
+}
+
+/// Native size for the Docked strip at a measured window width.
+///
+/// The width comes from the webview (content + chrome) so the snapped strip
+/// hugs its content instead of leaving a wide empty band on screen.
+pub fn docked_size(width: f64) -> (f64, f64) {
+    (clamp_docked_width(width), DOCKED_HEIGHT)
 }
 
 /// Corner radius per presentation mode, in logical pixels.
@@ -145,6 +178,26 @@ mod tests {
         assert_eq!(
             size(FloatPresentation::Docked, 2),
             (FLOAT_WIDTH, DOCKED_HEIGHT)
+        );
+    }
+
+    #[test]
+    fn docked_width_hugs_content_and_stays_in_range() {
+        assert_eq!(docked_size(0.0), (DOCKED_MIN_WIDTH, DOCKED_HEIGHT));
+        assert_eq!(
+            docked_size(248.0),
+            (248.0, DOCKED_HEIGHT),
+            "a measured width is used as-is"
+        );
+        assert_eq!(
+            docked_size(FLOAT_WIDTH + 80.0),
+            (FLOAT_WIDTH, DOCKED_HEIGHT),
+            "never wider than the Full/Compact window"
+        );
+        assert_eq!(
+            docked_size(f64::NAN),
+            (FLOAT_WIDTH, DOCKED_HEIGHT),
+            "a bad report falls back to the full width"
         );
     }
 

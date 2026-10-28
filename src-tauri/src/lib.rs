@@ -61,6 +61,7 @@ pub fn run() {
             commands::float::open_float_window,
             commands::float::close_float_window,
             commands::float::set_float_mode,
+            commands::float::set_float_docked_width,
             commands::update::get_update_state,
             commands::update::check_for_update,
             commands::update::download_update,

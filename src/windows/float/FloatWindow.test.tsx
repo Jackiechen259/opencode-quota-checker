@@ -7,7 +7,7 @@
 // labels, and the window-control commands.
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 // Must precede the FloatWindow import: registers the Tauri mocks.
 import { tauri } from "../../test/tauri";
 import { EVENT, type FloatStateDto, type UsageDto, type WindowReport } from "../../types/models";
@@ -163,24 +163,65 @@ describe("FloatWindow state architecture", () => {
     expect(screen.queryByText("OpenCode Quota Checker")).not.toBeInTheDocument();
   });
 
-  it("renders the Docked strip from presentationMode", async () => {
+  it("renders the Docked strip with a mini progress bar and no expand button", async () => {
     installInvokeRouter({ floatState: dockedState, usage: usage([windowReport("a", "5 小时", 4)]) });
     render(<FloatWindow />);
-    expect(await screen.findByText("展开")).toBeInTheDocument();
+    expect(await screen.findByText("5 小时")).toBeInTheDocument();
     expect(screen.getByText("4.0%")).toBeInTheDocument();
     expect(screen.getByText("剩余 960")).toBeInTheDocument();
+
+    const progress = screen.getByRole("progressbar", { name: "5 小时 已用 4.0%" });
+    expect(progress).toHaveAttribute("aria-valuenow", "4");
+    expect(progress.firstElementChild as HTMLElement).toHaveStyle({ width: "4%" });
+
+    // Docked is transient: dragging un-docks, so no expand control is offered.
+    expect(screen.queryByRole("button", { name: "展开全部配额" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "切换到精简视图" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "立即刷新" })).not.toBeInTheDocument();
+
     // No Full chrome in the docked strip.
     expect(screen.queryByText("OpenCode Quota Checker")).not.toBeInTheDocument();
     expect(screen.queryByText("最高 4.0%")).not.toBeInTheDocument();
   });
 
-  it("docked Expand restores the configured Full mode", async () => {
-    installInvokeRouter({ floatState: dockedState, usage: usage([windowReport("a", "5 小时", 4)]) });
-    render(<FloatWindow />);
-    fireEvent.click(await screen.findByRole("button", { name: "展开全部配额" }));
-    await waitFor(() => {
-      expect(tauri.invoke).toHaveBeenCalledWith("set_float_mode", { mode: "full" });
-    });
+  it("reports the measured Docked width to the backend", async () => {
+    const rect = (width: number) =>
+      ({
+        width,
+        height: 0,
+        top: 0,
+        left: 0,
+        right: width,
+        bottom: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    // jsdom has no layout: fake only the out-of-flow clone created by the
+    // measurement, and leave everything else at zero.
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: Element) {
+        const element = this as HTMLElement;
+        return element.classList.contains("float-docked-content") &&
+          element.style.width === "max-content"
+          ? rect(220)
+          : rect(0);
+      });
+    try {
+      installInvokeRouter({
+        floatState: dockedState,
+        usage: usage([windowReport("a", "5 小时", 4)]),
+      });
+      render(<FloatWindow />);
+      await waitFor(() => {
+        expect(tauri.invoke).toHaveBeenCalledWith("set_float_docked_width", {
+          width: 268,
+        });
+      });
+    } finally {
+      rectSpy.mockRestore();
+    }
   });
 });
 
@@ -208,7 +249,7 @@ describe("FloatWindow drag regions", () => {
       usage: usage([windowReport("a", "5 小时", 4)]),
     });
     const { container } = render(<FloatWindow />);
-    await screen.findByRole("button", { name: "展开全部配额" });
+    await screen.findByRole("progressbar", { name: "5 小时 已用 4.0%" });
 
     expect(container.querySelector(".float-docked")).toHaveAttribute(
       "data-tauri-drag-region",

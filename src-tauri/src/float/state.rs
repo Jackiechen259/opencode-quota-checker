@@ -60,13 +60,19 @@ pub struct FloatStateDto {
 ///
 /// * `Docked` is only reachable while `docked == true`;
 /// * the position debounce accepts only the newest move generation;
-/// * closing cancels any pending position write.
+/// * closing cancels any pending position write;
+/// * `docked_width` only feeds the native size and stays out of the DTO.
 #[derive(Debug, Default)]
 pub struct FloatRuntime {
     open: bool,
     docked: bool,
     position_dirty: bool,
     position_generation: u64,
+    /// Native Docked width measured by the webview, if it has reported one.
+    ///
+    /// This never leaves the process through the DTO and is never persisted;
+    /// it only feeds the native size while the window is Docked.
+    docked_width: Option<f64>,
 }
 
 impl FloatRuntime {
@@ -101,6 +107,20 @@ impl FloatRuntime {
     /// Leaves the docked presentation when the configured layout changes.
     pub fn clear_docked(&mut self) -> bool {
         self.set_docked(false)
+    }
+
+    /// The last native width measured by the webview for the Docked strip.
+    pub fn docked_width(&self) -> Option<f64> {
+        self.docked_width
+    }
+
+    /// Records a measured Docked width; returns `true` when it changed.
+    pub fn set_docked_width(&mut self, width: f64) -> bool {
+        if self.docked_width == Some(width) {
+            return false;
+        }
+        self.docked_width = Some(width);
+        true
     }
 
     /// The presentation mode implied by the persisted layout and dock flag.
@@ -216,6 +236,21 @@ mod tests {
         assert!(!runtime.set_docked(true));
         assert!(runtime.clear_docked());
         assert!(!runtime.clear_docked());
+    }
+
+    #[test]
+    fn docked_width_reports_only_real_changes_and_never_leaks_into_the_dto() {
+        let mut runtime = FloatRuntime::default();
+        assert_eq!(runtime.docked_width(), None);
+
+        assert!(runtime.set_docked_width(264.0));
+        assert_eq!(runtime.docked_width(), Some(264.0));
+        assert!(!runtime.set_docked_width(264.0));
+        assert!(runtime.set_docked_width(300.0));
+
+        let dto = runtime.snapshot(FloatLayout::Full);
+        assert_eq!(dto.presentation_mode, FloatPresentation::Full);
+        assert!(!dto.top_docked);
     }
 
     #[test]

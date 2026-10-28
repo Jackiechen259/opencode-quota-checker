@@ -33,6 +33,8 @@ export default [
         Number: "readonly",
         String: "readonly",
         HTMLElement: "readonly",
+        Element: "readonly",
+        DOMRect: "readonly",
         EventTarget: "readonly",
         MouseEvent: "readonly",
         KeyboardEvent: "readonly",

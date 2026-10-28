@@ -71,7 +71,6 @@ export function FloatWindow() {
           report={report}
           loading={loading}
           error={error?.user ?? null}
-          onExpand={() => changeMode("full")}
           onClose={close}
         />
       </div>
