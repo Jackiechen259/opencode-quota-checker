@@ -2,17 +2,20 @@
 //!
 //! These pin the contract that fixes the "Full UI rendered inside a Compact
 //! native window" bug: `AppConfig.float_mode` is the single persisted layout,
-//! `FloatRuntime` only carries the transient dock flag, and the DTO's
-//! `presentation_mode` is always derived from those two. Docked must never be
-//! persisted, and the native size helpers must stay deterministic.
+//! `FloatRuntime` only carries the transient dock edge, and the DTO's
+//! `presentation_mode` is always derived from those two. Docked presentations
+//! must never be persisted, and the native size helpers must stay
+//! deterministic.
 
 use opencode_core::{QuotaService, UsageReport, WindowReport};
 use opencode_quota_checker_lib::config::{AppConfig, FloatLayout};
 use opencode_quota_checker_lib::float::layout::{
-    full_height, quota_count, size, COMPACT_HEIGHT, DOCKED_HEIGHT, FLOAT_WIDTH, FULL_MAX_HEIGHT,
-    FULL_MIN_HEIGHT, SKELETON_CARD_COUNT,
+    full_height, quota_count, size, COMPACT_HEIGHT, DOCKED_THICKNESS, FLOAT_WIDTH, FULL_MAX_HEIGHT,
+    FULL_MIN_HEIGHT, SIDE_DOCKED_DEFAULT_LENGTH, SKELETON_CARD_COUNT,
 };
-use opencode_quota_checker_lib::float::state::{FloatPresentation, FloatRuntime};
+use opencode_quota_checker_lib::float::state::{
+    DockPlan, FloatEdge, FloatPresentation, FloatRuntime,
+};
 use opencode_quota_checker_lib::state::AppState;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -54,8 +57,8 @@ fn configured(state: &AppState) -> FloatLayout {
     state.config.lock().expect("config mutex").float_mode
 }
 
-fn docked(state: &AppState) -> bool {
-    state.floating.lock().expect("float mutex").is_docked()
+fn dock_edge(state: &AppState) -> Option<FloatEdge> {
+    state.floating.lock().expect("float mutex").dock_edge()
 }
 
 #[test]
@@ -65,7 +68,46 @@ fn initial_snapshot_is_full_and_undocked() {
     assert!(!dto.open);
     assert_eq!(dto.configured_mode, FloatLayout::Full);
     assert_eq!(dto.presentation_mode, FloatPresentation::Full);
-    assert!(!dto.top_docked);
+    assert!(
+        !dto.dock_hover,
+        "nothing can be hovering an unopened window"
+    );
+    assert_eq!(dock_edge(&state), None);
+}
+
+#[test]
+fn dock_hover_expands_a_docked_strip_only() {
+    let state = state();
+    {
+        let mut runtime = state.floating.lock().expect("float mutex");
+        // Undocked: the flag is recorded but never reaches the DTO.
+        runtime.set_dock_hover(true, Some(120));
+    }
+    assert!(!state.float_dto().dock_hover);
+
+    {
+        let mut runtime = state.floating.lock().expect("float mutex");
+        runtime.apply_dock_plan(DockPlan::docked(FloatEdge::Left));
+        runtime.set_dock_hover(true, Some(300));
+    }
+    let dto = state.float_dto();
+    assert!(dto.dock_hover);
+    assert_eq!(
+        dto.presentation_mode,
+        FloatPresentation::DockedLeft,
+        "the hover card is a presentation flag, not a mode"
+    );
+    assert_eq!(
+        configured(&state),
+        FloatLayout::Full,
+        "hovering must never persist anything"
+    );
+
+    // Un-docking drops the card with the docked presentation.
+    state.floating.lock().expect("float mutex").clear_docked();
+    let dto = state.float_dto();
+    assert!(!dto.dock_hover);
+    assert_eq!(dto.presentation_mode, FloatPresentation::Full);
 }
 
 #[test]
@@ -73,7 +115,7 @@ fn layout_transitions_full_to_compact_and_back() {
     let state = state();
     state.apply_float_layout(FloatLayout::Compact);
     assert_eq!(configured(&state), FloatLayout::Compact);
-    assert!(!docked(&state));
+    assert_eq!(dock_edge(&state), None);
     let dto = state.float_dto();
     assert_eq!(dto.configured_mode, FloatLayout::Compact);
     assert_eq!(dto.presentation_mode, FloatPresentation::Compact);
@@ -89,48 +131,103 @@ fn layout_transitions_full_to_compact_and_back() {
 fn docking_is_transient_and_layout_change_undocks() {
     let state = state();
     state.apply_float_layout(FloatLayout::Compact);
-    state.floating.lock().expect("float mutex").set_docked(true);
+    state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .apply_dock_plan(DockPlan::docked(FloatEdge::Top));
 
     assert_eq!(
         configured(&state),
         FloatLayout::Compact,
         "docking must not persist"
     );
-    assert!(docked(&state));
+    assert_eq!(dock_edge(&state), Some(FloatEdge::Top));
     let dto = state.float_dto();
     assert_eq!(dto.configured_mode, FloatLayout::Compact);
-    assert_eq!(dto.presentation_mode, FloatPresentation::Docked);
-    assert!(dto.top_docked);
+    assert_eq!(dto.presentation_mode, FloatPresentation::DockedTop);
 
     // Choosing a layout leaves the transient docked presentation.
     state.apply_float_layout(FloatLayout::Full);
-    assert!(!docked(&state));
+    assert_eq!(dock_edge(&state), None);
     let dto = state.float_dto();
     assert_eq!(dto.configured_mode, FloatLayout::Full);
     assert_eq!(dto.presentation_mode, FloatPresentation::Full);
 }
 
 #[test]
-fn both_configured_layouts_can_dock_and_undock() {
+fn every_edge_has_its_own_docked_presentation() {
     let state = state();
-    for layout in [FloatLayout::Full, FloatLayout::Compact] {
-        state.apply_float_layout(layout);
-        state.floating.lock().expect("float mutex").set_docked(true);
+    for (edge, presentation) in [
+        (FloatEdge::Top, FloatPresentation::DockedTop),
+        (FloatEdge::Left, FloatPresentation::DockedLeft),
+        (FloatEdge::Right, FloatPresentation::DockedRight),
+    ] {
+        state.apply_float_layout(FloatLayout::Compact);
+        state
+            .floating
+            .lock()
+            .expect("float mutex")
+            .apply_dock_plan(DockPlan::docked(edge));
+        let dto = state.float_dto();
         assert_eq!(
-            state.float_dto().presentation_mode,
-            FloatPresentation::Docked
+            dto.configured_mode,
+            FloatLayout::Compact,
+            "the configured layout survives every dock edge"
+        );
+        assert_eq!(dto.presentation_mode, presentation);
+        assert_eq!(
+            dto.presentation_mode.docked_edge(),
+            Some(edge),
+            "the presentation carries its own edge"
         );
 
         state.floating.lock().expect("float mutex").clear_docked();
-        assert_eq!(state.float_dto().presentation_mode, layout.into());
+        assert_eq!(
+            state.float_dto().presentation_mode,
+            FloatPresentation::Compact
+        );
     }
+}
+
+#[test]
+fn a_pending_side_rail_stays_docked_until_it_expands() {
+    let state = state();
+    state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .apply_dock_plan(DockPlan::pending_undock(FloatEdge::Right));
+
+    let dto = state.float_dto();
+    assert_eq!(
+        dto.presentation_mode,
+        FloatPresentation::DockedRight,
+        "the rail presentation must follow the native rail size while pending"
+    );
+    {
+        let mut runtime = state.floating.lock().expect("float mutex");
+        assert!(runtime.is_undock_pending());
+        assert!(!runtime.is_dock_guarded());
+        assert!(runtime.apply_dock_plan(DockPlan::undocked(true)));
+    }
+    assert_eq!(state.float_dto().presentation_mode, FloatPresentation::Full);
+    assert!(state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .is_dock_guarded());
 }
 
 #[test]
 fn docked_is_never_written_to_the_persisted_config() {
     let state = state();
     state.apply_float_layout(FloatLayout::Full);
-    state.floating.lock().expect("float mutex").set_docked(true);
+    state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .apply_dock_plan(DockPlan::docked(FloatEdge::Left));
     assert_eq!(configured(&state), FloatLayout::Full);
 
     // Legacy files may contain `"docked"`; it loads as the persisted Compact
@@ -175,9 +272,19 @@ fn size_for_fixed_modes_is_constant() {
         (FLOAT_WIDTH, COMPACT_HEIGHT)
     );
     assert_eq!(
-        size(FloatPresentation::Docked, 2),
-        (FLOAT_WIDTH, DOCKED_HEIGHT)
+        size(FloatPresentation::DockedTop, 2),
+        (FLOAT_WIDTH, DOCKED_THICKNESS)
     );
+    for presentation in [
+        FloatPresentation::DockedLeft,
+        FloatPresentation::DockedRight,
+    ] {
+        assert_eq!(
+            size(presentation, 2),
+            (DOCKED_THICKNESS, SIDE_DOCKED_DEFAULT_LENGTH),
+            "side rails are vertical"
+        );
+    }
 }
 
 #[test]
@@ -196,13 +303,16 @@ fn float_dto_never_leaks_a_stale_mode() {
     let dto = state.float_dto();
     assert_eq!(dto.configured_mode, configured(&state));
     assert_eq!(dto.presentation_mode, FloatPresentation::Compact);
-    assert!(!dto.top_docked);
+    assert_eq!(dock_edge(&state), None);
 
-    state.floating.lock().expect("float mutex").set_docked(true);
+    state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .apply_dock_plan(DockPlan::docked(FloatEdge::Right));
     let dto = state.float_dto();
     assert_eq!(dto.configured_mode, configured(&state));
-    assert_eq!(dto.presentation_mode, FloatPresentation::Docked);
-    assert!(dto.top_docked);
+    assert_eq!(dto.presentation_mode, FloatPresentation::DockedRight);
 }
 
 #[test]

@@ -42,12 +42,26 @@ pub fn set_float_mode(app: AppHandle, mode: FloatLayout) -> Result<(), String> {
     Ok(())
 }
 
-/// Applies the content-fitted width measured by the Docked view.
+/// Applies the content-fitted strip length measured by the docked view.
 ///
-/// The backend still owns the native size: this only records the requested
-/// width and resizes while the window is Docked (clamped in `float::layout`).
+/// The length runs along the strip axis: the width of the top strip, the
+/// height of a side rail. The backend still owns the native size: this only
+/// records the requested length and resizes while docked (clamped in
+/// `float::layout`).
 #[tauri::command]
-pub fn set_float_docked_width(app: AppHandle, width: f64) -> Result<(), String> {
-    controller::set_docked_width(&app, width);
+pub fn set_float_docked_length(app: AppHandle, length: f64) -> Result<(), String> {
+    controller::set_docked_length(&app, length);
+    Ok(())
+}
+
+/// Expands or collapses the hover card of the docked strip.
+///
+/// The webview reports the hover intent only; the controller owns the native
+/// size, the anchored position and the corner region, and reports the result
+/// back through `float://state` (`dockHover`). A request is ignored while the
+/// window is not docked, so a stale hover cannot resize an un-docked card.
+#[tauri::command]
+pub fn set_float_dock_hover(app: AppHandle, hover: bool) -> Result<(), String> {
+    controller::set_dock_hover(&app, hover);
     Ok(())
 }

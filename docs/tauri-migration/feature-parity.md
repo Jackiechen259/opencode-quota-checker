@@ -42,12 +42,13 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started · ➖ not applicable
 | Tray menu (Show/Hide Main, Toggle Float, Quit) | `tray-icon` + mpsc | Tauri tray + menu events | ✅ |
 | Tray left-click shows main | — (menu only) | Tauri `TrayIconEvent::Click` | ✅ |
 | Tray float checkmark sync | `set_float_open` | Tauri `MenuItem::set_checked` | ✅ |
-| Floating window (Full/Compact/Docked) | Iced `view/float.rs` + `window/float_window.rs` | Tauri `float::controller` + React `FloatWindow.tsx` | ✅ |
+| Floating window (Full/Compact/docked top/left/right) | Iced `view/float.rs` + `window/float_window.rs` | Tauri `float::controller` + React `FloatWindow.tsx` | ✅ |
 | Float always-on-top / borderless / non-resizable | Iced settings | Tauri window config | ✅ |
 | Float position persistence + restore | config `float_position` | same config field, Tauri adapter | ✅ |
 | Float position clamp to work area | Windows `SetWindowPos` clamp / Iced clamp | Windows adapter + Tauri monitor API | ✅ |
-| Top docking (hysteresis 18/24 px, DPI-scaled) | `is_top_docked_at_scale` | `float::layout::is_top_docked` | ✅ |
-| Snap to monitor top | Windows `SetWindowPos` | Windows adapter | ✅ |
+| Top docking (hysteresis 18/24 px, DPI-scaled) | `is_top_docked_at_scale` | `float::layout::plan_dock` | ✅ |
+| Side docking (left/right vertical rail, deferred expansion) | — (new) | `float::layout::plan_dock` + `controller::commit_undock` | ✅ |
+| Snap to monitor top / sides | Windows `SetWindowPos` | `controller::snap_to_edge` (work area + Tauri position API) | ✅ |
 | Rounded float card (Windows) | `CreateRoundRectRgn` | Windows adapter | ✅ |
 | Monitoring (interval polling) | Iced subscription `MonitorTick` | Rust tokio background task | ✅ |
 | Monitoring while main window hidden | Iced daemon subscriptions | Rust task independent of windows | ✅ |

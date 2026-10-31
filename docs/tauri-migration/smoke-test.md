@@ -60,24 +60,32 @@ Legend: ☐ unchecked · ☑ passed · ❌ failed (record details)
 ### Floating window
 - ☐ Toggle from the header button and the tray; checkmark stays in sync.
 - ☐ Full (392 wide; dynamic height 280–560 by quota count), Compact
-  (392×168), Docked (24 px tall, width fits the content 96–392) sizes
-  correct; height never clips cards.
+  (392×168), Docked top (24 px tall, width fits the content 96–392) and Docked
+  side rails (24 px wide, height fits the content 96–560) sizes correct; height
+  never clips cards.
 - ☐ No dark/black border around the card: the webview surface fills the native
   window exactly (shadow disabled; only the 1px outline + rounded region).
 - ☐ Always on top over other apps.
 - ☐ Drag by any non-button part of the header (logo, title, status, spacer,
-  padding) in Full/Compact, and by any non-button part of the Docked strip;
-  every button stays clickable.
-- ☐ Full → Compact → Full and Docked close; the UI never shows
-  Full inside a Compact-sized window.
+  padding) in Full/Compact, and by any non-button part of a docked strip; every
+  button stays clickable.
+- ☐ Full → Compact → Full and docked-close; the UI never shows Full inside a
+  Compact-sized window (or Full inside a 24 px rail).
 - ☐ Docked: mini usage progress bar visible next to the highest-risk window;
-  no expand button — dragging away from the top un-docks to the configured
-  Full/Compact mode; × closes.
-- ☐ Docked width hugs the content (no wide empty band); a different
+  no expand button; × closes. Side rails use vertical writing: every glyph,
+  including the percentage digits, stands upright and reads top-to-bottom, and
+  neither the text nor the × is clipped.
+- ☐ Docked length hugs the content (no wide empty band); a different
   highest-risk label or a longer remaining value resizes the strip without
   clipping the text or the ×.
+- ☐ Docked hover card: resting the pointer on a top strip or a side rail grows
+  the window into the 392×176 card with three quota rings (5 小时 / 近一周 /
+  近一月) and the remaining amount; leaving it collapses back to the same strip
+  position. A cursor merely crossing the 24 px strip does not flash the card.
+  The card fits on screen when the strip sits near a screen corner, and the
+  strip does not drift after collapsing.
 - ☐ Restart with `float_open`: the saved mode (Full/Compact) is restored;
-  Docked is never persisted.
+  docked presentations are never persisted.
 - ☐ Open/close the float window, then save Settings: the tray checkmark and
   `float_open` are not overwritten by the stale settings snapshot.
 - ☐ Quit with the float open, relaunch: it reopens. Quit with it closed:
@@ -87,9 +95,19 @@ Legend: ☐ unchecked · ☑ passed · ❌ failed (record details)
 - ☐ Mixed-DPI monitors (100–200%): no WM_DPICHANGED feedback loop, no
   jumps; logical size, region radius and dock thresholds scale.
 - ☐ Top docking: dragging near the monitor top (≤18 px, DPI-scaled) snaps to
-  Docked; releasing requires the 24 px hysteresis to leave.
+  the top strip; releasing requires the 24 px hysteresis to leave.
+- ☐ Left/right docking: dragging within 18 px of the left/right work-area edge
+  (DPI-scaled) snaps to a vertical rail flush with that edge.
+- ☐ Side rail drag-out: the rail follows the cursor while the button is held,
+  then expands to the configured layout where it was dropped (clamped on
+  screen). It must not jump to the opposite edge or stay a thin rail.
+- ☐ No immediate re-dock: after a rail is dragged out and released, the expanded
+  card does not collapse back into a rail on the first drag pixel; moving it
+  clear of the edge and back re-docks it.
+- ☐ Dragging along a docked edge repositions the strip and it settles flush to
+  that edge on release.
 - ☐ Rounded corners (16 px Full/Compact, 12 px Docked capsule) on the float
-  card after resize/DPI changes.
+  card after resize/DPI changes; side rails are capsules on their short axis.
 - ☐ Many quota windows (5+): the quota list scrolls inside the window;
   header/meta/footer stay fixed.
 

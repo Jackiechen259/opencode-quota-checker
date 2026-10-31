@@ -42,8 +42,10 @@ export const api = {
   openFloatWindow: () => invoke<void>("open_float_window"),
   closeFloatWindow: () => invoke<void>("close_float_window"),
   setFloatMode: (mode: PersistedFloatMode) => invoke<void>("set_float_mode", { mode }),
-  setFloatDockedWidth: (width: number) =>
-    invoke<void>("set_float_docked_width", { width }),
+  setFloatDockedLength: (length: number) =>
+    invoke<void>("set_float_docked_length", { length }),
+  /** Asks the backend to expand/collapse the docked strip's hover card. */
+  setFloatDockHover: (hover: boolean) => invoke<void>("set_float_dock_hover", { hover }),
 
   getUpdateState: () => invoke<UpdateStateDto>("get_update_state"),
   checkForUpdate: () => invoke<void>("check_for_update"),

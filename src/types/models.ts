@@ -6,12 +6,19 @@
 // The Rust integration tests in `src-tauri/tests/state.rs` assert the same
 // contract on the Rust side — change both together.
 
-export type FloatMode = "full" | "compact" | "docked";
+export type FloatMode =
+  | "full"
+  | "compact"
+  | "docked_top"
+  | "docked_left"
+  | "docked_right";
+/** Screen edge a docked floating window is snapped to. */
+export type FloatDockEdge = "top" | "left" | "right";
 /**
- * Modes that may be persisted to the config. `docked` is a transient
- * presentation (snapped to the monitor top) and must never be written.
+ * Modes that may be persisted to the config. The docked presentations are
+ * transient (the window is snapped to a screen edge) and must never be written.
  */
-export type PersistedFloatMode = Exclude<FloatMode, "docked">;
+export type PersistedFloatMode = "full" | "compact";
 /**
  * What the caption × / Alt+F4 does with the main window.
  *
@@ -105,16 +112,24 @@ export interface MonitorStatusDto {
  * Floating-window snapshot crossing the IPC boundary.
  *
  * `configuredMode` is the persisted layout (full | compact — docked is never
- * persisted) and `presentationMode` is what the UI must render right now
- * (docked while the window is snapped to the monitor top, otherwise the
- * configured mode). The frontend renders ONLY from `presentationMode` and
- * never derives it, so the native window size and the React UI always agree.
+ * persisted) and `presentationMode` is what the UI must render right now. A
+ * docked presentation already names its edge (`docked_top`, `docked_left`,
+ * `docked_right`), so there is no second orientation field that could disagree
+ * with the native window size. The frontend renders ONLY from
+ * `presentationMode` and never derives it.
  */
 export interface FloatStateDto {
   open: boolean;
   configuredMode: PersistedFloatMode;
   presentationMode: FloatMode;
-  topDocked: boolean;
+  /**
+   * The docked strip is expanded into its hover card.
+   *
+   * A transient presentation of a docked window (never a fourth layout, never
+   * persisted). The backend resizes the native window for it; the view renders
+   * the ring card from this flag and never keeps a hover state of its own.
+   */
+  dockHover: boolean;
 }
 
 export interface UsageDto {

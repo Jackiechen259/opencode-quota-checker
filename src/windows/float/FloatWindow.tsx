@@ -3,7 +3,7 @@
 // State architecture:
 //
 //   AppConfig.float_mode  ── persisted exactly once (full | compact)
-//   FloatRuntime.docked   ── transient (native drag / dock command)
+//   FloatRuntime dock edge ── transient (native drag / dock command)
 //   presentationMode      ── derived in the BACKEND, delivered in the DTO
 //   native window size    ── set by the backend from the same derivation
 //
@@ -17,10 +17,10 @@ import { useQuota } from "../../hooks/useApp";
 import { api } from "../../services/tauri";
 import type { PersistedFloatMode } from "../../types/models";
 import { CompactView } from "./CompactView";
-import { DockedView } from "./DockedView";
+import { DockedWindow } from "./DockedWindow";
 import { FloatHeader } from "./FloatHeader";
 import { FullView } from "./FullView";
-import { highestWindow } from "./floatLayout";
+import { dockedEdge, highestWindow } from "./floatLayout";
 import { useFloatSnapshot } from "./useFloatSnapshot";
 
 function BootShell() {
@@ -64,16 +64,20 @@ export function FloatWindow() {
     hasData: report !== null,
   };
 
-  if (presentationMode === "docked") {
+  // A docked presentation already names its edge (docked_top/left/right); the
+  // docked shell renders either the strip or its hover card from the same
+  // backend snapshot.
+  const edge = dockedEdge(presentationMode);
+  if (edge !== null) {
     return (
-      <div className="float-window float-window--docked">
-        <DockedView
-          report={report}
-          loading={loading}
-          error={error?.user ?? null}
-          onClose={close}
-        />
-      </div>
+      <DockedWindow
+        edge={edge}
+        dockHover={snapshot?.dockHover ?? false}
+        report={report}
+        loading={loading}
+        error={error?.user ?? null}
+        onClose={close}
+      />
     );
   }
 

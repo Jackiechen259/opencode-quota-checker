@@ -1,9 +1,10 @@
 //! Native Windows adapters for the borderless floating window.
 //!
-//! Physical-pixel position restore clamped to the monitor work area and
-//! snapping to the monitor top. Rounded-window shaping lives in the shared
-//! [`crate::window::win`] helper because the main window needs the same
-//! native region.
+//! Physical-pixel work-area queries, position restore clamped to the work area,
+//! and the drag-state probe used by the deferred side un-dock. Edge snapping
+//! itself is platform-neutral and lives in [`crate::float::controller`];
+//! rounded-window shaping lives in the shared [`crate::window::win`] helper
+//! because the main window needs the same native region.
 
 use crate::config::FloatPosition;
 use crate::window::win::hwnd;
@@ -12,38 +13,38 @@ use windows::Win32::Foundation::{HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowRect, SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
 };
 
-/// Returns the work-area top of the monitor under the window, in physical
-/// (virtual-desktop) pixels.
-pub fn work_area_top(window: &WebviewWindow) -> Option<i32> {
+/// Returns the work area of the monitor under the window as
+/// `(left, top, right, bottom)` in physical (virtual-desktop) pixels.
+///
+/// The rectangle excludes the taskbar and other appbars, which is what every
+/// docking threshold and snap is measured against.
+pub fn work_area(window: &WebviewWindow) -> Option<(i32, i32, i32, i32)> {
     let hwnd = hwnd(window)?;
-    native_rects(hwnd).map(|(_, work_rect)| work_rect.top)
+    native_rects(hwnd).map(|(_, work_rect)| {
+        (
+            work_rect.left,
+            work_rect.top,
+            work_rect.right,
+            work_rect.bottom,
+        )
+    })
 }
 
-/// Snaps the window to the top of its current monitor work area.
-pub fn snap_to_monitor_top(window: &WebviewWindow) {
-    let Some(hwnd) = hwnd(window) else {
-        return;
-    };
-    let Some((window_rect, work_rect)) = native_rects(hwnd) else {
-        return;
-    };
-    // SAFETY: `hwnd` belongs to the live window and the flags keep its size,
-    // z-order, and activation state unchanged.
-    let _ = unsafe {
-        SetWindowPos(
-            hwnd,
-            None,
-            window_rect.left,
-            work_rect.top,
-            0,
-            0,
-            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
-        )
-    };
+/// Whether the primary mouse button is still held down.
+///
+/// The dock-settle task uses this to keep a side rail collapsed until the
+/// native move loop has ended: while the button is down the move loop owns the
+/// window position, so expanding a right-edge rail mid-drag would leave most of
+/// the card off-screen (and the loop would undo any repositioning anyway).
+pub fn primary_button_down() -> bool {
+    // SAFETY: `GetAsyncKeyState` only reads the current key state and has no
+    // preconditions.
+    unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0 }
 }
 
 /// Restores a saved physical position, clamped to the nearest monitor work

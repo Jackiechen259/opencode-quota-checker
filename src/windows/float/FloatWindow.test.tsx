@@ -17,21 +17,43 @@ const fullState: FloatStateDto = {
   open: true,
   configuredMode: "full",
   presentationMode: "full",
-  topDocked: false,
+  dockHover: false,
 };
 
 const compactState: FloatStateDto = {
   open: true,
   configuredMode: "compact",
   presentationMode: "compact",
-  topDocked: false,
+  dockHover: false,
 };
 
-const dockedState: FloatStateDto = {
+const dockedTopState: FloatStateDto = {
   open: true,
   configuredMode: "full",
-  presentationMode: "docked",
-  topDocked: true,
+  presentationMode: "docked_top",
+  dockHover: false,
+};
+
+const dockedLeftState: FloatStateDto = {
+  open: true,
+  configuredMode: "full",
+  presentationMode: "docked_left",
+  dockHover: false,
+};
+
+const dockedRightState: FloatStateDto = {
+  open: true,
+  configuredMode: "full",
+  presentationMode: "docked_right",
+  dockHover: false,
+};
+
+/** The backend has already grown the window into the hover card. */
+const dockedHoverState: FloatStateDto = {
+  open: true,
+  configuredMode: "full",
+  presentationMode: "docked_top",
+  dockHover: true,
 };
 
 function windowReport(key: string, label: string, percent: number): WindowReport {
@@ -77,6 +99,7 @@ function installInvokeRouter(overrides: {
       case "get_usage":
         return overrides.usage ?? noUsage;
       case "set_float_mode":
+      case "set_float_dock_hover":
       case "close_float_window":
       case "refresh_usage":
         return undefined;
@@ -164,7 +187,7 @@ describe("FloatWindow state architecture", () => {
   });
 
   it("renders the Docked strip with a mini progress bar and no expand button", async () => {
-    installInvokeRouter({ floatState: dockedState, usage: usage([windowReport("a", "5 小时", 4)]) });
+    installInvokeRouter({ floatState: dockedTopState, usage: usage([windowReport("a", "5 小时", 4)]) });
     render(<FloatWindow />);
     expect(await screen.findByText("5 小时")).toBeInTheDocument();
     expect(screen.getByText("4.0%")).toBeInTheDocument();
@@ -184,44 +207,218 @@ describe("FloatWindow state architecture", () => {
     expect(screen.queryByText("最高 4.0%")).not.toBeInTheDocument();
   });
 
-  it("reports the measured Docked width to the backend", async () => {
-    const rect = (width: number) =>
+  it.each([
+    ["top", dockedTopState],
+    ["left", dockedLeftState],
+    ["right", dockedRightState],
+  ])("reports the measured strip length for the %s edge to the backend", async (_edge, state) => {
+    const rect = (width: number, height: number) =>
       ({
         width,
-        height: 0,
+        height,
         top: 0,
         left: 0,
         right: width,
-        bottom: 0,
+        bottom: height,
         x: 0,
         y: 0,
         toJSON: () => ({}),
       }) as DOMRect;
-    // jsdom has no layout: fake only the out-of-flow clone created by the
-    // measurement, and leave everything else at zero.
+    // jsdom has no layout: fake only the out-of-flow clones created by the
+    // measurement, and leave everything else at zero. The top strip measures a
+    // horizontal `max-content` width, a side rail a vertical `max-content`
+    // height.
     const rectSpy = vi
       .spyOn(Element.prototype, "getBoundingClientRect")
       .mockImplementation(function (this: Element) {
         const element = this as HTMLElement;
-        return element.classList.contains("float-docked-content") &&
-          element.style.width === "max-content"
-          ? rect(220)
-          : rect(0);
+        if (element.classList.contains("float-docked-content")) {
+          if (element.style.width === "max-content") return rect(220, 0);
+          if (element.style.height === "max-content") return rect(0, 220);
+        }
+        return rect(0, 0);
       });
     try {
       installInvokeRouter({
-        floatState: dockedState,
+        floatState: state,
         usage: usage([windowReport("a", "5 小时", 4)]),
       });
       render(<FloatWindow />);
       await waitFor(() => {
-        expect(tauri.invoke).toHaveBeenCalledWith("set_float_docked_width", {
-          width: 268,
+        // The same length feeds the top strip's width and a side rail's
+        // height; the backend decides which axis it applies to.
+        expect(tauri.invoke).toHaveBeenCalledWith("set_float_docked_length", {
+          length: 268,
         });
       });
     } finally {
       rectSpy.mockRestore();
     }
+  });
+
+  it("transposes the progress meter and uses vertical writing in a side rail", async () => {
+    installInvokeRouter({
+      floatState: dockedLeftState,
+      usage: usage([windowReport("a", "5 小时", 4)]),
+    });
+    const { container } = render(<FloatWindow />);
+    const progress = await screen.findByRole("progressbar", {
+      name: "5 小时 已用 4.0%",
+    });
+    expect(container.querySelector(".float-docked-content")).toHaveClass(
+      "float-docked-content--side",
+    );
+    expect(progress.firstElementChild).toHaveStyle({ width: "100%", height: "4%" });
+  });
+});
+
+describe("FloatWindow side rails", () => {
+  it.each([
+    ["left", dockedLeftState],
+    ["right", dockedRightState],
+  ])("renders the %s rail as a vertical read-only strip", async (edge, state) => {
+    installInvokeRouter({
+      floatState: state,
+      usage: usage([windowReport("a", "5 小时", 4)]),
+    });
+    const { container } = render(<FloatWindow />);
+    expect(await screen.findByText("5 小时")).toBeInTheDocument();
+
+    const strip = container.querySelector(".float-docked");
+    expect(strip).toHaveClass(`float-docked--${edge}`);
+    // The whole rail drags, and removing it from the edge expands it.
+    expect(strip).toHaveAttribute("data-tauri-drag-region", "deep");
+
+    // Same read-only strip as the top edge: no Full/Compact chrome, and the
+    // only control is close.
+    expect(screen.queryByText("OpenCode Quota Checker")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "展开全部配额" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "切换到精简视图" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "立即刷新" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关闭悬浮窗" })).toBeInTheDocument();
+  });
+
+  it("switches from a top strip to a side rail on float://state", async () => {
+    installInvokeRouter({
+      floatState: dockedTopState,
+      usage: usage([windowReport("a", "5 小时", 4)]),
+    });
+    const { container } = render(<FloatWindow />);
+    expect(await screen.findByRole("progressbar", { name: "5 小时 已用 4.0%" })).toBeInTheDocument();
+    expect(container.querySelector(".float-docked")).toHaveClass("float-docked--top");
+
+    act(() => {
+      tauri.emit(EVENT.FLOAT_STATE, dockedRightState);
+    });
+    await waitFor(() => {
+      expect(container.querySelector(".float-docked")).toHaveClass("float-docked--right");
+    });
+    expect(container.querySelector(".float-docked")).not.toHaveClass("float-docked--top");
+  });
+});
+
+describe("FloatWindow docked hover card", () => {
+  it("asks the backend to expand only after the pointer rests on the strip", async () => {
+    installInvokeRouter({
+      floatState: dockedTopState,
+      usage: usage([windowReport("a", "5 小时", 4)]),
+    });
+    const { container } = render(<FloatWindow />);
+    await screen.findByRole("progressbar", { name: "5 小时 已用 4.0%" });
+    const root = container.querySelector(".float-window") as HTMLElement;
+
+    fireEvent.pointerOver(root);
+    // Hover intent: a pointer passing over the 24 px strip must not flash the
+    // card open in the native window.
+    expect(tauri.invoke).not.toHaveBeenCalledWith("set_float_dock_hover", { hover: true });
+
+    await waitFor(() =>
+      expect(tauri.invoke).toHaveBeenCalledWith("set_float_dock_hover", { hover: true }),
+    );
+  });
+
+  it("renders one ring per quota window once the backend expands the window", async () => {
+    installInvokeRouter({
+      floatState: dockedHoverState,
+      usage: usage([
+        windowReport("monthly", "近一月", 19),
+        windowReport("rolling-5h", "5 小时", 78),
+        windowReport("weekly", "近一周", 52),
+      ]),
+    });
+    const { container } = render(<FloatWindow />);
+
+    expect(await screen.findByText("配额概览")).toBeInTheDocument();
+    // The collapsed strip is replaced by the card, not layered under it.
+    expect(container.querySelector(".float-dock-card")).not.toBeNull();
+    expect(container.querySelector(".float-docked")).toBeNull();
+
+    // Three rings in the canonical 5h / weekly / monthly order.
+    expect(container.querySelectorAll(".float-dock-ring-gauge")).toHaveLength(3);
+    expect(screen.getByRole("progressbar", { name: "5 小时 已用 78.0%" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "近一周 已用 52.0%" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "近一月 已用 19.0%" })).toBeInTheDocument();
+    expect(screen.getByText("剩余 220")).toBeInTheDocument();
+
+    // The ring arc is a dash offset of the full circumference, so a 78 % window
+    // draws 22 % of it empty.
+    const arc = container.querySelectorAll(".float-dock-ring-fill")[0] as Element;
+    expect(Number(arc.getAttribute("stroke-dashoffset"))).toBeGreaterThan(0);
+    expect(Number(arc.getAttribute("stroke-dasharray"))).toBeGreaterThan(0);
+
+    // The card keeps the strip's only control: closing the window.
+    fireEvent.click(screen.getByRole("button", { name: "关闭悬浮窗" }));
+    await waitFor(() => {
+      expect(tauri.invoke).toHaveBeenCalledWith("close_float_window");
+    });
+  });
+
+  it("collapses back to the strip when the pointer leaves", async () => {
+    installInvokeRouter({
+      floatState: dockedHoverState,
+      usage: usage([windowReport("rolling-5h", "5 小时", 78)]),
+    });
+    const { container } = render(<FloatWindow />);
+    await screen.findByText("配额概览");
+
+    fireEvent.pointerOut(container.querySelector(".float-window") as HTMLElement);
+    await waitFor(() =>
+      expect(tauri.invoke).toHaveBeenCalledWith("set_float_dock_hover", { hover: false }),
+    );
+    // The card stays until the backend confirms it shrank the native window.
+    expect(screen.getByText("配额概览")).toBeInTheDocument();
+
+    act(() => {
+      tauri.emit(EVENT.FLOAT_STATE, dockedTopState);
+    });
+    expect(
+      await screen.findByRole("progressbar", { name: "5 小时 已用 78.0%" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("配额概览")).not.toBeInTheDocument();
+  });
+
+  it("keeps the card open while the pointer is re-entering during the grace period", async () => {
+    installInvokeRouter({
+      floatState: dockedHoverState,
+      usage: usage([windowReport("rolling-5h", "5 小时", 78)]),
+    });
+    const { container } = render(<FloatWindow />);
+    await screen.findByText("配额概览");
+    const root = container.querySelector(".float-window") as HTMLElement;
+
+    fireEvent.pointerOut(root);
+    fireEvent.pointerOver(root);
+    // The re-enter cancelled the pending collapse.
+    await new Promise((resolve) => setTimeout(resolve, 320));
+    expect(tauri.invoke).not.toHaveBeenCalledWith("set_float_dock_hover", { hover: false });
+  });
+
+  it("shows the loading state inside the card when there is no report yet", async () => {
+    installInvokeRouter({ floatState: dockedHoverState, usage: loadingUsage });
+    render(<FloatWindow />);
+    expect(await screen.findByText("配额概览")).toBeInTheDocument();
+    expect(screen.getByText("正在同步用量…")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 });
 
@@ -245,7 +442,7 @@ describe("FloatWindow drag regions", () => {
 
   it("makes the whole docked strip draggable", async () => {
     installInvokeRouter({
-      floatState: dockedState,
+      floatState: dockedTopState,
       usage: usage([windowReport("a", "5 小时", 4)]),
     });
     const { container } = render(<FloatWindow />);
@@ -372,7 +569,7 @@ describe("FloatWindow controls", () => {
 
   it("keeps buttons clickable in the docked strip", async () => {
     installInvokeRouter({
-      floatState: dockedState,
+      floatState: dockedTopState,
       usage: usage([windowReport("a", "5 小时", 4)]),
     });
     render(<FloatWindow />);

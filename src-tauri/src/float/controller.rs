@@ -5,6 +5,36 @@
 //! delegate here, so opening, closing, docking, resizing, event emission and
 //! persistence cannot drift apart.
 //!
+//! # Docking and dragging
+//!
+//! Docking is decided on every `Moved` event from the window's distances to the
+//! monitor work-area edges (see `float::layout::plan_dock`):
+//!
+//! * the top edge produces the one-line horizontal strip and un-docks
+//!   immediately — growing back into the configured layout keeps the top-left
+//!   corner, so the card stays on screen;
+//! * the left/right edges produce a vertical rail. Expanding a rail mid-drag
+//!   would put most of a right-edge card off-screen: while the mouse button is
+//!   down, the native move loop owns the window position and undoes any
+//!   repositioning. A side un-dock is therefore *pending* until the drag
+//!   settles, then the rail expands (or docks to another edge it was dropped
+//!   against) and is clamped into the work area.
+//! * after an un-dock, docking stays guarded until the window leaves every snap
+//!   band, so a card dropped flush against an edge cannot immediately collapse
+//!   back into a rail.
+//!
+//! # Docked hover card
+//!
+//! Resting the pointer on a docked strip asks the controller to grow the same
+//! window into a slightly larger card (`layout::dock_hover_size`). The
+//! expansion is anchored to the docked edge (`layout::docked_position`) and its
+//! along-edge coordinate is remembered, so collapsing restores the strip where
+//! it was even when the card had to clamp into the work area. The flag is
+//! transient: the docking decision clears it when the window leaves (or starts
+//! to leave) the edge, a close/rebuild clears it, and the expanded card never
+//! writes `AppConfig.float_position` — that position is derived from the strip
+//! anchor, not chosen by the user.
+//!
 //! # Lock ordering
 //!
 //! `AppState` documents the global order `config → tray → monitor → floating →
@@ -14,8 +44,8 @@
 //! guards have been dropped.
 
 use crate::config::{FloatLayout, FloatPosition};
-use crate::float::layout;
-use crate::float::state::{FloatPresentation, FloatStateDto};
+use crate::float::layout::{self, EdgeDistances};
+use crate::float::state::{DockPlan, FloatEdge, FloatPresentation, FloatStateDto};
 use crate::persistence::persist_config;
 use crate::state::AppState;
 use std::sync::{Arc, Mutex};
@@ -30,6 +60,12 @@ const WINDOW_LABEL: &str = "float";
 
 /// Delay before a drag position is written to disk.
 const POSITION_DEBOUNCE_MS: u64 = 750;
+
+/// Quiet period after the last move before a docked window is settled.
+///
+/// The settle pass re-snaps docked windows flush to their edge and expands a
+/// pending side rail; it must only run once the native move loop has ended.
+const DOCK_SETTLE_MS: u64 = 220;
 
 /// Serializes window creation.
 ///
@@ -53,22 +89,54 @@ fn quota_count_of(state: &AppState) -> usize {
     layout::quota_count(usage.report.as_ref())
 }
 
-/// Native size for a presentation, applying the last measured Docked width.
+/// Native size for a presentation, applying the last measured strip length.
 ///
-/// The webview measures the Docked content and reports the total window
-/// width; until it does (and again after an undock/redock) the stored width
-/// or the default `FLOAT_WIDTH` is used.
-fn size_for(state: &AppState, presentation: FloatPresentation) -> (f64, f64) {
-    if presentation == FloatPresentation::Docked {
-        let width = state
-            .floating
-            .lock()
-            .expect("float mutex")
-            .docked_width()
-            .unwrap_or(layout::FLOAT_WIDTH);
-        return layout::docked_size(width);
+/// The webview measures the strip content and reports its length; until it does
+/// (and again after an undock/redock) the stored length or the presentation
+/// default is used. The top strip uses it as its width, the side rails as their
+/// height.
+///
+/// `dock_hover` expands a docked window into the fixed hover card instead;
+/// callers pass the runtime flag explicitly so a transition can size the window
+/// it is *becoming* rather than the one it still is.
+fn size_for(state: &AppState, presentation: FloatPresentation, dock_hover: bool) -> (f64, f64) {
+    if dock_hover && presentation.docked_edge().is_some() {
+        return layout::dock_hover_size();
     }
-    layout::size(presentation, quota_count_of(state))
+    let length = state.floating.lock().expect("float mutex").docked_length();
+    match presentation {
+        FloatPresentation::DockedTop => layout::docked_size(length.unwrap_or(layout::FLOAT_WIDTH)),
+        FloatPresentation::DockedLeft | FloatPresentation::DockedRight => {
+            layout::side_docked_size(length.unwrap_or(layout::SIDE_DOCKED_DEFAULT_LENGTH))
+        }
+        FloatPresentation::Full | FloatPresentation::Compact => {
+            layout::size(presentation, quota_count_of(state))
+        }
+    }
+}
+
+/// Native size the current presentation requires.
+fn desired_size(state: &AppState) -> (f64, f64) {
+    let layout = layout_of(state);
+    let (presentation, dock_hover) = {
+        let runtime = state.floating.lock().expect("float mutex");
+        (runtime.presentation(layout), runtime.is_dock_hover())
+    };
+    size_for(state, presentation, dock_hover)
+}
+
+/// Applies [`desired_size`] to the native window and returns it.
+///
+/// Returning the target size lets callers position the window against the size
+/// it is *becoming*: Tauri may apply a resize asynchronously (especially from
+/// the async settle task), so reading `outer_size()` back immediately is not
+/// reliable.
+fn apply_presentation_size(app: &AppHandle, window: &WebviewWindow) -> (f64, f64) {
+    let size = desired_size(&state(app));
+    if let Err(error) = window.set_size(LogicalSize::new(size.0, size.1)) {
+        tracing::warn!(%error, "failed to sync the floating window size");
+    }
+    size
 }
 
 /// Canonical floating-window snapshot.
@@ -121,12 +189,14 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
         let config = state.config.lock().expect("config mutex");
         (config.float_mode, config.float_position)
     };
-    let presentation = state
-        .floating
-        .lock()
-        .expect("float mutex")
-        .presentation(layout);
-    let (width, height) = size_for(&state, presentation);
+    let presentation = {
+        let mut runtime = state.floating.lock().expect("float mutex");
+        // A rebuild always starts from the collapsed strip: the hover card is
+        // a hover-only state and the pointer is not over the new window yet.
+        runtime.clear_dock_hover();
+        runtime.presentation(layout)
+    };
+    let (width, height) = size_for(&state, presentation, false);
 
     let builder =
         WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::App("index.html".into()))
@@ -157,7 +227,7 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
     attach_window_handlers(&window, app);
 
     #[cfg(target_os = "windows")]
-    crate::window::win::round_corners(&window, layout::corner_radius(presentation));
+    crate::window::win::round_corners(&window, layout::corner_radius(presentation, false));
 
     if let Err(error) = window.show() {
         // Do not leave an invisible "open" window behind: a failed show must
@@ -195,32 +265,132 @@ pub fn toggle(app: &AppHandle) {
 
 /// Switches the persisted layout and resizes the window to it.
 ///
-/// Setting a layout always leaves the transient Docked presentation, matching
-/// the old `apply_float_mode` behavior.
+/// Setting a layout always leaves the transient docked presentation, matching
+/// the old `apply_float_mode` behavior. A side rail would otherwise expand to
+/// the right of the screen edge, so its position is clamped back into the work
+/// area.
 pub fn set_layout(app: &AppHandle, layout: FloatLayout) {
     let state = state(app);
+    let was_side_rail = state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .dock_edge()
+        .is_some_and(FloatEdge::is_side);
     state.apply_float_layout(layout);
     sync_size(app);
+    if was_side_rail {
+        if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+            if let Some(work) = work_area(&window) {
+                let size = physical_size(desired_size(&state), work.scale_factor);
+                clamp_into_work_area(&window, work, size);
+            }
+        }
+    }
     emit_state(app);
     persist_config(app);
 }
 
-/// Applies the Docked width measured by the webview.
+/// Applies the strip length measured by the webview.
 ///
 /// The webview measures its own content (text widths depend on the platform
-/// fonts) and reports the total window width. The controller clamps that value
-/// and re-applies the native size; nothing is persisted and the DTO is
-/// unchanged, so no event is needed.
-pub fn set_docked_width(app: &AppHandle, width: f64) {
+/// fonts) and reports the total length along the strip axis: the width of the
+/// top strip, the height of a side rail. The controller clamps that value and
+/// re-applies the native size; nothing is persisted and the DTO is unchanged,
+/// so no event is needed.
+pub fn set_docked_length(app: &AppHandle, length: f64) {
     let state = state(app);
     let changed = state
         .floating
         .lock()
         .expect("float mutex")
-        .set_docked_width(width);
+        .set_docked_length(length);
     if changed {
         sync_size(app);
     }
+}
+
+/// Expands or collapses the hover card of a docked window.
+///
+/// Hovering a docked strip asks for a slightly larger card: the window is
+/// anchored to its edge (the coordinate along the edge is preserved), grows
+/// away from it and is clamped into the work area. Collapsing restores the
+/// strip on that same anchor, so a clamped card does not slide the strip.
+///
+/// Hover is a transient presentation, not a layout: requests are ignored while
+/// the window is not docked, while a side rail waits for its un-dock to settle
+/// (the native move loop owns the window), and while the user is dragging. The
+/// controller owns the native size; the webview only asks for the state and
+/// renders whatever `float://state` reports.
+pub fn set_dock_hover(app: &AppHandle, hover: bool) {
+    let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
+        return;
+    };
+    let state = state(app);
+
+    let edge = {
+        let runtime = state.floating.lock().expect("float mutex");
+        match runtime.dock_edge() {
+            Some(edge) if !runtime.is_undock_pending() => edge,
+            _ => return,
+        }
+    };
+    if drag_in_progress() {
+        return;
+    }
+    if state.floating.lock().expect("float mutex").is_dock_hover() == hover {
+        return;
+    }
+    let Some(work) = work_area(&window) else {
+        return;
+    };
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
+
+    // The coordinate along the edge must survive the expansion: only the axis
+    // that grows away from the edge moves.
+    let anchor = match edge {
+        FloatEdge::Top => position.x,
+        FloatEdge::Left | FloatEdge::Right => position.y,
+    };
+    let anchor = if hover {
+        anchor
+    } else {
+        state
+            .floating
+            .lock()
+            .expect("float mutex")
+            .dock_hover_origin()
+            .unwrap_or(anchor)
+    };
+    let presentation = edge.into();
+    let (width, height) = size_for(&state, presentation, hover);
+
+    // Record the new state first: the resize below re-applies the native
+    // window region, which reads the same flag for its corner radius.
+    {
+        let mut runtime = state.floating.lock().expect("float mutex");
+        if !runtime.set_dock_hover(hover, Some(anchor)) {
+            return;
+        }
+    }
+
+    if let Err(error) = window.set_size(LogicalSize::new(width, height)) {
+        tracing::warn!(%error, "failed to resize the floating window's hover card");
+    }
+    let target = layout::docked_position(
+        edge,
+        anchor,
+        work.rect,
+        physical_size((width, height), work.scale_factor),
+    );
+    if (target.0, target.1) != (position.x, position.y) {
+        let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
+    }
+    #[cfg(target_os = "windows")]
+    crate::window::win::round_corners(&window, layout::corner_radius(presentation, hover));
+    emit_state(app);
 }
 
 /// Re-applies the native size for the current presentation and usage state.
@@ -229,19 +399,8 @@ pub fn set_docked_width(app: &AppHandle, width: f64) {
 /// after mode changes. The size always derives from the canonical state, so
 /// the native window can never drift from the DTO the frontend renders.
 pub fn sync_size(app: &AppHandle) {
-    let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
-        return;
-    };
-    let state = state(app);
-    let layout = layout_of(&state);
-    let presentation = state
-        .floating
-        .lock()
-        .expect("float mutex")
-        .presentation(layout);
-    let (width, height) = size_for(&state, presentation);
-    if let Err(error) = window.set_size(LogicalSize::new(width, height)) {
-        tracing::warn!(%error, "failed to sync the floating window size");
+    if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+        apply_presentation_size(app, &window);
     }
 }
 
@@ -303,9 +462,11 @@ fn finalize_close(app: &AppHandle) {
 
     if state.is_shutting_down() {
         // The process is exiting: keep `float_open` so the next launch can
-        // restore the window, but stop any queued position write.
+        // restore the window, but stop any queued position write or settle.
         let mut runtime = state.floating.lock().expect("float mutex");
         let _ = runtime.take_pending_position();
+        runtime.cancel_dock_settle();
+        runtime.clear_dock_hover();
         runtime.set_open(false);
         return;
     }
@@ -314,6 +475,9 @@ fn finalize_close(app: &AppHandle) {
         let mut runtime = state.floating.lock().expect("float mutex");
         let was_open = runtime.is_open();
         let pending_position = runtime.take_pending_position();
+        runtime.cancel_dock_settle();
+        // The window is going away; a reopen must start from the strip.
+        runtime.clear_dock_hover();
         if was_open {
             runtime.set_open(false);
         }
@@ -335,14 +499,17 @@ fn finalize_close(app: &AppHandle) {
 }
 
 /// Handles a float-window move: persists the position, runs the docking
-/// decision in physical coordinates, and snaps/resizes on changes.
+/// decision in physical coordinates, and applies size/snap on changes.
 fn on_moved(app: &AppHandle, position: &PhysicalPosition<i32>) {
     let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
         return;
     };
     let state = state(app);
 
-    {
+    // The hover card's position is derived from the strip anchor and the work
+    // area; it must never overwrite the persisted (collapsed) position.
+    let hover = state.floating.lock().expect("float mutex").is_dock_hover();
+    if !hover {
         let mut config = state.config.lock().expect("config mutex");
         config.float_position = Some(FloatPosition {
             x: position.x,
@@ -351,42 +518,197 @@ fn on_moved(app: &AppHandle, position: &PhysicalPosition<i32>) {
     }
     let generation = state.floating.lock().expect("float mutex").begin_move();
 
-    let Some(monitor_top) = monitor_top(&window) else {
+    let Some(plan) = dock_plan_at(&state, &window, *position) else {
         schedule_position_persist(app, generation);
         return;
     };
-    let scale_factor = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .map_or(1.0, |monitor| monitor.scale_factor());
-    let layout = layout_of(&state);
-    let currently_docked = state.floating.lock().expect("float mutex").is_docked();
-    let distance = position.y as f64 - monitor_top;
-    let top_docked = layout::is_top_docked(currently_docked, distance, scale_factor);
 
-    if top_docked != currently_docked {
-        state
-            .floating
-            .lock()
-            .expect("float mutex")
-            .set_docked(top_docked);
-        let presentation = if top_docked {
-            FloatPresentation::Docked
-        } else {
-            FloatPresentation::from(layout)
-        };
-        let (width, height) = size_for(&state, presentation);
-        if let Err(error) = window.set_size(LogicalSize::new(width, height)) {
-            tracing::warn!(%error, "failed to resize the floating window for docking");
+    let (presentation_changed, hover_changed) = {
+        let mut runtime = state.floating.lock().expect("float mutex");
+        let was_hover = runtime.is_dock_hover();
+        let presentation_changed = runtime.apply_dock_plan(plan);
+        // Dragging the expanded card along its edge moves the strip with it:
+        // remember the new anchor so the collapse lands where the card is.
+        if was_hover && runtime.is_dock_hover() && drag_in_progress() {
+            if let Some(edge) = plan.edge {
+                let anchor = match edge {
+                    FloatEdge::Top => position.x,
+                    FloatEdge::Left | FloatEdge::Right => position.y,
+                };
+                runtime.set_dock_hover_origin(anchor);
+            }
         }
-        if top_docked {
-            snap_to_monitor_top(&window);
+        (presentation_changed, was_hover != runtime.is_dock_hover())
+    };
+    if presentation_changed {
+        let size = apply_presentation_size(app, &window);
+        if let Some(edge) = plan.edge {
+            snap_to_edge(&window, edge, size);
         }
+        emit_state(app);
+    } else if hover_changed {
+        // The plan dropped the card (a side rail started to un-dock). Resize
+        // back to the strip, but do not snap: the move loop owns the position
+        // until the drag settles.
+        apply_presentation_size(app, &window);
         emit_state(app);
     }
 
+    if plan.edge.is_some() {
+        // Docked windows are re-snapped flush to their edge, and a pending
+        // side rail is expanded, only once the drag has settled.
+        schedule_dock_settle(app, generation);
+    }
     schedule_position_persist(app, generation);
+}
+
+/// Resolves the docking decision for the window's current geometry.
+///
+/// `None` means the monitor work area or the window size could not be read;
+/// callers then only persist the position and leave the dock state untouched.
+fn dock_plan_at(
+    state: &AppState,
+    window: &WebviewWindow,
+    position: PhysicalPosition<i32>,
+) -> Option<DockPlan> {
+    let work = work_area(window)?;
+    let size = window.outer_size().ok()?;
+    let distances = EdgeDistances::new(
+        (position.x, position.y),
+        (size.width, size.height),
+        work.rect,
+    );
+    let (current, guarded) = {
+        let runtime = state.floating.lock().expect("float mutex");
+        (runtime.dock_edge(), runtime.is_dock_guarded())
+    };
+    Some(layout::plan_dock(
+        current,
+        guarded,
+        distances,
+        work.scale_factor,
+    ))
+}
+
+/// Schedules the deferred dock pass for a move.
+///
+/// The task re-checks the move generation, so only the newest drag can settle.
+/// While the mouse button is still down the pass reschedules itself: the native
+/// move loop owns the window position until the drag ends.
+fn schedule_dock_settle(app: &AppHandle, generation: u64) {
+    let state = state(app);
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_millis(DOCK_SETTLE_MS)).await;
+            if !state
+                .floating
+                .lock()
+                .expect("float mutex")
+                .is_latest_move(generation)
+            {
+                return;
+            }
+            if drag_in_progress() {
+                continue;
+            }
+            settle_docked_window(&handle);
+            return;
+        }
+    });
+}
+
+/// Re-snaps a docked window, or expands a pending side rail.
+fn settle_docked_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
+        return;
+    };
+    let state = state(app);
+    let (edge, pending) = {
+        let runtime = state.floating.lock().expect("float mutex");
+        (runtime.dock_edge(), runtime.is_undock_pending())
+    };
+    match edge {
+        Some(edge) if pending => commit_undock(app, &window, edge),
+        Some(edge) => snap_to_edge(&window, edge, desired_size(&state)),
+        None => {}
+    }
+}
+
+/// Expands a side rail that was dragged out of its release band.
+///
+/// The rail is dropped as-is when the drag ends. If it ended against another
+/// edge, that edge docks instead of expanding into the middle of the screen;
+/// otherwise the configured layout is restored and clamped into the work area.
+/// A fresh un-dock arms the re-dock guard while the card still touches an edge.
+fn commit_undock(app: &AppHandle, window: &WebviewWindow, edge: FloatEdge) {
+    let state = state(app);
+    {
+        let runtime = state.floating.lock().expect("float mutex");
+        if runtime.dock_edge() != Some(edge) || !runtime.is_undock_pending() {
+            // The window re-docked (or a newer move arrived) while this settle
+            // task was waking up; the newer decision wins.
+            return;
+        }
+    }
+
+    let (Ok(position), Ok(size)) = (window.outer_position(), window.outer_size()) else {
+        return;
+    };
+    let Some(work) = work_area(window) else {
+        return;
+    };
+    let distances = EdgeDistances::new(
+        (position.x, position.y),
+        (size.width, size.height),
+        work.rect,
+    );
+    let target_edge = layout::snap_edge(distances, work.scale_factor);
+    let layout = layout_of(&state);
+    let presentation: FloatPresentation = match target_edge {
+        Some(edge) => edge.into(),
+        None => layout.into(),
+    };
+    let (width, height) = size_for(&state, presentation, false);
+    // Position against the size the window is *becoming*: the resize below may
+    // be applied asynchronously, so `outer_size()` cannot be read back yet.
+    let target_size = physical_size((width, height), work.scale_factor);
+    let current = (position.x, position.y);
+    let target_position = match target_edge {
+        Some(edge) => snapped_position(edge, current, work, target_size),
+        None => clamped_position(current, work, target_size),
+    };
+    // A freshly un-docked card that still touches an edge keeps docking
+    // disarmed until the user drags it clear (a right-edge rail always expands
+    // flush to the edge, which is inside its own snap band).
+    let guarded = target_edge.is_none()
+        && !EdgeDistances::new(target_position, target_size, work.rect)
+            .all_beyond(work.scale_factor);
+
+    // Commit the docking decision first so the native size, the position and
+    // the DTO all come from this one decision.
+    let plan = match target_edge {
+        Some(edge) => DockPlan::docked(edge),
+        None => DockPlan::undocked(false),
+    };
+    state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .apply_dock_plan(plan);
+
+    if let Err(error) = window.set_size(LogicalSize::new(width, height)) {
+        tracing::warn!(%error, "failed to resize the floating window after un-docking");
+    }
+    if target_position != current {
+        let _ = window.set_position(PhysicalPosition::new(target_position.0, target_position.1));
+    }
+    state
+        .floating
+        .lock()
+        .expect("float mutex")
+        .set_dock_guarded(guarded);
+    emit_state(app);
 }
 
 fn schedule_position_persist(app: &AppHandle, generation: u64) {
@@ -405,40 +727,130 @@ fn schedule_position_persist(app: &AppHandle, generation: u64) {
     });
 }
 
-/// Monitor work-area top under the window, in physical pixels.
+/// Monitor work area in physical pixels plus the DPI scale.
+#[derive(Debug, Clone, Copy)]
+struct WorkArea {
+    /// `(left, top, right, bottom)`, taskbar-aware on Windows.
+    rect: (i32, i32, i32, i32),
+    scale_factor: f64,
+}
+
+/// Work area under the window, in physical pixels.
 ///
 /// Windows uses the native work area (taskbar-aware); other platforms use the
-/// monitor's top edge.
-fn monitor_top(window: &WebviewWindow) -> Option<f64> {
+/// monitor's bounds, matching the previous top-docking behavior.
+fn work_area(window: &WebviewWindow) -> Option<WorkArea> {
     #[cfg(target_os = "windows")]
-    {
-        crate::float::win::work_area_top(window).map(|top| top as f64)
-    }
+    let rect = crate::float::win::work_area(window)?;
     #[cfg(not(target_os = "windows"))]
-    {
-        window
-            .current_monitor()
-            .ok()
-            .flatten()
-            .map(|monitor| monitor.position().y as f64)
+    let rect = {
+        let monitor = window.current_monitor().ok().flatten()?;
+        let position = monitor.position();
+        let size = monitor.size();
+        (
+            position.x,
+            position.y,
+            position.x.saturating_add(size.width as i32),
+            position.y.saturating_add(size.height as i32),
+        )
+    };
+    Some(WorkArea {
+        rect,
+        scale_factor: window.scale_factor().unwrap_or(1.0),
+    })
+}
+
+/// Converts a logical window size into the physical pixels the native window
+/// will have on this monitor.
+fn physical_size(size: (f64, f64), scale_factor: f64) -> (u32, u32) {
+    let scale = scale_factor.max(0.01);
+    (
+        (size.0 * scale).round().max(1.0) as u32,
+        (size.1 * scale).round().max(1.0) as u32,
+    )
+}
+
+/// Work-area size in physical pixels.
+fn work_size(work: WorkArea) -> (u32, u32) {
+    (
+        (work.rect.2 - work.rect.0).max(1) as u32,
+        (work.rect.3 - work.rect.1).max(1) as u32,
+    )
+}
+
+/// Physical position that snaps a `size` window flush to `edge`.
+///
+/// Only the axis that owns the edge moves: a top strip keeps its horizontal
+/// position, a side rail keeps its vertical position.
+fn snapped_position(
+    edge: FloatEdge,
+    current: (i32, i32),
+    work: WorkArea,
+    size: (u32, u32),
+) -> (i32, i32) {
+    let x = match edge {
+        FloatEdge::Top => current.0,
+        FloatEdge::Left => work.rect.0,
+        FloatEdge::Right => work.rect.2 - size.0 as i32,
+    };
+    let y = match edge {
+        FloatEdge::Top => work.rect.1,
+        FloatEdge::Left | FloatEdge::Right => current.1,
+    };
+    (x, y)
+}
+
+/// Physical position clamped into the work area for a `size` window.
+fn clamped_position(position: (i32, i32), work: WorkArea, size: (u32, u32)) -> (i32, i32) {
+    layout::clamp_position(position, (work.rect.0, work.rect.1), work_size(work), size)
+}
+
+/// Snaps the floating window flush to a work-area edge.
+///
+/// `size` is the logical size the window has (or is becoming). A no-op when
+/// already flush, so the settle pass cannot start a move feedback loop.
+fn snap_to_edge(window: &WebviewWindow, edge: FloatEdge, size: (f64, f64)) {
+    let Some(work) = work_area(window) else {
+        return;
+    };
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
+    let target = snapped_position(
+        edge,
+        (position.x, position.y),
+        work,
+        physical_size(size, work.scale_factor),
+    );
+    if target != (position.x, position.y) {
+        let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
     }
 }
 
-/// Snaps the floating window to the top of its current monitor work area.
-fn snap_to_monitor_top(window: &WebviewWindow) {
+/// Clamps the window back into the work area for a target physical size.
+fn clamp_into_work_area(window: &WebviewWindow, work: WorkArea, size: (u32, u32)) {
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
+    let target = clamped_position((position.x, position.y), work, size);
+    if target != (position.x, position.y) {
+        let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
+    }
+}
+
+/// Whether the user is still dragging the window.
+///
+/// On Windows the native move loop owns the window until the mouse button is
+/// released; the deferred side un-dock must not run before that. Other
+/// platforms fall back to the settle delay alone.
+fn drag_in_progress() -> bool {
     #[cfg(target_os = "windows")]
     {
-        crate::float::win::snap_to_monitor_top(window);
+        crate::float::win::primary_button_down()
     }
     #[cfg(not(target_os = "windows"))]
     {
-        if let Some(monitor) = window.current_monitor().ok().flatten() {
-            let x = window
-                .outer_position()
-                .ok()
-                .map_or(0, |position| position.x);
-            let _ = window.set_position(PhysicalPosition::new(x, monitor.position().y));
-        }
+        false
     }
 }
 
@@ -473,10 +885,66 @@ fn refresh_region(app: &AppHandle) {
     };
     let state = state(app);
     let layout = layout_of(&state);
-    let presentation = state
-        .floating
-        .lock()
-        .expect("float mutex")
-        .presentation(layout);
-    crate::window::win::round_corners(&window, layout::corner_radius(presentation));
+    let (presentation, dock_hover) = {
+        let runtime = state.floating.lock().expect("float mutex");
+        (runtime.presentation(layout), runtime.is_dock_hover())
+    };
+    crate::window::win::round_corners(&window, layout::corner_radius(presentation, dock_hover));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn work() -> WorkArea {
+        WorkArea {
+            rect: (0, 0, 1920, 1040),
+            scale_factor: 1.0,
+        }
+    }
+
+    #[test]
+    fn physical_size_rounds_with_the_monitor_scale() {
+        assert_eq!(physical_size((392.0, 280.0), 1.0), (392, 280));
+        assert_eq!(physical_size((392.0, 280.0), 1.5), (588, 420));
+        assert_eq!(physical_size((24.0, 257.4), 1.0), (24, 257));
+        assert_eq!(
+            physical_size((0.0, 0.0), 1.0),
+            (1, 1),
+            "a zero size must never reach the native window"
+        );
+    }
+
+    #[test]
+    fn snapped_position_moves_only_the_owning_axis() {
+        let work = work();
+        assert_eq!(
+            snapped_position(FloatEdge::Top, (300, 12), work, (392, 24)),
+            (300, 0)
+        );
+        assert_eq!(
+            snapped_position(FloatEdge::Left, (12, 300), work, (24, 257)),
+            (0, 300)
+        );
+        assert_eq!(
+            snapped_position(FloatEdge::Right, (879, 300), work, (24, 257)),
+            (1896, 300)
+        );
+        assert_eq!(
+            snapped_position(FloatEdge::Right, (500, 300), work, (392, 280)),
+            (1528, 300),
+            "the target size decides where a right-edge card starts"
+        );
+    }
+
+    #[test]
+    fn clamped_position_keeps_an_expanded_rail_visible() {
+        let work = work();
+        // A right rail dropped 30 px from the edge expands flush right.
+        assert_eq!(clamped_position((1890, 300), work, (392, 280)), (1528, 300));
+        // A rail dropped in the middle keeps its position.
+        assert_eq!(clamped_position((800, 300), work, (392, 280)), (800, 300));
+        // A rail dragged past the top is pushed back into the work area.
+        assert_eq!(clamped_position((800, -40), work, (392, 280)), (800, 0));
+    }
 }

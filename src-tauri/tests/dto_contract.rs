@@ -9,6 +9,7 @@
 
 use opencode_core::QuotaService;
 use opencode_quota_checker_lib::credential_task::CredentialCheckResult;
+use opencode_quota_checker_lib::float::state::{DockPlan, FloatEdge};
 use opencode_quota_checker_lib::state::{AppState, UpdateStatus};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -52,7 +53,11 @@ fn app_status_dto_uses_camel_case_contract() {
         updater.banner_dismissed = true;
     }
     {
-        state.floating.lock().expect("float mutex").set_docked(true);
+        state
+            .floating
+            .lock()
+            .expect("float mutex")
+            .apply_dock_plan(DockPlan::docked(FloatEdge::Right));
     }
     let json = serde_json::to_value(state.status_dto()).expect("dto serializes");
 
@@ -79,11 +84,29 @@ fn app_status_dto_uses_camel_case_contract() {
     let float = json.get("float").expect("float snapshot");
     assert_has(float, "configuredMode");
     assert_has(float, "presentationMode");
-    assert_has(float, "topDocked");
+    assert_eq!(
+        float.get("presentationMode"),
+        Some(&json!("docked_right")),
+        "a docked presentation carries its edge in the presentation name"
+    );
+    assert_eq!(
+        float.get("configuredMode"),
+        Some(&json!("full")),
+        "the persisted layout is independent of the dock edge"
+    );
     // The old single `mode` field is gone: the DTO must not smuggle one
-    // field with three meanings (persisted / native / render).
+    // field with three meanings (persisted / native / render). The removed
+    // `topDocked` flag is redundant now that `presentationMode` carries the
+    // edge; a resurrected copy would desynchronize on side docking.
     assert_lacks(float, "mode");
+    assert_lacks(float, "topDocked");
     assert_lacks(float, "top_docked");
+    // The hover card is a presentation flag of the docked strip, not a mode:
+    // it never changes `presentationMode` and it is false for this snapshot
+    // (nothing hovers a docked window that was never shown).
+    assert_has(float, "dockHover");
+    assert_eq!(float.get("dockHover"), Some(&json!(false)));
+    assert_lacks(float, "dock_hover");
 
     let update = json.get("update").expect("update snapshot");
     assert_has(update, "downloadedVersion");

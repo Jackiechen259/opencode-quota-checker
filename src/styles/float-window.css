@@ -1,14 +1,17 @@
 /* Floating window — Desktop Quota Widget.
  *
- * Full / Compact / Docked are three distinct layouts (never a squashed
- * copy of each other). The native window size is owned by the Rust backend
- * (`float/layout.rs` layout constants); this stylesheet only has to render
- * fluidly inside it:
+ * Full / Compact / Docked are the three distinct surface layouts (never a
+ * squashed copy of each other). Docked has two orientations: the horizontal
+ * strip on the top edge and the vertical-writing rail on the left/right edges
+ * (see "Side rails" below). Resting the pointer on either one expands the
+ * native window into the docked hover card (three quota rings). The native
+ * window size is owned by the Rust backend (`float/layout.rs` layout
+ * constants); this stylesheet only has to render fluidly inside it:
  *
  * - Full height is dynamic (min 280 / max 560 logical px). Only the quota
  *   list scrolls; header, meta and footer stay fixed.
- * - border-radius must match the native region: 16px Full/Compact
- *   (`--radius-float`), 12px Docked (`--radius-float-docked`).
+ * - border-radius must match the native region: 16px Full/Compact and the
+ *   hover card (`--radius-float`), 12px Docked (`--radius-float-docked`).
  * - Every hard-coded color comes from tokens.css; state colors reach the
  *   DOM only through the `--quota-accent` custom property.
  */
@@ -41,10 +44,11 @@ body[data-window="float"] {
   overflow: hidden;
 }
 
-/* Shared surface — the single outline. Full/Compact/Docked only override
-   radius and interior layout, never the surface itself. */
+/* Shared surface — the single outline. Full/Compact/Docked/hover-card only
+   override radius and interior layout, never the surface itself. */
 .float-inner,
-.float-docked {
+.float-docked,
+.float-dock-card {
   background: var(--float-surface);
   border: 1px solid var(--float-border);
   box-shadow: var(--float-shadow);
@@ -425,14 +429,16 @@ body[data-window="float"] {
 /* Docked layout -------------------------------------------------------------
  * Docked shares the float surface — only radius + layout differ.
  *
- * The native window is only 24 logical px tall (`float::layout::
- * DOCKED_HEIGHT`) so the always-on-top strip covers as little of other
- * windows as possible. Every control here must fit that height: the 20 px
- * close button plus the 1 px outline top and bottom.
+ * The native window is only 24 logical px thick (`float::layout::
+ * DOCKED_THICKNESS`) so the always-on-top strip covers as little of other
+ * windows as possible: 24 px tall on the top edge, 24 px wide on a side rail.
+ * Every control here must fit that thickness: the 20 px close button plus the
+ * 1 px outline top and bottom.
  *
- * Its width is content-fitted by the controller: the webview reports the
- * content plus chrome (`DOCKED_CHROME_WIDTH` in `floatLayout.ts`). Keep the
- * padding, gap and close-button sizes below in sync with that constant. */
+ * Its length along the strip is content-fitted by the controller: the webview
+ * reports the content plus chrome (`DOCKED_CHROME_LENGTH` in `floatLayout.ts`).
+ * Keep the padding, gap and close-button sizes below in sync with that
+ * constant. */
 
 .float-docked {
   width: 100%;
@@ -554,6 +560,229 @@ body[data-window="float"] {
 .float-docked-close:hover {
   background: var(--danger-soft);
   color: var(--danger-text);
+}
+
+/* Side rails (docked to the left/right work-area edge) ----------------------
+ * The rail is the same strip laid out with vertical writing: `vertical-rl`
+ * runs the flex row from top to bottom, and `text-orientation: upright` keeps
+ * every glyph — Chinese characters and digits alike — standing upright, so the
+ * percentage reads down the rail instead of lying on its side. The native
+ * window stays simply 24 px wide and as tall as the measured content, so there
+ * is no transform and no pre-transform overflow to clip.
+ *
+ * The 8 px padding moves from the sides to the ends: it is part of the strip
+ * length chrome (46 px along the axis), not of the 24 px thickness.
+ *
+ * `--left` and `--right` share one rule: the text reads top-to-bottom on both
+ * edges, so the rail does not flip between sides. */
+.float-docked--left,
+.float-docked--right {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  padding: 8px 0;
+}
+
+/* The side class is also applied to the out-of-flow measurement clone, which
+ * lives outside the rail and therefore cannot inherit its writing mode. */
+.float-docked-content--side {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+/* The progress meter is physical: in a vertical rail its length runs along the
+ * height, so the 56 x 4 bar transposes. The fill's size comes from React
+ * (width for the top strip, height for a side rail). */
+.float-docked-content--side .float-docked-progress {
+  width: 4px;
+  height: 56px;
+  min-width: 0;
+  min-height: 32px;
+}
+
+.float-docked-content--side .float-docked-progress-fill {
+  transition: height 300ms ease;
+}
+
+/* A long label must not stretch the rail: cap its inline size (the physical
+ * height in vertical writing) and ellipsize there, mirroring the top strip's
+ * 140 px cap. */
+.float-docked-content--side .float-docked-label {
+  max-width: none;
+  max-height: 140px;
+}
+
+/* Docked hover card ---------------------------------------------------------
+ * Resting the pointer on a docked strip grows the native window into this
+ * card (`float::layout::dock_hover_size`: 392 x 176 logical px). It is the
+ * docked counterpart of the Full/Compact surface, so it shares their 16 px
+ * radius token (`--radius-float` matches `float::layout::corner_radius` for
+ * `dock_hover == true`) and renders one ring per quota window.
+ *
+ * All three dock edges use this same card; the native window is anchored to
+ * the edge by the controller, so no direction-specific CSS is needed. The
+ * 84 px gauges and the seven unit ring stroke come from
+ * `floatLayout.ts` (`DOCK_HOVER_RING_*`) — keep the box size in sync or the
+ * SVG scales the arc. */
+
+.float-dock-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-float);
+  overflow: hidden;
+  animation: float-dock-card-in 150ms ease;
+}
+
+@keyframes float-dock-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.float-dock-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  flex-shrink: 0;
+  padding-left: 2px;
+  cursor: grab;
+}
+
+.float-dock-card-header:active {
+  cursor: grabbing;
+}
+
+.float-dock-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.float-dock-card-time {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.float-dock-card-close {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.float-dock-card-close:hover {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.float-dock-card-close:active {
+  background: var(--danger-border);
+  color: var(--danger-text);
+}
+
+.float-dock-rings {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+}
+
+.float-dock-ring {
+  flex: 1 1 0;
+  min-width: 0;
+  /* Three rings share the row evenly; a partial report (one or two windows)
+     keeps them as one compact group instead of stretching a wide gap. */
+  max-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.float-dock-ring-gauge {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.float-dock-ring-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.float-dock-ring-track {
+  fill: none;
+  stroke: var(--bg-track);
+}
+
+.float-dock-ring-fill {
+  fill: none;
+  stroke-linecap: round;
+  /* The arc is one dash as long as the circumference; the percentage is a
+     dash offset, so it animates without re-rendering the DOM. */
+  transition: stroke-dashoffset 420ms ease;
+}
+
+.float-dock-ring-value {
+  position: relative;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+
+.float-dock-ring-label {
+  max-width: 100%;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.float-dock-ring-remaining {
+  max-width: 100%;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.float-dock-card-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 /* Empty / error / loading states -------------------------------------------- */
