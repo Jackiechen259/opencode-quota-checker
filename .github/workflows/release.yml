@@ -63,7 +63,7 @@ jobs:
             formats: deb,appimage
             artifact: linux-x86_64
           - name: macOS Apple Silicon
-            os: macos-14
+            os: macos-15
             target: aarch64-apple-darwin
             formats: dmg
             artifact: macos-aarch64
