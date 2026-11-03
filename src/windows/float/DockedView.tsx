@@ -21,6 +21,7 @@
 import { type CSSProperties, useEffect, useRef } from "react";
 import { Dot } from "../../components/common";
 import { Icons } from "../../components/icons";
+import { percent } from "../../lib/format";
 import { api } from "../../services/tauri";
 import {
   quotaHealth,
@@ -112,7 +113,7 @@ export function DockedView({
   } else {
     const health = quotaHealth(window.percent);
     const accent = healthColors[health];
-    const percent = clampPercent(window.percent);
+    const used = clampPercent(window.percent);
     const fill = progressWidth(window.percent);
     // The meter is physical: full width and a partial height on a vertical
     // rail, full height and a partial width on the horizontal strip.
@@ -128,15 +129,15 @@ export function DockedView({
         <span
           className="float-docked-progress"
           role="progressbar"
-          aria-valuenow={Math.round(percent)}
+          aria-valuenow={Math.round(used)}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label={`${window.label} 已用 ${percent.toFixed(1)}%`}
+          aria-label={`${window.label} 已用 ${percent(window.percent)}`}
         >
           <span className="float-docked-progress-fill" style={fillStyle} />
         </span>
         <span className="float-docked-percent" style={{ color: accent }}>
-          {window.percent.toFixed(1)}%
+          {percent(window.percent)}
         </span>
         <span className="float-docked-remaining">
           剩余 {compactNumber(window.remaining)}

@@ -93,13 +93,19 @@ pub async fn save_credentials(
         credentials.available = true;
         credentials.error = None;
     }
+    // Drop any token-usage and Go-overview data from the previous key before
+    // probing. The generation bumps also invalidate responses still in flight.
+    state.reset_token_usage();
+    state.reset_go_overview();
     persist_config(&app);
     state.push_monitor_config();
     let _ = app.emit(crate::events::APP_STATUS, state.status_dto());
+    let _ = app.emit(crate::events::TOKEN_USAGE_STATE, state.token_usage_dto());
+    let _ = app.emit(crate::events::GO_OVERVIEW_STATE, state.go_overview_dto());
 
     // One probe so a wrong key, a missing Go subscription or a blocked network
     // is reported while the user is still on the credentials page.
-    crate::monitor::run_once(&app).await;
+    crate::monitor::run_once_forced(&app).await;
     let probe_error = state.usage.lock().expect("usage mutex").error.clone();
     let _ = app.emit(crate::events::APP_STATUS, state.status_dto());
     match probe_error {
@@ -117,7 +123,7 @@ pub async fn test_connection(app: AppHandle) -> Result<(), AppError> {
             opencode_core::OpenCodeError::CredentialsMissing,
         ));
     }
-    crate::monitor::run_once(&app).await;
+    crate::monitor::run_once_forced(&app).await;
     let error = state.usage.lock().expect("usage mutex").error.clone();
     match error {
         Some(error) => Err(error),
@@ -156,9 +162,13 @@ pub async fn clear_credentials(
         monitor.last_fetch_ms = None;
         monitor.error = None;
     }
+    state.reset_token_usage();
+    state.reset_go_overview();
     state.push_monitor_config();
     persist_config(&app);
     let _ = app.emit(crate::events::APP_STATUS, state.status_dto());
+    let _ = app.emit(crate::events::TOKEN_USAGE_STATE, state.token_usage_dto());
+    let _ = app.emit(crate::events::GO_OVERVIEW_STATE, state.go_overview_dto());
     crate::tray::emit_monitor_state(&app);
     Ok(())
 }

@@ -23,6 +23,20 @@ pub enum OpenCodeError {
     #[error("the workspace is not subscribed to OpenCode Go")]
     NotSubscribed,
 
+    /// The API key cannot read the workspace's Console usage summary.
+    ///
+    /// The Console summary requires the key's `usage:read` scope; a workspace
+    /// member without permission is denied the same way.
+    #[error("the API key cannot read workspace usage")]
+    UsagePermissionDenied,
+
+    /// The API key cannot read the workspace's billing status.
+    ///
+    /// The billing status requires `billing:read`; the Go overview treats this
+    /// as an optional card, not a page failure.
+    #[error("the API key cannot read billing status")]
+    BillingPermissionDenied,
+
     /// The usage API rate-limited the request.
     #[error("request rate limited")]
     RateLimited,
@@ -63,8 +77,16 @@ impl OpenCodeError {
             Self::NotSubscribed => {
                 "该工作区未订阅 OpenCode Go，或 API Key 缺少 Usage 权限。".to_owned()
             }
+            Self::UsagePermissionDenied => {
+                "无法读取工作区用量：API Key 需要 Usage › Read 权限，或当前账号无权查看工作区用量。"
+                    .to_owned()
+            }
+            Self::BillingPermissionDenied => {
+                "无法读取账单/余额：API Key 需要 Billing › Read 权限，或当前账号无权查看账单。"
+                    .to_owned()
+            }
             Self::RateLimited => "请求过于频繁，请稍后重试。".to_owned(),
-            Self::Parse(_) => "OpenCode Go 用量接口返回了无法识别的数据。".to_owned(),
+            Self::Parse(_) => "用量接口返回了无法识别的数据。".to_owned(),
             Self::Http { status, .. } => format!("服务请求失败（HTTP {}）。", status.as_u16()),
             Self::Keyring(_) => "无法访问系统钥匙串。".to_owned(),
             Self::Config(message) => format!("配置无效：{message}"),

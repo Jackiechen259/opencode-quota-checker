@@ -1,0 +1,29 @@
+{
+  "startsAt": "2026-10-26T00:00:00.000Z",
+  "daily": [
+    {
+      "date": "2026-10-26",
+      "totalCostMicroCents": "100",
+      "totalTokens": "1000",
+      "totalRequests": "2"
+    },
+    {
+      "date": "2026-10-27",
+      "totalCostMicroCents": "200",
+      "totalTokens": "3000",
+      "totalRequests": "3"
+    }
+  ],
+  "models": [
+    {
+      "provider": "opencode",
+      "model": "deepseek-v4.1-flash",
+      "totalRequests": "4"
+    },
+    {
+      "provider": "opencode",
+      "model": "glm-5.3",
+      "totalRequests": "1"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import { quotaHealth } from "../types/models";
 import { IconButton, StatusBadge, healthColor } from "./common";
 import { Icons } from "./icons";
 
-export type HeaderPage = "dashboard" | "settings" | "debug";
+export type HeaderPage = "dashboard" | "go" | "settings" | "debug";
 
 interface Props {
   status: AppStatusDto | null;
@@ -113,6 +113,12 @@ export function AppHeader({
           label="刷新"
           onClick={onRefresh}
           loading={loading}
+        />
+        <IconButton
+          icon={<Icons.Activity size={16} />}
+          label={page === "go" ? "返回概览" : "Go 用量"}
+          onClick={() => onNavigate(page === "go" ? "dashboard" : "go")}
+          focused={page === "go"}
         />
         <IconButton
           icon={<Icons.Settings size={16} />}

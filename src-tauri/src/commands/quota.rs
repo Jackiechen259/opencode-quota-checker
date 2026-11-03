@@ -8,7 +8,7 @@
 use crate::credential_task;
 use crate::error::AppError;
 use crate::monitor;
-use crate::state::{AppState, UsageDto};
+use crate::state::{AppState, TokenUsageDto, UsageDto};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -19,6 +19,17 @@ use tauri::{AppHandle, Emitter, Manager, State};
 pub async fn get_usage(app: AppHandle) -> UsageDto {
     let state = app.state::<Arc<AppState>>().inner().clone();
     state.usage_dto()
+}
+
+/// Returns the latest workspace token-usage snapshot (never the raw response).
+///
+/// Token usage is a separate best-effort data source; the DTO carries its own
+/// loading/error state so the main window can render it independently from the
+/// Go quota cards.
+#[tauri::command]
+pub async fn get_token_usage(app: AppHandle) -> TokenUsageDto {
+    let state = app.state::<Arc<AppState>>().inner().clone();
+    state.token_usage_dto()
 }
 
 /// Triggers one fetch/parse/alert cycle through the shared monitor path.
@@ -32,7 +43,7 @@ pub fn refresh_usage(app: AppHandle, state: State<'_, Arc<AppState>>) -> Result<
         return Ok(());
     }
     tauri::async_runtime::spawn(async move {
-        monitor::run_once(&app).await;
+        monitor::run_once_forced(&app).await;
     });
     Ok(())
 }

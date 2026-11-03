@@ -39,6 +39,17 @@ const idleUpdate = {
 };
 
 const noUsage = { report: null, loading: false, error: null, lastSuccessMs: null };
+const noToken = { report: null, loading: false, error: null, lastSuccessMs: null };
+const noGoOverview = {
+  status: null,
+  activity: null,
+  billing: null,
+  statusError: null,
+  activityError: null,
+  billingError: null,
+  loading: false,
+  lastSuccessMs: null,
+};
 
 /**
  * Installs an `invoke` router with sane defaults for every command the shell
@@ -59,6 +70,11 @@ function installInvokeRouter(
         return overrides.app ?? appStatusFixture();
       case "get_usage":
         return noUsage;
+      case "get_token_usage":
+        return noToken;
+      case "get_go_overview":
+      case "refresh_go_overview":
+        return noGoOverview;
       case "get_config":
         return defaultConfig;
       case "get_update_state":
@@ -105,6 +121,24 @@ describe("MainWindow startup", () => {
     expect(screen.queryByText(LOADING_TEXT)).not.toBeInTheDocument();
   });
 
+  it("opens the Go usage page from the header", async () => {
+    installInvokeRouter({
+      boot: bootStatusFixture({
+        configured: true,
+        credentials: { phase: "available", available: true, error: null },
+      }),
+      app: appStatusFixture({
+        configured: true,
+        credentials: { phase: "available", available: true, error: null },
+      }),
+    });
+    render(<MainWindow />);
+    await screen.findByText("还没有配额数据");
+    fireEvent.click(screen.getByLabelText("Go 用量"));
+    expect(await screen.findByText("还没有 Go 用量数据")).toBeInTheDocument();
+    expect(screen.getByLabelText("返回概览")).toBeInTheDocument();
+  });
+
   it("shows a recoverable error state for a timed-out keyring, not loading", async () => {
     installInvokeRouter({
       boot: bootStatusFixture({
@@ -134,6 +168,11 @@ describe("MainWindow startup", () => {
           return appStatusFixture();
         case "get_usage":
           return noUsage;
+        case "get_token_usage":
+          return noToken;
+        case "get_go_overview":
+        case "refresh_go_overview":
+          return noGoOverview;
         case "get_config":
           return defaultConfig;
         case "get_update_state":
@@ -166,6 +205,11 @@ describe("MainWindow startup", () => {
           return appStatusFixture();
         case "get_usage":
           return noUsage;
+        case "get_token_usage":
+          return noToken;
+        case "get_go_overview":
+        case "refresh_go_overview":
+          return noGoOverview;
         case "get_config":
           return defaultConfig;
         case "get_update_state":
@@ -198,6 +242,11 @@ describe("MainWindow startup", () => {
           return appStatusFixture();
         case "get_usage":
           return noUsage;
+        case "get_token_usage":
+          return noToken;
+        case "get_go_overview":
+        case "refresh_go_overview":
+          return noGoOverview;
         case "get_config":
           return defaultConfig;
         case "get_update_state":

@@ -14,6 +14,7 @@
 
 import { Dot } from "../../components/common";
 import { Icons } from "../../components/icons";
+import { percent } from "../../lib/format";
 import {
   quotaHealth,
   type FloatDockEdge,
@@ -40,20 +41,20 @@ const RING_CIRCUMFERENCE = ringCircumference();
 function QuotaRing({ window }: { window: WindowReport }) {
   const health = quotaHealth(window.percent, window.limited);
   const accent = healthColors[health];
-  const percent = clampPercent(window.percent);
+  const used = clampPercent(window.percent);
   const remaining = compactNumber(window.remaining);
   return (
     <div
       className="float-dock-ring"
-      title={`${window.label}：已用 ${window.percent.toFixed(1)}%，剩余 ${remaining}`}
+      title={`${window.label}：已用 ${percent(window.percent)}，剩余 ${remaining}`}
     >
       <div
         className="float-dock-ring-gauge"
         role="progressbar"
-        aria-valuenow={Math.round(percent)}
+        aria-valuenow={Math.round(used)}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={`${window.label} 已用 ${percent.toFixed(1)}%`}
+        aria-label={`${window.label} 已用 ${percent(window.percent)}`}
       >
         <svg
           className="float-dock-ring-svg"
@@ -81,7 +82,7 @@ function QuotaRing({ window }: { window: WindowReport }) {
           </g>
         </svg>
         <span className="float-dock-ring-value" style={{ color: accent }}>
-          {window.percent.toFixed(1)}%
+          {percent(window.percent)}
         </span>
       </div>
       <span className="float-dock-ring-label" title={window.label}>

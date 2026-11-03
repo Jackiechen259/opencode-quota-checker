@@ -739,6 +739,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-base);
+  min-width: 0;
   transition:
     transform var(--transition-normal),
     border-color var(--transition-normal),
@@ -1572,6 +1573,527 @@
   font-size: var(--text-label);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
+}
+
+/* Token usage card ------------------------------------------------------------ */
+
+.token-usage {
+  margin-top: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.token-usage-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.token-usage-hero {
+  justify-content: flex-start;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+  row-gap: var(--space-xs);
+}
+
+.token-usage-total {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.token-usage-total-label {
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+  font-weight: 500;
+}
+
+.token-usage-cost {
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  font-weight: 500;
+  white-space: nowrap;
+  padding-bottom: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-usage-stats {
+  margin-top: 2px;
+}
+
+.token-usage-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--text-tertiary);
+  font-size: var(--text-caption);
+  flex-wrap: wrap;
+}
+
+.token-usage-note {
+  color: var(--text-tertiary);
+}
+
+.token-usage-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  align-items: flex-start;
+  width: 100%;
+}
+
+.token-usage-error .notice {
+  width: 100%;
+}
+
+.token-usage-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.token-usage-skeleton .overview-stats {
+  margin-top: var(--space-sm);
+}
+
+/* Go usage page -------------------------------------------------------------- */
+
+.go-page {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--page-padding);
+}
+
+.go-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.go-page-head h1 {
+  margin: 2px 0 0;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+}
+
+.go-product {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.go-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.go-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-md);
+}
+
+.go-summary-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-base);
+  min-width: 0;
+}
+
+.go-percent {
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  color: var(--color-success);
+  font-variant-numeric: tabular-nums;
+}
+
+.go-percent.is-critical {
+  color: var(--color-danger);
+}
+
+.go-summary-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.go-summary-title {
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.go-summary-sub {
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+}
+
+.go-summary-sub.is-warning {
+  color: var(--warning-text);
+  font-weight: 500;
+}
+
+.go-chart-skeleton {
+  padding: var(--space-md) 0;
+}
+
+.go-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.go-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.go-chart-grid {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+
+.go-chart-limit {
+  stroke: var(--text-tertiary);
+  stroke-width: 1;
+  stroke-dasharray: 4 5;
+  opacity: 0.75;
+}
+
+.go-chart-axis {
+  font-size: 11px;
+  fill: var(--text-tertiary);
+  font-family: inherit;
+}
+
+.go-chart-usage {
+  fill: none;
+  stroke: var(--color-success);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.go-chart-forecast {
+  fill: none;
+  stroke: var(--color-warning);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  stroke-linecap: round;
+}
+
+.go-chart-current {
+  fill: var(--color-success);
+  stroke: var(--bg-surface);
+  stroke-width: 2;
+}
+
+.go-chart-forecast-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--color-warning);
+  font-family: inherit;
+}
+
+.go-chart-cursor {
+  stroke: var(--border-strong, var(--text-tertiary));
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.6;
+}
+
+.go-chart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.go-chart-detail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  min-height: 16px;
+}
+
+.go-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--text-tertiary);
+}
+
+.go-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.go-key {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.go-key-usage {
+  background: var(--color-success);
+}
+
+.go-key-forecast {
+  background: var(--color-warning);
+  height: 0;
+  border-top: 2px dashed var(--color-warning);
+}
+
+.go-key-limit {
+  background: var(--text-tertiary);
+  opacity: 0.7;
+}
+
+.go-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--card-gap);
+}
+
+.go-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  min-width: 0;
+}
+
+.go-card-heading h2 {
+  margin: 0;
+  font-size: var(--text-card-title);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.go-card-heading p {
+  margin: 4px 0 0;
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+}
+
+.go-card-action {
+  align-self: flex-start;
+}
+
+.go-muted {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.go-limits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+.go-limit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.go-limit-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.go-limit-label {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.go-limit-reset {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.go-limit-bar {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-track);
+  overflow: hidden;
+}
+
+.go-limit-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-success);
+  transition: width var(--transition-normal);
+}
+
+.go-limit-bar i.is-warning {
+  background: var(--color-warning);
+}
+
+.go-limit-bar i.is-critical {
+  background: var(--color-danger);
+}
+
+.go-limit-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+.go-badge-danger {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.go-models {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.go-model {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.go-model-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.go-model-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-body);
+  color: var(--text-primary);
+}
+
+.go-model-share {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.go-models-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.go-models-totals div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.go-models-totals span {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+.go-models-totals strong {
+  font-size: var(--text-metric-value);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.go-extra-credit {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.go-extra-credit span {
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+}
+
+.go-extra-credit strong {
+  font-size: 24px;
+  font-weight: 650;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1199px) {
+  .go-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 899px) {
+  .go-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .go-summary {
+    flex-direction: column;
+  }
 }
 
 /* Responsive ------------------------------------------------------------------------- */

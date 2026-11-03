@@ -16,12 +16,13 @@ import { Toast } from "./components/common";
 import { TitleBar } from "./components/TitleBar";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { WindowResizeHandles } from "./components/WindowResizeHandles";
-import { useAppStatus, useConfig, useQuota, useUpdater } from "./hooks/useApp";
+import { useAppStatus, useConfig, useQuota, useTokenUsage, useUpdater } from "./hooks/useApp";
 import { useNow } from "./hooks/useTauriEvents";
 import { useWindowState } from "./hooks/useWindowState";
 import { Credentials } from "./pages/Credentials";
 import { Dashboard } from "./pages/Dashboard";
 import { Debug } from "./pages/Debug";
+import { GoUsagePage } from "./pages/GoUsage";
 import { Settings } from "./pages/Settings";
 import { api } from "./services/tauri";
 import { windowService } from "./services/window";
@@ -34,6 +35,7 @@ const STARTUP_TIMEOUT_MS = 8_000;
 export function MainWindow() {
   const { boot, status, reload: reloadStatus, retry: retryBoot } = useAppStatus();
   const { report, loading, error } = useQuota();
+  const tokenUsage = useTokenUsage();
   const { config, setConfig } = useConfig();
   const { update } = useUpdater();
   const nowMs = useNow();
@@ -60,7 +62,8 @@ export function MainWindow() {
 
   const refresh = useCallback(() => {
     void api.refreshUsage();
-  }, []);
+    if (page === "go") void api.refreshGoOverview();
+  }, [page]);
 
   const toggleFloat = useCallback(() => {
     void api.openFloatWindow().catch((error) => {
@@ -95,7 +98,7 @@ export function MainWindow() {
   const credentialPhase = booted?.credentials.phase ?? "checking";
   const checking = credentialPhase === "checking";
   const configLoaded = booted?.configLoaded ?? false;
-  const dashboardOpen = page === "dashboard" && configLoaded && configured;
+  const contentOpen = (page === "dashboard" || page === "go") && configLoaded && configured;
 
   let body: ReactNode;
   if (page === "debug") {
@@ -163,12 +166,23 @@ export function MainWindow() {
         onSaved={reloadStatus}
       />
     );
+  } else if (page === "go") {
+    body = (
+      <GoUsagePage
+        report={report}
+        loading={loading}
+        token={tokenUsage}
+        nowMs={nowMs}
+        onRefresh={refresh}
+      />
+    );
   } else {
     body = (
       <Dashboard
         report={report}
         loading={loading}
         error={error}
+        token={tokenUsage}
         nowMs={nowMs}
         onRefresh={refresh}
       />
@@ -201,8 +215,8 @@ export function MainWindow() {
           update.status === "ready_to_install") ? (
           <UpdateBanner update={update} />
         ) : null}
-        <div className={`main-body ${dashboardOpen ? "main-body-scroll" : ""}`}>{body}</div>
-        {dashboardOpen ? <div className="main-footer">{footer}</div> : null}
+        <div className={`main-body ${contentOpen ? "main-body-scroll" : ""}`}>{body}</div>
+        {contentOpen ? <div className="main-footer">{footer}</div> : null}
       </div>
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </div>

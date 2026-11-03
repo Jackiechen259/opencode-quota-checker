@@ -4,6 +4,10 @@
 pub const QUOTA_UPDATED: &str = "quota://updated";
 /// Fired with an `AppError` after a failed quota fetch.
 pub const QUOTA_ERROR: &str = "quota://error";
+/// Fired with a `TokenUsageDto` whenever the token-usage state changes.
+pub const TOKEN_USAGE_STATE: &str = "token://state";
+/// Fired with a `GoOverviewDto` whenever the on-demand Go overview changes.
+pub const GO_OVERVIEW_STATE: &str = "go://overview";
 /// Fired with a `MonitorStatusDto` whenever monitoring state changes.
 pub const MONITOR_STATUS: &str = "monitor://status";
 /// Fired with a `FloatStateDto` whenever the floating window changes.

@@ -1,23 +1,58 @@
-//! HTTP client for the OpenCode Go usage API.
+//! HTTP client for the OpenCode Go and Console usage endpoints.
 //!
-//! `GET https://opencode.ai/zen/go/v1/usage` returns the three Go allowance
-//! windows as JSON. It authenticates with an OpenCode Console API key
-//! (`oc_sk_...`) sent as a bearer token; the key is never included in returned
-//! values or error messages.
+//! All requests authenticate with an OpenCode Console API key (`oc_sk_...`)
+//! sent as a bearer token; the key is never included in returned values or
+//! error messages. The legacy `x-opencode-org-id` header is only used by the
+//! Go allowance endpoint when the user configured a workspace override.
+//!
+//! Endpoints:
+//!
+//! * `GET /zen/go/v1/usage` - Go allowance percentages.
+//! * `GET /console/api/usage/summary` - workspace token totals.
+//! * `GET /console/api/go/status` - Go subscription meters and period start.
+//! * `GET /console/api/activity/go` - Go-only daily and per-model activity.
+//! * `GET /console/api/billing/status` - available credit (optional).
 
+use crate::token_usage::TOKEN_USAGE_RANGE;
 use crate::OpenCodeError;
 use std::time::Duration;
 use url::Url;
 
 const DEFAULT_ENDPOINT: &str = "https://opencode.ai";
 const USAGE_PATH: &str = "/zen/go/v1/usage";
+const CONSOLE_USAGE_PATH: &str = "/console/api/usage/summary";
+const GO_STATUS_PATH: &str = "/console/api/go/status";
+const GO_ACTIVITY_PATH: &str = "/console/api/activity/go";
+const BILLING_STATUS_PATH: &str = "/console/api/billing/status";
+const INCLUDE_LEGACY_KEYS: &str = "true";
 const TIMEOUT: Duration = Duration::from_secs(15);
 
 /// User agent required by the Go terms: clients must identify themselves
 /// instead of presenting as a generic HTTP library.
 const USER_AGENT: &str = concat!("opencode-quota-checker/", env!("CARGO_PKG_VERSION"));
 
-/// Reusable client for the OpenCode Go usage endpoint.
+/// How a 403 from a given endpoint should be interpreted.
+#[derive(Debug, Clone, Copy)]
+enum Forbidden {
+    /// The Go allowance endpoint: no subscription or missing Usage permission.
+    NotSubscribed,
+    /// Console usage/status/activity: missing `usage:read` or workspace access.
+    Usage,
+    /// Billing status: missing `billing:read`.
+    Billing,
+}
+
+impl Forbidden {
+    fn into_error(self) -> OpenCodeError {
+        match self {
+            Self::NotSubscribed => OpenCodeError::NotSubscribed,
+            Self::Usage => OpenCodeError::UsagePermissionDenied,
+            Self::Billing => OpenCodeError::BillingPermissionDenied,
+        }
+    }
+}
+
+/// Reusable client for the OpenCode Go and Console usage endpoints.
 #[derive(Clone, Debug)]
 pub struct OpenCodeClient {
     http: reqwest::Client,
@@ -55,24 +90,88 @@ impl OpenCodeClient {
         Ok(Self { http, endpoint })
     }
 
-    /// Fetches the raw usage JSON for the workspace behind `api_key`.
+    /// Fetches the raw Go allowance JSON for the workspace behind `api_key`.
     ///
-    /// `api_key` is a secret and only ever transmitted as the `Authorization`
-    /// header. `workspace_id` selects the workspace through `x-opencode-org-id`
-    /// and is omitted when empty, because a personal API key is already bound to
-    /// the workspace it was created in.
+    /// `workspace_id` selects the workspace through `x-opencode-org-id` and is
+    /// omitted when empty, because a personal API key is already bound to the
+    /// workspace it was created in.
     pub async fn fetch_usage(
         &self,
         api_key: &str,
         workspace_id: Option<&str>,
     ) -> Result<String, OpenCodeError> {
-        let url = self.endpoint.join(USAGE_PATH).map_err(|error| {
-            OpenCodeError::Config(format!("invalid usage endpoint path: {error}"))
-        })?;
+        self.get_json(
+            api_key,
+            USAGE_PATH,
+            &[],
+            workspace_id,
+            Forbidden::NotSubscribed,
+        )
+        .await
+    }
+
+    /// Fetches the raw workspace token-usage summary for the last 30 days.
+    pub async fn fetch_token_usage(&self, api_key: &str) -> Result<String, OpenCodeError> {
+        self.get_json(
+            api_key,
+            CONSOLE_USAGE_PATH,
+            &[
+                ("range", TOKEN_USAGE_RANGE),
+                ("includeLegacyKeys", INCLUDE_LEGACY_KEYS),
+            ],
+            None,
+            Forbidden::Usage,
+        )
+        .await
+    }
+
+    /// Fetches the Go subscription status.
+    ///
+    /// `fresh` asks the server to bypass its short-lived status cache; the
+    /// overview page uses it for manual refreshes.
+    pub async fn fetch_go_status(
+        &self,
+        api_key: &str,
+        fresh: bool,
+    ) -> Result<String, OpenCodeError> {
+        let query: &[(&str, &str)] = if fresh { &[("fresh", "true")] } else { &[] };
+        self.get_json(api_key, GO_STATUS_PATH, query, None, Forbidden::Usage)
+            .await
+    }
+
+    /// Fetches the Go-only daily and per-model activity for the paid period.
+    pub async fn fetch_go_activity(&self, api_key: &str) -> Result<String, OpenCodeError> {
+        self.get_json(api_key, GO_ACTIVITY_PATH, &[], None, Forbidden::Usage)
+            .await
+    }
+
+    /// Fetches the workspace billing status (available credit).
+    ///
+    /// Requires `billing:read`; callers must treat a 403 as an optional card
+    /// failure rather than a page failure.
+    pub async fn fetch_billing_status(&self, api_key: &str) -> Result<String, OpenCodeError> {
+        self.get_json(api_key, BILLING_STATUS_PATH, &[], None, Forbidden::Billing)
+            .await
+    }
+
+    /// Shared GET implementation with bounded error bodies.
+    async fn get_json(
+        &self,
+        api_key: &str,
+        path: &str,
+        query: &[(&str, &str)],
+        workspace_id: Option<&str>,
+        forbidden: Forbidden,
+    ) -> Result<String, OpenCodeError> {
+        let url = self
+            .endpoint
+            .join(path)
+            .map_err(|error| OpenCodeError::Config(format!("invalid endpoint path: {error}")))?;
 
         let mut request = self
             .http
             .get(url)
+            .query(query)
             .header("Accept", "application/json")
             .header("User-Agent", USER_AGENT)
             .bearer_auth(api_key);
@@ -92,9 +191,7 @@ impl OpenCodeClient {
         }
         Err(match status.as_u16() {
             401 => OpenCodeError::AuthenticationFailed,
-            // A key that cannot read the workspace's Go allowance either belongs
-            // to a workspace without a Go subscription or lacks the permission.
-            403 => OpenCodeError::NotSubscribed,
+            403 => forbidden.into_error(),
             429 => OpenCodeError::RateLimited,
             _ => OpenCodeError::Http {
                 status,

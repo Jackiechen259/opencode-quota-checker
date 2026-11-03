@@ -7,8 +7,12 @@
 //! instead of silently producing `undefined` fields that look like a hung
 //! app in the UI (the "正在检查系统钥匙串…" freeze was exactly that).
 
-use opencode_core::QuotaService;
+use opencode_core::{
+    BillingReport, GoAccess, GoActivityDay, GoActivityReport, GoMeter, GoModelUsage,
+    GoStatusReport, OpenCodeError, QuotaService, TokenUsageReport,
+};
 use opencode_quota_checker_lib::credential_task::CredentialCheckResult;
+use opencode_quota_checker_lib::error::AppError;
 use opencode_quota_checker_lib::float::state::{DockPlan, FloatEdge};
 use opencode_quota_checker_lib::state::{AppState, UpdateStatus};
 use serde_json::{json, Value};
@@ -190,5 +194,217 @@ fn credential_and_update_phases_stay_snake_case() {
         json.pointer("/status"),
         Some(&json!("ready_to_install")),
         "update status must serialize as snake_case string"
+    );
+}
+
+#[test]
+fn token_usage_dto_uses_the_expected_contract() {
+    let state = state();
+    {
+        let mut token = state.token_usage.lock().expect("token usage mutex");
+        token.report = Some(TokenUsageReport {
+            range: "30d".to_owned(),
+            requests: 123,
+            input_tokens: 1_000,
+            output_tokens: 2_000,
+            cache_read_tokens: 3_000,
+            cache_write_tokens: 100,
+            total_tokens: 6_100,
+            cost_microcents: 30_000_000,
+            fetched_at: 1_778_800_000_000,
+        });
+        token.last_success_ms = Some(42);
+    }
+    let json = serde_json::to_value(state.token_usage_dto()).expect("dto serializes");
+
+    // Container fields are camelCase.
+    assert_has(&json, "lastSuccessMs");
+    assert_has(&json, "loading");
+    assert_has(&json, "report");
+    assert_has(&json, "error");
+    assert_lacks(&json, "last_success_ms");
+
+    // The embedded core report keeps its serde field names (snake_case).
+    let report = json.get("report").expect("report snapshot");
+    assert_has(report, "input_tokens");
+    assert_has(report, "output_tokens");
+    assert_has(report, "cache_read_tokens");
+    assert_has(report, "cache_write_tokens");
+    assert_has(report, "total_tokens");
+    assert_has(report, "cost_microcents");
+    assert_lacks(report, "inputTokens");
+    assert_lacks(report, "costMicrocents");
+    assert_eq!(report.get("total_tokens"), Some(&json!(6_100)));
+}
+
+#[test]
+fn usage_permission_error_has_a_stable_code() {
+    let error = AppError::from(OpenCodeError::UsagePermissionDenied);
+    assert_eq!(error.code, "usage_permission_denied");
+    assert!(
+        error.user.contains("Usage › Read"),
+        "the permission message must name the required scope, got: {}",
+        error.user
+    );
+}
+
+#[test]
+fn reset_token_usage_invalidates_in_flight_results() {
+    let state = state();
+    state.token_usage.lock().expect("token usage mutex").report = Some(TokenUsageReport {
+        range: "30d".to_owned(),
+        requests: 1,
+        input_tokens: 1,
+        output_tokens: 1,
+        cache_read_tokens: 1,
+        cache_write_tokens: 1,
+        total_tokens: 4,
+        cost_microcents: 1,
+        fetched_at: 1,
+    });
+    let before = state
+        .token_usage
+        .lock()
+        .expect("token usage mutex")
+        .generation;
+    state.reset_token_usage();
+    let token = state.token_usage.lock().expect("token usage mutex");
+    assert!(token.report.is_none(), "reset must clear the stale report");
+    assert_eq!(
+        token.generation,
+        before + 1,
+        "reset must invalidate an in-flight response"
+    );
+}
+
+#[test]
+fn go_overview_dto_uses_the_expected_contract() {
+    let state = state();
+    {
+        let mut go = state.go_overview.lock().expect("go overview mutex");
+        go.status = Some(GoStatusReport {
+            product: "go".to_owned(),
+            cancel_at_period_end: false,
+            use_balance: false,
+            access: Some(GoAccess {
+                starts_at: 1,
+                five_hour: None,
+                week: None,
+                month: Some(GoMeter {
+                    used_microcents: 24,
+                    limit_microcents: 100,
+                    resets_at: 2,
+                    percent: 24.0,
+                    limited: false,
+                }),
+            }),
+            fetched_at: 3,
+        });
+        go.activity = Some(GoActivityReport {
+            starts_at: 1,
+            daily: vec![GoActivityDay {
+                date: "2026-10-26".to_owned(),
+                cost_microcents: 10,
+                requests: 2,
+                tokens: 3,
+            }],
+            models: vec![GoModelUsage {
+                provider: "opencode".to_owned(),
+                model: "deepseek-v4.1-flash".to_owned(),
+                requests: 2,
+            }],
+            total_cost_microcents: 10,
+            total_requests: 2,
+            total_tokens: 3,
+            fetched_at: 4,
+        });
+        go.billing = Some(BillingReport {
+            available_microcents: 0,
+            balance_microcents: 0,
+            billing_mode: "prepaid".to_owned(),
+            fetched_at: 5,
+        });
+        go.last_success_ms = Some(6);
+    }
+    let json = serde_json::to_value(state.go_overview_dto()).expect("dto serializes");
+
+    // Container fields are camelCase.
+    assert_has(&json, "status");
+    assert_has(&json, "activity");
+    assert_has(&json, "billing");
+    assert_has(&json, "statusError");
+    assert_has(&json, "activityError");
+    assert_has(&json, "billingError");
+    assert_has(&json, "lastSuccessMs");
+    assert_lacks(&json, "status_error");
+
+    // Nested core reports keep their snake_case fields.
+    let status = json.get("status").expect("status snapshot");
+    assert_has(status, "cancel_at_period_end");
+    assert_has(status, "use_balance");
+    assert_lacks(status, "cancelAtPeriodEnd");
+    let access = status.get("access").expect("access");
+    assert_has(access, "starts_at");
+    assert_lacks(access, "startsAt");
+    let month = access.get("month").expect("monthly meter");
+    assert_has(month, "used_microcents");
+    assert_has(month, "limit_microcents");
+    assert_has(month, "resets_at");
+    assert_has(month, "percent");
+    assert_has(month, "limited");
+    assert_lacks(month, "usedMicroCents");
+
+    let activity = json.get("activity").expect("activity snapshot");
+    assert_has(activity, "starts_at");
+    assert_has(activity, "total_cost_microcents");
+    assert_has(activity, "total_requests");
+    assert_has(activity, "total_tokens");
+    assert_lacks(activity, "totalRequests");
+    let first_day = activity
+        .get("daily")
+        .and_then(Value::as_array)
+        .and_then(|days| days.first())
+        .expect("first day");
+    assert_has(first_day, "cost_microcents");
+    assert_has(first_day, "requests");
+    assert_has(first_day, "tokens");
+    assert_lacks(first_day, "costMicrocents");
+
+    let billing = json.get("billing").expect("billing snapshot");
+    assert_has(billing, "available_microcents");
+    assert_has(billing, "balance_microcents");
+    assert_has(billing, "billing_mode");
+    assert_lacks(billing, "availableMicroCents");
+}
+
+#[test]
+fn reset_go_overview_invalidates_in_flight_results() {
+    let state = state();
+    state.go_overview.lock().expect("go overview mutex").status = Some(GoStatusReport {
+        product: "go".to_owned(),
+        cancel_at_period_end: false,
+        use_balance: false,
+        access: None,
+        fetched_at: 1,
+    });
+    let before = state
+        .go_overview
+        .lock()
+        .expect("go overview mutex")
+        .generation;
+    state.reset_go_overview();
+    let go = state.go_overview.lock().expect("go overview mutex");
+    assert!(go.status.is_none(), "reset must clear the stale status");
+    assert_eq!(go.generation, before + 1);
+}
+
+#[test]
+fn billing_permission_error_has_a_stable_code() {
+    let error = AppError::from(OpenCodeError::BillingPermissionDenied);
+    assert_eq!(error.code, "billing_permission_denied");
+    assert!(
+        error.user.contains("Billing › Read"),
+        "the billing message must name the required scope, got: {}",
+        error.user
     );
 }

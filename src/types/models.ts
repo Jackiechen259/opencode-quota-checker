@@ -68,6 +68,105 @@ export interface UsageReport {
   fetched_at: number;
 }
 
+/**
+ * Workspace token usage for one period, from the Console Activity summary.
+ *
+ * The Rust `TokenUsageReport` has no `rename_all`, so these field names stay
+ * snake_case just like `UsageReport`. Counts cross IPC as JSON numbers; the
+ * current 30-day totals are far below `Number.MAX_SAFE_INTEGER`.
+ */
+export interface TokenUsageReport {
+  range: string;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  total_tokens: number;
+  cost_microcents: number;
+  fetched_at: number;
+}
+
+/** IPC snapshot for the Token 用量 card; separate from the quota snapshot. */
+export interface TokenUsageDto {
+  report: TokenUsageReport | null;
+  loading: boolean;
+  error: AppError | null;
+  lastSuccessMs: number | null;
+}
+
+/** One Go allowance meter from `/console/api/go/status`. */
+export interface GoMeter {
+  used_microcents: number;
+  limit_microcents: number;
+  resets_at: number;
+  percent: number;
+  limited: boolean;
+}
+
+/** Paid-period access block for the Go subscription. */
+export interface GoAccess {
+  starts_at: number;
+  five_hour: GoMeter | null;
+  week: GoMeter | null;
+  month: GoMeter | null;
+}
+
+/** Go subscription status; accessible only when the key can read usage. */
+export interface GoStatusReport {
+  product: string;
+  cancel_at_period_end: boolean;
+  use_balance: boolean;
+  access: GoAccess | null;
+  fetched_at: number;
+}
+
+/** One Go-only daily usage point. */
+export interface GoActivityDay {
+  date: string;
+  cost_microcents: number;
+  requests: number;
+  tokens: number;
+}
+
+/** Per-model request count for the current Go period. */
+export interface GoModelUsage {
+  provider: string;
+  model: string;
+  requests: number;
+}
+
+/** Go-only activity for the current paid period. */
+export interface GoActivityReport {
+  starts_at: number;
+  daily: GoActivityDay[];
+  models: GoModelUsage[];
+  total_cost_microcents: number;
+  total_requests: number;
+  total_tokens: number;
+  fetched_at: number;
+}
+
+/** Billing credit used by the Extra usage card (optional source). */
+export interface BillingReport {
+  available_microcents: number;
+  balance_microcents: number;
+  billing_mode: string;
+  fetched_at: number;
+}
+
+/** On-demand Go overview snapshot; each source has its own error. */
+export interface GoOverviewDto {
+  status: GoStatusReport | null;
+  activity: GoActivityReport | null;
+  billing: BillingReport | null;
+  statusError: AppError | null;
+  activityError: AppError | null;
+  billingError: AppError | null;
+  loading: boolean;
+  lastSuccessMs: number | null;
+}
+
 export interface Thresholds {
   five_hour: number;
   weekly: number;
@@ -224,6 +323,8 @@ export function healthStatusLabel(health: QuotaHealth): string {
 export const EVENT = {
   QUOTA_UPDATED: "quota://updated",
   QUOTA_ERROR: "quota://error",
+  TOKEN_USAGE_STATE: "token://state",
+  GO_OVERVIEW_STATE: "go://overview",
   MONITOR_STATUS: "monitor://status",
   FLOAT_STATE: "float://state",
   UPDATE_STATE: "update://state",

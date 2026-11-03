@@ -128,9 +128,9 @@ describe("FloatWindow state architecture", () => {
     render(<FloatWindow />);
     expect(await screen.findByText("5 小时")).toBeInTheDocument();
     expect(screen.getByText("每周")).toBeInTheDocument();
-    expect(screen.getByText("4.0%")).toBeInTheDocument();
-    expect(screen.getByText("27.0%")).toBeInTheDocument();
-    expect(screen.getByText("最高 27.0%")).toBeInTheDocument();
+    expect(screen.getByText("4%")).toBeInTheDocument();
+    expect(screen.getByText("27%")).toBeInTheDocument();
+    expect(screen.getByText("最高 27%")).toBeInTheDocument();
     // Full header carries the app title + a compact button.
     expect(screen.getByText("OpenCode Quota Checker")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "切换到精简视图" })).toBeInTheDocument();
@@ -147,14 +147,14 @@ describe("FloatWindow state architecture", () => {
     // Compact shows only the highest-risk window and an expand button.
     expect(await screen.findByRole("button", { name: "展开全部配额" })).toBeInTheDocument();
     expect(screen.queryByText("OpenCode Quota Checker")).not.toBeInTheDocument();
-    expect(screen.queryByText("4.0%")).not.toBeInTheDocument();
-    expect(screen.getByText("27.0%")).toBeInTheDocument();
+    expect(screen.queryByText("4%")).not.toBeInTheDocument();
+    expect(screen.getByText("27%")).toBeInTheDocument();
 
     act(() => {
       tauri.emit(EVENT.FLOAT_STATE, fullState);
     });
     expect(await screen.findByText("OpenCode Quota Checker")).toBeInTheDocument();
-    expect(screen.getByText("4.0%")).toBeInTheDocument();
+    expect(screen.getByText("4%")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "展开全部配额" })).not.toBeInTheDocument();
   });
 
@@ -190,10 +190,10 @@ describe("FloatWindow state architecture", () => {
     installInvokeRouter({ floatState: dockedTopState, usage: usage([windowReport("a", "5 小时", 4)]) });
     render(<FloatWindow />);
     expect(await screen.findByText("5 小时")).toBeInTheDocument();
-    expect(screen.getByText("4.0%")).toBeInTheDocument();
+    expect(screen.getByText("4%")).toBeInTheDocument();
     expect(screen.getByText("剩余 960")).toBeInTheDocument();
 
-    const progress = screen.getByRole("progressbar", { name: "5 小时 已用 4.0%" });
+    const progress = screen.getByRole("progressbar", { name: "5 小时 已用 4%" });
     expect(progress).toHaveAttribute("aria-valuenow", "4");
     expect(progress.firstElementChild as HTMLElement).toHaveStyle({ width: "4%" });
 
@@ -204,7 +204,7 @@ describe("FloatWindow state architecture", () => {
 
     // No Full chrome in the docked strip.
     expect(screen.queryByText("OpenCode Quota Checker")).not.toBeInTheDocument();
-    expect(screen.queryByText("最高 4.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("最高 4%")).not.toBeInTheDocument();
   });
 
   it.each([
@@ -263,7 +263,7 @@ describe("FloatWindow state architecture", () => {
     });
     const { container } = render(<FloatWindow />);
     const progress = await screen.findByRole("progressbar", {
-      name: "5 小时 已用 4.0%",
+      name: "5 小时 已用 4%",
     });
     expect(container.querySelector(".float-docked-content")).toHaveClass(
       "float-docked-content--side",
@@ -304,7 +304,7 @@ describe("FloatWindow side rails", () => {
       usage: usage([windowReport("a", "5 小时", 4)]),
     });
     const { container } = render(<FloatWindow />);
-    expect(await screen.findByRole("progressbar", { name: "5 小时 已用 4.0%" })).toBeInTheDocument();
+    expect(await screen.findByRole("progressbar", { name: "5 小时 已用 4%" })).toBeInTheDocument();
     expect(container.querySelector(".float-docked")).toHaveClass("float-docked--top");
 
     act(() => {
@@ -324,7 +324,7 @@ describe("FloatWindow docked hover card", () => {
       usage: usage([windowReport("a", "5 小时", 4)]),
     });
     const { container } = render(<FloatWindow />);
-    await screen.findByRole("progressbar", { name: "5 小时 已用 4.0%" });
+    await screen.findByRole("progressbar", { name: "5 小时 已用 4%" });
     const root = container.querySelector(".float-window") as HTMLElement;
 
     fireEvent.pointerOver(root);
@@ -355,9 +355,9 @@ describe("FloatWindow docked hover card", () => {
 
     // Three rings in the canonical 5h / weekly / monthly order.
     expect(container.querySelectorAll(".float-dock-ring-gauge")).toHaveLength(3);
-    expect(screen.getByRole("progressbar", { name: "5 小时 已用 78.0%" })).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "近一周 已用 52.0%" })).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "近一月 已用 19.0%" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "5 小时 已用 78%" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "近一周 已用 52%" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "近一月 已用 19%" })).toBeInTheDocument();
     expect(screen.getByText("剩余 220")).toBeInTheDocument();
 
     // The ring arc is a dash offset of the full circumference, so a 78 % window
@@ -392,7 +392,7 @@ describe("FloatWindow docked hover card", () => {
       tauri.emit(EVENT.FLOAT_STATE, dockedTopState);
     });
     expect(
-      await screen.findByRole("progressbar", { name: "5 小时 已用 78.0%" }),
+      await screen.findByRole("progressbar", { name: "5 小时 已用 78%" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("配额概览")).not.toBeInTheDocument();
   });
@@ -446,7 +446,7 @@ describe("FloatWindow drag regions", () => {
       usage: usage([windowReport("a", "5 小时", 4)]),
     });
     const { container } = render(<FloatWindow />);
-    await screen.findByRole("progressbar", { name: "5 小时 已用 4.0%" });
+    await screen.findByRole("progressbar", { name: "5 小时 已用 4%" });
 
     expect(container.querySelector(".float-docked")).toHaveAttribute(
       "data-tauri-drag-region",
@@ -479,8 +479,8 @@ describe("FloatWindow views", () => {
       usage: usage([windowReport("a", "5 小时", 4), windowReport("b", "每周", 27)]),
     });
     render(<FloatWindow />);
-    expect(await screen.findByText("27.0%")).toBeInTheDocument();
-    expect(screen.queryByText("4.0%")).not.toBeInTheDocument();
+    expect(await screen.findByText("27%")).toBeInTheDocument();
+    expect(screen.queryByText("4%")).not.toBeInTheDocument();
     expect(screen.getByText("剩余额度")).toBeInTheDocument();
   });
 
@@ -490,15 +490,15 @@ describe("FloatWindow views", () => {
     render(<FloatWindow />);
     const label = await screen.findByTitle(longLabel);
     expect(label).toBeInTheDocument();
-    expect(screen.getByText("12.0%")).toBeInTheDocument();
+    expect(screen.getByText("12%")).toBeInTheDocument();
   });
 
   it.each([
-    [0, "0.0%"],
-    [0.1, "0.1%"],
-    [50, "50.0%"],
-    [99.9, "99.9%"],
-    [100, "100.0%"],
+    [0, "0%"],
+    [0.1, "0%"],
+    [50, "50%"],
+    [99.9, "100%"],
+    [100, "100%"],
   ])("renders the %s%% extreme without overflow", async (percent, text) => {
     installInvokeRouter({
       usage: usage([windowReport("a", "5 小时", percent)]),

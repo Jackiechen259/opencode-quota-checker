@@ -4,6 +4,7 @@
 // The only ticking piece is the reset countdown on the bottom row.
 
 import { Dot } from "../../components/common";
+import { percent } from "../../lib/format";
 import { quotaHealth, type UsageReport } from "../../types/models";
 import {
   clampPercent,
@@ -37,13 +38,13 @@ export function CompactView({
   }
   const health = quotaHealth(window.percent);
   const accent = healthColors[health];
-  const percent = clampPercent(window.percent);
+  const used = clampPercent(window.percent);
   return (
     <div className="float-compact">
       <div className="float-compact-hero">
         <div className="float-compact-percent-block">
           <span className="float-compact-percent" style={{ color: accent }}>
-            {window.percent.toFixed(1)}%
+            {percent(window.percent)}
           </span>
           <span className="float-compact-label" title={window.label}>
             {window.label}
@@ -59,10 +60,10 @@ export function CompactView({
       <div
         className="float-card-progress"
         role="progressbar"
-        aria-valuenow={Math.round(percent)}
+        aria-valuenow={Math.round(used)}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={`${window.label} 已用 ${percent.toFixed(1)}%`}
+        aria-label={`${window.label} 已用 ${percent(window.percent)}`}
       >
         <div
           className="float-card-progress-fill"

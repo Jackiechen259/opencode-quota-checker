@@ -51,6 +51,8 @@ impl From<OpenCodeError> for AppError {
             OpenCodeError::Request(_) => "request_failed",
             OpenCodeError::AuthenticationFailed => "authentication_failed",
             OpenCodeError::NotSubscribed => "not_subscribed",
+            OpenCodeError::UsagePermissionDenied => "usage_permission_denied",
+            OpenCodeError::BillingPermissionDenied => "billing_permission_denied",
             OpenCodeError::RateLimited => "rate_limited",
             OpenCodeError::Parse(_) => "parse_failed",
             OpenCodeError::Http { .. } => "http_error",

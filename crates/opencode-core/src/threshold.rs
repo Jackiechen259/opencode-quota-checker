@@ -73,6 +73,16 @@ pub struct AlertEvaluation {
     pub next_alerted: HashMap<String, i64>,
 }
 
+/// Formats a quota amount without a redundant trailing zero.
+///
+/// The report works on a 100-point scale, so whole amounts are the norm and
+/// `"100.0"` in a notification is noise. A real fraction keeps its single
+/// decimal (`"90.6"`), matching the UI formatter.
+fn quota_amount(value: f64) -> String {
+    let text = format!("{value:.1}");
+    text.strip_suffix(".0").unwrap_or(&text).to_owned()
+}
+
 /// Evaluates thresholds and returns both new alerts and deduplication state.
 pub fn evaluate_alerts(
     report: &UsageReport,
@@ -89,8 +99,11 @@ pub fn evaluate_alerts(
                     window_key: window.key.clone(),
                     title: format!("配额告警：{}", window.label),
                     body: format!(
-                        "已用 {:.1} / {:.1} ({:.0}%)，剩余 {:.1}",
-                        window.used, window.quota, window.percent, window.remaining
+                        "已用 {} / {} ({:.0}%)，剩余 {}",
+                        quota_amount(window.used),
+                        quota_amount(window.quota),
+                        window.percent,
+                        quota_amount(window.remaining)
                     ),
                     alert_cycle: window.subscribe_time,
                 });
@@ -142,6 +155,19 @@ mod tests {
 
         let next_cycle = evaluate_alerts(&report(90.0, 11), &thresholds, &duplicate.next_alerted);
         assert_eq!(next_cycle.decisions.len(), 1);
+    }
+
+    #[test]
+    fn alert_body_omits_a_redundant_trailing_zero() {
+        let thresholds = Thresholds::default();
+        let whole = evaluate_alerts(&report(90.0, 10), &thresholds, &HashMap::new());
+        assert_eq!(whole.decisions[0].body, "已用 90 / 100 (90%)，剩余 10");
+
+        let fractional = evaluate_alerts(&report(90.6, 10), &thresholds, &HashMap::new());
+        assert_eq!(
+            fractional.decisions[0].body, "已用 90.6 / 100 (91%)，剩余 9.4",
+            "a real fraction keeps its single decimal"
+        );
     }
 
     #[test]

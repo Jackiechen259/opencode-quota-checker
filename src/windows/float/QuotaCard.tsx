@@ -5,6 +5,7 @@
 
 import type { CSSProperties } from "react";
 import { Dot } from "../../components/common";
+import { percent } from "../../lib/format";
 import { quotaHealth, type WindowReport } from "../../types/models";
 import { clampPercent, compactNumber, healthColors, progressWidth } from "./floatLayout";
 import { ResetCountdown } from "./tickers";
@@ -12,7 +13,7 @@ import { ResetCountdown } from "./tickers";
 export function QuotaCard({ window }: { window: WindowReport }) {
   const health = quotaHealth(window.percent, window.limited);
   const accent = healthColors[health];
-  const percent = clampPercent(window.percent);
+  const used = clampPercent(window.percent);
   return (
     <div className="float-card" style={{ "--quota-accent": accent } as CSSProperties}>
       <div className="float-card-top">
@@ -22,15 +23,15 @@ export function QuotaCard({ window }: { window: WindowReport }) {
             {window.label}
           </span>
         </span>
-        <span className="float-card-percent">{window.percent.toFixed(1)}%</span>
+        <span className="float-card-percent">{percent(window.percent)}</span>
       </div>
       <div
         className="float-card-progress"
         role="progressbar"
-        aria-valuenow={Math.round(percent)}
+        aria-valuenow={Math.round(used)}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={`${window.label} 已用 ${percent.toFixed(1)}%`}
+        aria-label={`${window.label} 已用 ${percent(window.percent)}`}
       >
         <div
           className="float-card-progress-fill"

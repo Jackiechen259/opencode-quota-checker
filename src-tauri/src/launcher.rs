@@ -9,6 +9,9 @@
 /// OpenCode Console: where API keys are created and usage lives.
 pub const CONSOLE_URL: &str = "https://opencode.ai/console";
 
+/// OpenCode Console Go page: subscription, limits, models, and extra usage.
+pub const GO_URL: &str = "https://opencode.ai/console/go";
+
 /// Opens `url` in the system default browser.
 pub fn open_url(url: &str) -> Result<(), String> {
     let result = spawn_browser(url);

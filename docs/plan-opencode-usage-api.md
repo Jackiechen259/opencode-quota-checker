@@ -325,6 +325,9 @@ README.md, docs/architecture/usage-api.md             改 / 新增
 - 接入本地 opencode 服务 `usage.limits`（OpenAPI `experimental.usage.limits`），用于"opencode 已登录时免配置"的场景——代价是依赖本地服务在跑。
 - 用 `status: "rate-limited"` 驱动托盘图标变色。
 
+> 2026-11-03 追加：Token 用量已通过 Console 的 `/console/api/usage/summary` 接入仪表盘，
+> 见 [Token 用量接口](architecture/token-usage-api.md)。周期切换、趋势图与按模型拆分仍为后续项。
+
 ---
 
 ## 10. 实施记录

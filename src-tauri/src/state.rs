@@ -10,7 +10,9 @@ use crate::credential_task::CredentialCheckResult;
 use crate::error::AppError;
 use crate::float::FloatRuntime;
 pub use crate::float::FloatStateDto;
-use opencode_core::{QuotaService, UsageReport};
+use opencode_core::{
+    BillingReport, GoActivityReport, GoStatusReport, QuotaService, TokenUsageReport, UsageReport,
+};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -64,6 +66,44 @@ pub struct UsageState {
     pub raw_loading: bool,
     pub error: Option<AppError>,
     pub last_success_ms: Option<i64>,
+}
+
+/// Latest workspace token-usage request state shared with the frontend.
+///
+/// Token usage is a separate, best-effort data source: failures here must never
+/// leak into [`UsageState`], the monitor's quota error, or notifications.
+#[derive(Debug, Default)]
+pub struct TokenUsageState {
+    pub report: Option<TokenUsageReport>,
+    pub loading: bool,
+    pub error: Option<AppError>,
+    pub last_success_ms: Option<i64>,
+    /// Last request attempt in milliseconds; drives the 5-minute throttle.
+    pub last_attempt_ms: Option<i64>,
+    /// Incremented whenever credentials are replaced or cleared so a slow
+    /// response from the previous key can never overwrite the new state.
+    pub generation: u64,
+}
+
+/// Latest on-demand Go overview state (status, activity, billing).
+///
+/// This data is only fetched while the Go page is open; it is deliberately
+/// separate from the monitor's quota/token state so a Console 403/400 can never
+/// disturb the dashboard, alerts, tray, or floating window.
+#[derive(Debug, Default)]
+pub struct GoOverviewState {
+    pub status: Option<GoStatusReport>,
+    pub activity: Option<GoActivityReport>,
+    pub billing: Option<BillingReport>,
+    pub status_error: Option<AppError>,
+    pub activity_error: Option<AppError>,
+    pub billing_error: Option<AppError>,
+    pub loading: bool,
+    pub last_success_ms: Option<i64>,
+    /// Last request attempt in milliseconds; drives the on-demand cache.
+    pub last_attempt_ms: Option<i64>,
+    /// Credential generation guard for in-flight responses.
+    pub generation: u64,
 }
 
 /// Monitoring and notification deduplication state.
@@ -128,8 +168,9 @@ pub struct UpdateState {
 /// # Lock ordering
 ///
 /// Global lock order (highest to lowest priority): **credentials → config →
-/// tray → monitor → floating → updater → usage**. The `tray_error` /
-/// `config_error` `RwLock`s are leaf resources and never nested.
+/// tray → monitor → floating → updater → usage → token_usage → go_overview**.
+/// The `tray_error` / `config_error` `RwLock`s are leaf resources and never
+/// nested.
 ///
 /// Hard rules enforced across the crate:
 ///
@@ -146,6 +187,8 @@ pub struct UpdateState {
 pub struct AppState {
     pub config: Mutex<AppConfig>,
     pub usage: Mutex<UsageState>,
+    pub token_usage: Mutex<TokenUsageState>,
+    pub go_overview: Mutex<GoOverviewState>,
     pub monitor: Mutex<MonitorState>,
     pub floating: Mutex<FloatRuntime>,
     pub updater: Mutex<UpdateState>,
@@ -171,6 +214,8 @@ impl AppState {
         Self {
             config: Mutex::new(AppConfig::default()),
             usage: Mutex::new(UsageState::default()),
+            token_usage: Mutex::new(TokenUsageState::default()),
+            go_overview: Mutex::new(GoOverviewState::default()),
             monitor: Mutex::new(MonitorState::default()),
             floating: Mutex::new(FloatRuntime::default()),
             updater: Mutex::new(UpdateState::default()),
@@ -348,6 +393,33 @@ pub struct UsageDto {
     pub last_success_ms: Option<i64>,
 }
 
+/// Latest workspace token-usage snapshot returned by `get_token_usage` and
+/// emitted on `token://state`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenUsageDto {
+    pub report: Option<TokenUsageReport>,
+    pub loading: bool,
+    pub error: Option<AppError>,
+    pub last_success_ms: Option<i64>,
+}
+
+/// On-demand Go overview snapshot returned by `get_go_overview` and emitted on
+/// `go://overview`. Each data source has its own error so the page can render
+/// a partial result (for example, status + activity without billing credit).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoOverviewDto {
+    pub status: Option<GoStatusReport>,
+    pub activity: Option<GoActivityReport>,
+    pub billing: Option<BillingReport>,
+    pub status_error: Option<AppError>,
+    pub activity_error: Option<AppError>,
+    pub billing_error: Option<AppError>,
+    pub loading: bool,
+    pub last_success_ms: Option<i64>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfoDto {
@@ -411,6 +483,55 @@ impl AppState {
             error: usage.error.clone(),
             last_success_ms: usage.last_success_ms,
         }
+    }
+
+    /// Builds the current token-usage snapshot for IPC/events.
+    pub fn token_usage_dto(&self) -> TokenUsageDto {
+        let token = self.token_usage.lock().expect("token usage mutex");
+        TokenUsageDto {
+            report: token.report.clone(),
+            loading: token.loading,
+            error: token.error.clone(),
+            last_success_ms: token.last_success_ms,
+        }
+    }
+
+    /// Clears the token-usage state and invalidates any in-flight response.
+    ///
+    /// The generation bump is what protects a new key from being overwritten by
+    /// a request that was started with the previous key.
+    pub fn reset_token_usage(&self) {
+        let mut token = self.token_usage.lock().expect("token usage mutex");
+        let generation = token.generation.wrapping_add(1);
+        *token = TokenUsageState {
+            generation,
+            ..TokenUsageState::default()
+        };
+    }
+
+    /// Builds the current Go overview snapshot for IPC/events.
+    pub fn go_overview_dto(&self) -> GoOverviewDto {
+        let go = self.go_overview.lock().expect("go overview mutex");
+        GoOverviewDto {
+            status: go.status.clone(),
+            activity: go.activity.clone(),
+            billing: go.billing.clone(),
+            status_error: go.status_error.clone(),
+            activity_error: go.activity_error.clone(),
+            billing_error: go.billing_error.clone(),
+            loading: go.loading,
+            last_success_ms: go.last_success_ms,
+        }
+    }
+
+    /// Clears the Go overview state and invalidates any in-flight response.
+    pub fn reset_go_overview(&self) {
+        let mut go = self.go_overview.lock().expect("go overview mutex");
+        let generation = go.generation.wrapping_add(1);
+        *go = GoOverviewState {
+            generation,
+            ..GoOverviewState::default()
+        };
     }
 
     /// Builds the current monitor snapshot for IPC/events.

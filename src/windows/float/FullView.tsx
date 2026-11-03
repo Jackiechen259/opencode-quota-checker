@@ -5,6 +5,7 @@
 // piece, isolated in its own component.
 
 import { Dot } from "../../components/common";
+import { percent } from "../../lib/format";
 import { quotaHealth, type UsageReport } from "../../types/models";
 import { highestWindow, healthColors } from "./floatLayout";
 import { QuotaCard } from "./QuotaCard";
@@ -45,7 +46,7 @@ export function FullView({
         </span>
         <span className="float-spacer" />
         <span className="float-meta-highest" style={{ color: highestAccent }}>
-          最高 {highest ? highest.percent.toFixed(1) : "0.0"}%
+          最高 {percent(highest?.percent ?? 0)}
         </span>
       </div>
       <div className="float-quota-list">

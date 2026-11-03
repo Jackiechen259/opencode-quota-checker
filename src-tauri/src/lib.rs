@@ -12,6 +12,7 @@ pub mod credential_task;
 pub mod error;
 mod events;
 pub mod float;
+mod go_overview;
 mod icons;
 mod launcher;
 mod monitor;
@@ -45,8 +46,12 @@ pub fn run() {
             commands::app::get_app_status,
             commands::app::quit_app,
             commands::quota::get_usage,
+            commands::quota::get_token_usage,
             commands::quota::refresh_usage,
             commands::quota::get_raw_usage,
+            commands::go::get_go_overview,
+            commands::go::refresh_go_overview,
+            commands::go::open_go_page,
             commands::config::get_config,
             commands::config::save_config,
             commands::config::set_monitor,

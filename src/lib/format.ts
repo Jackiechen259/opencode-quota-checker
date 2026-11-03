@@ -46,17 +46,27 @@ export function relative(fetchedAtMs: number, nowMs: number): string {
   return `${Math.floor(hours / 24)} 天前`;
 }
 
-/** Formats a number with thousands separators and one decimal place. */
+/**
+ * Formats a number with thousands separators and at most one decimal.
+ *
+ * A whole value is printed without a redundant trailing zero ("100", not
+ * "100.0"); a real fraction keeps its single decimal ("75,780.9").
+ */
 export function number(value: number): string {
   return value.toLocaleString("en-US", {
-    minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   });
 }
 
-/** Formats a percentage with one decimal, tolerating values over 100. */
+/**
+ * Formats a percentage as a whole number, tolerating values over 100.
+ *
+ * Percentages are rounded for display ("78%", "52%") so a quota readout does
+ * not carry a meaningless decimal; the underlying value stays untouched and
+ * every bar, ring and threshold decision keeps using the exact number.
+ */
 export function percent(value: number): string {
-  return `${value.toFixed(1)}%`;
+  return `${Math.round(value)}%`;
 }
 
 /** Relative "last checked" label from an epoch-milliseconds timestamp. */
@@ -69,7 +79,7 @@ export function lastCheckedText(timestampMs: number | null): string {
   return `${Math.floor(seconds / 86_400)} 天前`;
 }
 
-/** Bytes → human readable size. */
+/** Bytes → human readable size, without a redundant trailing `.0`. */
 export function bytes(value: number): string {
   if (value < 1024) return `${value} B`;
   const units = ["KB", "MB", "GB"];
@@ -80,5 +90,37 @@ export function bytes(value: number): string {
     amount /= 1024;
     unit = next;
   }
-  return `${amount.toFixed(1)} ${unit}`;
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 1 })} ${unit}`;
+}
+
+/**
+ * Compact token count for cards, using Chinese 万/亿 units.
+ *
+ * Values below ten thousand keep the exact formatter so a small count is not
+ * rounded into a misleading unit ("8,534", not "8534"). Larger values use the
+ * zh-CN compact notation ("1万", "2601.78万", "12.6亿"). Non-finite input is a
+ * bug, not a number to display.
+ */
+export function compact(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (Math.abs(value) < 10_000) return number(value);
+  return value.toLocaleString("zh-CN", {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
+ * Converts Console microcents to a display-only USD amount.
+ *
+ * 1 USD = 100,000,000 microcents. The division happens only at display time;
+ * the report keeps the exact integer.
+ */
+export function usdFromMicrocents(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  const dollars = value / 100_000_000;
+  return `$${dollars.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }

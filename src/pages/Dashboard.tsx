@@ -6,13 +6,15 @@
 import { useMemo } from "react";
 import { DetailsHeader, OverviewCard, QuotaCard } from "../components/quota";
 import { Card, EmptyState, Notice } from "../components/common";
-import type { AppError, UsageReport } from "../types/models";
+import { TokenUsageCard } from "../components/TokenUsageCard";
+import type { AppError, TokenUsageDto, UsageReport } from "../types/models";
 import { Icons } from "../components/icons";
 
 interface Props {
   report: UsageReport | null;
   loading: boolean;
   error: AppError | null;
+  token: TokenUsageDto;
   nowMs: number;
   onRefresh: () => void;
 }
@@ -70,7 +72,7 @@ function DashboardSkeleton() {
   );
 }
 
-export function Dashboard({ report, loading, error, nowMs, onRefresh }: Props) {
+export function Dashboard({ report, loading, error, token, nowMs, onRefresh }: Props) {
   const content = useMemo(() => {
     if (report) {
       return (
@@ -84,6 +86,7 @@ export function Dashboard({ report, loading, error, nowMs, onRefresh }: Props) {
               ))}
             </div>
           </section>
+          <TokenUsageCard token={token} nowMs={nowMs} />
         </>
       );
     }
@@ -104,7 +107,7 @@ export function Dashboard({ report, loading, error, nowMs, onRefresh }: Props) {
         />
       </Card>
     );
-  }, [report, loading, nowMs, onRefresh]);
+  }, [report, loading, token, nowMs, onRefresh]);
 
   return (
     <div className="dashboard">

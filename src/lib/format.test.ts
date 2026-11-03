@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { bytes, countdown, countdownShort, lastCheckedText, number, percent, relative, timestamp } from "./format";
+import {
+  bytes,
+  compact,
+  countdown,
+  countdownShort,
+  lastCheckedText,
+  number,
+  percent,
+  relative,
+  timestamp,
+  usdFromMicrocents,
+} from "./format";
 
 describe("countdown", () => {
   it("handles boundaries", () => {
@@ -27,17 +38,25 @@ describe("timestamp", () => {
 });
 
 describe("number", () => {
-  it("uses thousands separators and one decimal", () => {
+  it("uses thousands separators and at most one decimal", () => {
     expect(number(75780.9)).toBe("75,780.9");
-    expect(number(100000)).toBe("100,000.0");
-    expect(number(0)).toBe("0.0");
+    expect(number(52.34)).toBe("52.3");
+    expect(number(100000)).toBe("100,000");
+    expect(number(0)).toBe("0");
   });
 });
 
 describe("percent", () => {
-  it("formats one decimal", () => {
-    expect(percent(78)).toBe("78.0%");
-    expect(percent(52.34)).toBe("52.3%");
+  it("formats whole percentages without a decimal part", () => {
+    expect(percent(78)).toBe("78%");
+    expect(percent(52.34)).toBe("52%");
+    expect(percent(52.5)).toBe("53%");
+    expect(percent(0.4)).toBe("0%");
+    expect(percent(99.9)).toBe("100%");
+  });
+
+  it("tolerates values over 100", () => {
+    expect(percent(120)).toBe("120%");
   });
 });
 
@@ -62,9 +81,33 @@ describe("lastCheckedText", () => {
 });
 
 describe("bytes", () => {
-  it("scales units", () => {
+  it("scales units without a redundant trailing zero", () => {
     expect(bytes(512)).toBe("512 B");
-    expect(bytes(2048)).toBe("2.0 KB");
-    expect(bytes(5 * 1024 * 1024)).toBe("5.0 MB");
+    expect(bytes(2048)).toBe("2 KB");
+    expect(bytes(1536)).toBe("1.5 KB");
+    expect(bytes(5 * 1024 * 1024)).toBe("5 MB");
+  });
+});
+
+describe("compact", () => {
+  it("shortens large token totals with Chinese units and keeps small values exact", () => {
+    expect(compact(0)).toBe("0");
+    expect(compact(999)).toBe("999");
+    expect(compact(1_000)).toBe("1,000");
+    expect(compact(8_534)).toBe("8,534");
+    expect(compact(10_000)).toBe("1万");
+    expect(compact(26_017_766)).toBe("2601.78万");
+    expect(compact(1_072_476_433)).toBe("10.72亿");
+    expect(compact(1_260_000_000)).toBe("12.6亿");
+    expect(compact(Number.NaN)).toBe("—");
+  });
+});
+
+describe("usdFromMicrocents", () => {
+  it("converts microcents with two decimals", () => {
+    expect(usdFromMicrocents(0)).toBe("$0.00");
+    expect(usdFromMicrocents(30_000_000)).toBe("$0.30");
+    expect(usdFromMicrocents(1_388_554_159)).toBe("$13.89");
+    expect(usdFromMicrocents(Number.NaN)).toBe("—");
   });
 });

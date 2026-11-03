@@ -1,0 +1,25 @@
+{
+  "product": "go",
+  "cancelAtPeriodEnd": false,
+  "useBalance": false,
+  "access": {
+    "startsAt": "2026-10-26T00:00:00.000Z",
+    "meters": {
+      "fiveHour": {
+        "usedMicroCents": "120000000",
+        "limitMicroCents": "1200000000",
+        "resetsAt": "2026-11-03T21:00:00.000Z"
+      },
+      "week": {
+        "usedMicroCents": "420000000",
+        "limitMicroCents": "6000000000",
+        "resetsAt": "2026-11-09T00:00:00.000Z"
+      },
+      "month": {
+        "usedMicroCents": "14400000000",
+        "limitMicroCents": "60000000000",
+        "resetsAt": "2026-11-26T00:00:00.000Z"
+      }
+    }
+  }
+}

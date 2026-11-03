@@ -1,0 +1,10 @@
+{
+  "totalRequests": "123",
+  "totalInputTokens": "1000",
+  "totalOutputTokens": "2000",
+  "totalCacheReadTokens": "3000",
+  "totalCacheWrite5mTokens": "40",
+  "totalCacheWrite1hTokens": "60",
+  "totalCostMicroCents": "30000000",
+  "services": []
+}

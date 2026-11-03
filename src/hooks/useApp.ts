@@ -8,6 +8,8 @@ import {
   type AppError,
   type AppStatusDto,
   type BootStatusDto,
+  type GoOverviewDto,
+  type TokenUsageDto,
   type UsageReport,
   type UpdateStateDto,
 } from "../types/models";
@@ -112,6 +114,113 @@ export function useQuota() {
   useTauriEvent<boolean>(EVENT.MONITOR_STATUS, () => reload());
 
   return { report, loading, error, lastSuccessMs, reload };
+}
+
+/** Latest workspace token usage; updated by `token://state` events. */
+export function useTokenUsage() {
+  const [token, setToken] = useState<TokenUsageDto>({
+    report: null,
+    loading: false,
+    error: null,
+    lastSuccessMs: null,
+  });
+
+  const reload = useCallback(() => {
+    api
+      .getTokenUsage()
+      .then(setToken)
+      .catch((caught) => {
+        console.error("[token-usage] get_token_usage failed", caught);
+        setToken((current) => ({
+          ...current,
+          loading: false,
+          error: caught as AppError,
+        }));
+      });
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  useTauriEvent<TokenUsageDto>(EVENT.TOKEN_USAGE_STATE, setToken);
+  // Safety net for the startup race: a very fast token response can land
+  // before the listener above is registered. The monitor emits this event at
+  // the end of each quota cycle, so the snapshot is re-read then.
+  useTauriEvent<unknown>(EVENT.MONITOR_STATUS, () => reload());
+
+  return token;
+}
+
+const EMPTY_GO_OVERVIEW: GoOverviewDto = {
+  status: null,
+  activity: null,
+  billing: null,
+  statusError: null,
+  activityError: null,
+  billingError: null,
+  loading: false,
+  lastSuccessMs: null,
+};
+
+/**
+ * On-demand Go overview for the Go usage page.
+ *
+ * The backend starts the fetch when the page asks for it; this hook listens for
+ * `go://overview`, retries a short poll while loading (event-race safety), and
+ * refreshes every five minutes while the page is mounted.
+ */
+export function useGoOverview() {
+  const [data, setData] = useState<GoOverviewDto>(EMPTY_GO_OVERVIEW);
+
+  const reload = useCallback(() => {
+    api
+      .getGoOverview()
+      .then(setData)
+      .catch((caught) => {
+        console.error("[go-overview] get_go_overview failed", caught);
+        setData((current) => ({
+          ...current,
+          loading: false,
+          statusError: caught as AppError,
+        }));
+      });
+  }, []);
+
+  const refresh = useCallback(() => {
+    api
+      .refreshGoOverview()
+      .then(setData)
+      .catch((caught) => {
+        console.error("[go-overview] refresh_go_overview failed", caught);
+        setData((current) => ({
+          ...current,
+          loading: false,
+          statusError: caught as AppError,
+        }));
+      });
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  useTauriEvent<GoOverviewDto>(EVENT.GO_OVERVIEW_STATE, setData);
+
+  // A fast response can beat the listener registration on first mount.
+  useEffect(() => {
+    if (!data.loading) return;
+    const timer = window.setTimeout(reload, 2_000);
+    return () => window.clearTimeout(timer);
+  }, [data.loading, reload]);
+
+  // Keep the open page current without adding a background monitor request.
+  useEffect(() => {
+    const timer = window.setInterval(refresh, 5 * 60 * 1_000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
+  return { data, refresh, reload };
 }
 
 /** Updater snapshot; refreshed by `update://state` events. */

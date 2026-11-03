@@ -11,9 +11,11 @@ OpenCode Go 配额的原生桌面监控工具（Tauri v2 + React）。展示 5 �
 
 ## 功能
 
-- 数据源：OpenCode Go 用量接口（Console API Key，Workspace ID 可选）
+- 数据源：OpenCode Go 用量接口 + Console Token/Go 明细接口（同一枚 Console API Key，Workspace ID 可选）
 - 主窗口仪表盘：最高负载、最近重置与窗口健康概览，以及每个配额窗口的用量卡
 - 展示 5 小时、近一周、近一月三个配额窗口的已用、总额、剩余与重置时间
+- Token 用量卡片：当前工作区近 30 天的输入 / 输出 / 缓存读取 / 缓存写入、请求数与折算费用；独立刷新，失败不影响配额
+- Go 用量页面：月度已用/续订日期、累计用量与预测曲线、日均速度、三个限额窗口、本期模型占比、Requests/Tokens 与 Extra usage 状态
 - 原生系统托盘：关闭主窗口默认隐藏到托盘并继续后台监控，托盘菜单可显示/隐藏主窗口、切换悬浮窗、退出；关闭行为可在设置中改为最小化到任务栏或退出
 - Full、Compact 与三向贴边停靠的置顶悬浮窗：拖到屏幕顶部附近自动停靠为单行 Docked 横条，拖到屏幕左/右边缘自动停靠为竖排窄条，拖离边缘即恢复所选布局；鼠标悬停在停靠条上会展开为三个圆环的配额概览卡
 - 可配置轮询间隔（30–3600 秒）与每个窗口的告警阈值（0–100%）
@@ -31,11 +33,15 @@ OpenCode Go 配额的原生桌面监控工具（Tauri v2 + React）。展示 5 �
 
 OpenCode 只报告百分比，应用将其归一化到 100 分制展示（总额恒为 100，已用即报告百分比，剩余与占比据此得出）。重置时间直接采用服务端返回的时间戳，不再由相对秒数推算；`rate-limited` 作为权威的「额度耗尽」标志参与健康判定。
 
-解析、HTTP、凭据与告警逻辑全部位于 `crates/opencode-core`（单一业务逻辑来源，不依赖任何 UI 框架）；Tauri Rust 后端负责窗口、托盘、监控任务、通知与更新；React 只渲染状态并发送命令。
+Token 用量来自 Console Activity 的另一个接口 `GET https://opencode.ai/console/api/usage/summary?range=30d&includeLegacyKeys=true`，使用同一枚 API Key 作为 Bearer。它返回**当前工作区全部模型**近 30 天的输入、输出、缓存读取/写入 token、请求数与按牌价折算的费用，只用于仪表盘的 Token 卡片；该请求在独立任务中执行、后台最多每 5 分钟一次，失败不会影响 Go 配额。详见 [Token 用量接口契约](docs/architecture/token-usage-api.md)。
+
+「Go 用量」页面在打开时按需读取 Console 的 `/console/api/go/status`（计费周期、三个 meter、Extra usage 开关）、`/console/api/activity/go`（本期每日费用/请求/token 与模型请求数）和可选的 `/console/api/billing/status`（可用余额），据此计算累计曲线、月末预测与日均速度。点击标题栏的 **Activity** 图标即可打开，再次点击返回概览。这些请求只在页面活跃时发生，失败时回退到现有 Go 配额数据，不会影响 Dashboard、告警、托盘或悬浮窗。详见 [Go 用量接口契约](docs/architecture/go-usage-api.md)。
+
+解析、HTTP、凭据与告警逻辑（含 Token / Go 页面数据解析）全部位于 `crates/opencode-core`（单一业务逻辑来源，不依赖任何 UI 框架）；Tauri Rust 后端负责窗口、托盘、监控任务、通知与更新；React 只渲染状态并发送命令。
 
 ## 认证
 
-- **API Key**：在 [OpenCode Console](https://opencode.ai/console) 的 **Account › Personal API keys** 创建，建议勾选 **Usage › Read** 权限。它被视为密码，仅保存到系统钥匙串，作为 Bearer 令牌随请求发送到 opencode.ai，不会写入配置文件或日志，也不会进入 WebView 状态。
+- **API Key**：在 [OpenCode Console](https://opencode.ai/console) 的 **Account › Personal API keys** 创建，勾选 **Usage › Read** 权限。它被视为密码，仅保存到系统钥匙串，作为 Bearer 令牌随请求发送到 opencode.ai，不会写入配置文件或日志，也不会进入 WebView 状态。Go 配额、Token 用量与 Go 概览页共用这枚 Key；Go 概览页的可用余额还需要 **Billing › Read**（缺少时只影响余额显示）。
 - **Workspace ID**（可选）：保存在普通配置文件中（非敏感）。API Key 已绑定创建它的工作区，只有需要覆盖工作区时（发送 `x-opencode-org-id`）才填。
 
 > 旧版本的 `auth` Cookie 已随工作区面板停用：升级后需要改用 API Key。旧 Cookie 条目保留在钥匙串中不动，方便回退到旧版本。

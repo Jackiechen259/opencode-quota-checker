@@ -8,8 +8,10 @@ import type {
   AppStatusDto,
   BootStatusDto,
   FloatStateDto,
+  GoOverviewDto,
   MonitorStatusDto,
   PersistedFloatMode,
+  TokenUsageDto,
   UpdateStateDto,
   UsageDto,
 } from "../types/models";
@@ -21,8 +23,13 @@ export const api = {
   quitApp: () => invoke<void>("quit_app"),
 
   getUsage: () => invoke<UsageDto>("get_usage"),
+  getTokenUsage: () => invoke<TokenUsageDto>("get_token_usage"),
   refreshUsage: () => invoke<void>("refresh_usage"),
   getRawUsage: () => invoke<string>("get_raw_usage"),
+
+  getGoOverview: () => invoke<GoOverviewDto>("get_go_overview"),
+  refreshGoOverview: () => invoke<GoOverviewDto>("refresh_go_overview"),
+  openGoPage: () => invoke<void>("open_go_page"),
 
   getConfig: () => invoke<AppConfig>("get_config"),
   saveConfig: (config: AppConfig) => invoke<AppConfig>("save_config", { config }),
