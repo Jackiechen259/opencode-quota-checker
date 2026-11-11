@@ -89,6 +89,12 @@ fn finish(
 ) {
     let (status_value, status_error) = split(status);
     let (activity_value, activity_error) = split(activity);
+    // Keep the daily rows for the local history before the state update below
+    // consumes the report.
+    let new_days = activity_value
+        .as_ref()
+        .map(|report| report.daily.clone())
+        .unwrap_or_default();
     let (billing_value, billing_error) = match billing {
         Ok(value) => (Some(value), None),
         Err(error) => (None, Some(AppError::from(error))),
@@ -159,6 +165,10 @@ fn finish(
             go.last_success_ms = Some(now_ms);
         }
     }
+    // Merge the fresh days into the persisted year history before emitting, so
+    // the same `go://overview` snapshot already carries them. A failed history
+    // write is logged inside the store; it never blocks the page.
+    state.record_go_history(&new_days);
     let _ = app.emit(events::GO_OVERVIEW_STATE, state.go_overview_dto());
 }
 

@@ -72,6 +72,15 @@
   --danger-solid: #c42b1c;
   --danger-solid-pressed: #9e1f13;
 
+  /* Go activity heatmap ---------------------------------------------------- */
+  /* Five-step blue scale: 0 is a day without usage, 4 the busiest day.
+     Deeper = more tokens (the Go page calendar only). */
+  --heat-0: #eef2f8;
+  --heat-1: #dbeafe;
+  --heat-2: #93c5fd;
+  --heat-3: #3b82f6;
+  --heat-4: #1d4ed8;
+
   /* Radius ----------------------------------------------------------------- */
   --radius-sm: 6px;
   --radius-md: 8px;

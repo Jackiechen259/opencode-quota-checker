@@ -22,6 +22,7 @@ import type {
 } from "../types/models";
 import { api } from "../services/tauri";
 import { Card, EmptyState, Notice } from "../components/common";
+import { GoCalendar } from "../components/GoCalendar";
 import { GoUsageChart } from "../components/GoUsageChart";
 import { Icons } from "../components/icons";
 
@@ -409,6 +410,20 @@ export function GoUsagePage({ report, loading, token, nowMs, onRefresh }: Props)
         {data.activityError && !activity ? (
           <p className="go-muted">Go 明细暂不可用，曲线按当前进度估算。</p>
         ) : null}
+      </Card>
+
+      <Card className="go-calendar-card">
+        <div className="go-card-heading">
+          <h2>活跃度</h2>
+          <p>每天一格，当天 Token 越多颜色越深</p>
+        </div>
+        {chartLoading ? (
+          <div className="go-calendar-skeleton" aria-label="正在加载活跃度" aria-busy="true">
+            <span className="sk sk-line" style={{ width: "100%", height: 140 }} />
+          </div>
+        ) : (
+          <GoCalendar days={data.history} nowMs={nowMs} />
+        )}
       </Card>
 
       <div className="go-grid">

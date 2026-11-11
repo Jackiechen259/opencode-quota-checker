@@ -75,6 +75,32 @@ Console 侧使用 WorkspaceMiddleware，接受 Bearer API Key；personal key 已
 - `models` 只有请求数；模型占比按请求数计算（`<1%` / 四舍五入）。
 - 后端汇总 `totalCostMicroCents`、`totalRequests`、`totalTokens` 后下发，前端不重复求和。
 
+## 本地每日历史与活跃度格子图
+
+Console 只返回**本期**的 `daily`（最多约 30 天），年度格子图需要的更早日期只能由应用自己记住。
+每次 activity 拉取成功后，`src-tauri/src/go_history.rs` 把逐日数据合并进本地 JSON：
+
+```
+<config_dir>/opencode-quota-checker/go-history.json
+{ "version": 1, "days": [ { "date": "2026-11-11", "cost_microcents": …, "requests": …, "tokens": … } ] }
+```
+
+- **合并语义**：按 `date` 覆盖写入。上游当天的行是累计值（今天会持续增长），所以后到的数据总是更新。
+- **保留窗口**：只保留最近 `HISTORY_DAYS = 400` 天；超出窗口、非法日期、以及晚于“今天 + 1 天”的行被丢弃（容错 UTC 跨日）。
+- **写入**：同目录临时文件 + fsync + rename，和 `config.json` 一致；写入失败只记日志，下次成功后重试。
+- **读取失败**：文件缺失是正常首次运行；损坏或 `version` 未知时记录日志并按空历史启动，不会阻塞窗口。
+- **IPC**：`GoOverviewDto.history`（camelCase 字段，数组元素仍是 snake_case 的 `GoActivityDay`），按日期升序，最多 400 条。
+
+前端 `src/lib/goCalendar.ts` 把历史铺成 53 周 × 7 天（周一为每列第一天，按 UTC 日期对齐）：
+
+- 颜色按**当天 token 数**的排名分 4 档（1 最浅、4 最深），排名而非绝对阈值，避免某一天特别大时其他格子全部趋同。
+- 今天之后的格子是占位符，不计入统计；没有记录的日期是 0 档，不是错误。
+- 统计：总计 Token、活跃天数、最长连续、最高单日；悬停显示当天 Token / 请求 / 费用。
+- 历史起点晚于窗口起点时，页面提示“本地记录从 … 开始”，避免把空白误读为零用量。
+
+> 局限：历史只在页面拉取 activity 时累积（打开页面、每 5 分钟自动刷新、手动刷新）。
+> 若整个计费周期都没有打开过页面，该周期的日期不会被回填——Console 没有提供历史区间接口。
+
 ## 账单余额
 
 `/console/api/billing/status` 只读取：
@@ -105,6 +131,7 @@ Console 侧使用 WorkspaceMiddleware，接受 Bearer API Key；personal key 已
 - **按需请求**：只有打开 Go 页面时才请求；不加入后台 monitor。
 - 页面挂载时请求一次，之后每 5 分钟自动刷新；手动刷新/页面重试会强制一次。
 - 三个请求并发；billing 失败不影响 status/activity。
+- 每次 activity 成功后立即把 `daily` 合并进本地历史（见上一节），同一份 `go://overview` 快照即可携带新格子。
 - 5 分钟缓存避免页面来回切换时重复请求；401/403/400/429 不自动重试。
 - Console 的 Cloudflare 可能对高频探测返回 400；应用已限制为页面活跃时的低频请求。
 

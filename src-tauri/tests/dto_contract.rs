@@ -370,6 +370,14 @@ fn go_overview_dto_uses_the_expected_contract() {
     assert_has(first_day, "tokens");
     assert_lacks(first_day, "costMicrocents");
 
+    // The local year history is a top-level camelCase array of the same
+    // snake_case day records (an empty store still serializes as `[]`).
+    let history = json.get("history").expect("history snapshot");
+    assert!(
+        history.as_array().is_some_and(Vec::is_empty),
+        "history must always be an array, got: {history}"
+    );
+
     let billing = json.get("billing").expect("billing snapshot");
     assert_has(billing, "available_microcents");
     assert_has(billing, "balance_microcents");

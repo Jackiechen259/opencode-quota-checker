@@ -12,6 +12,7 @@ pub mod credential_task;
 pub mod error;
 mod events;
 pub mod float;
+pub mod go_history;
 mod go_overview;
 mod icons;
 mod launcher;
@@ -123,6 +124,11 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         };
     state.apply_config(config);
     since = stage("config loaded", since);
+
+    // The local Go history is a small JSON file read once here; a missing or
+    // corrupt file only logs and starts empty, never delays the shell.
+    state.load_go_history();
+    since = stage("go history loaded", since);
 
     // The keyring availability check runs as a background task on the
     // blocking pool with a soft timeout — never on the setup thread. The

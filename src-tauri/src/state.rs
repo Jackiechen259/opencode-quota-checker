@@ -10,8 +10,10 @@ use crate::credential_task::CredentialCheckResult;
 use crate::error::AppError;
 use crate::float::FloatRuntime;
 pub use crate::float::FloatStateDto;
+use crate::go_history::GoHistory;
 use opencode_core::{
-    BillingReport, GoActivityReport, GoStatusReport, QuotaService, TokenUsageReport, UsageReport,
+    BillingReport, GoActivityDay, GoActivityReport, GoStatusReport, QuotaService, TokenUsageReport,
+    UsageReport,
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -168,9 +170,10 @@ pub struct UpdateState {
 /// # Lock ordering
 ///
 /// Global lock order (highest to lowest priority): **credentials → config →
-/// tray → monitor → floating → updater → usage → token_usage → go_overview**.
-/// The `tray_error` / `config_error` `RwLock`s are leaf resources and never
-/// nested.
+/// tray → monitor → floating → updater → usage → token_usage → go_overview →
+/// go_history**. The `tray_error` / `config_error` `RwLock`s are leaf resources
+/// and never nested; `go_history` is a leaf as well (it performs no IO while
+/// locked).
 ///
 /// Hard rules enforced across the crate:
 ///
@@ -189,6 +192,12 @@ pub struct AppState {
     pub usage: Mutex<UsageState>,
     pub token_usage: Mutex<TokenUsageState>,
     pub go_overview: Mutex<GoOverviewState>,
+    /// Local daily Go history that backs the year heatmap.
+    ///
+    /// Persisted separately from the config and shared by every session; the
+    /// Console only reports the current period, so this is the app's memory of
+    /// older days. Leaf resource: no IO happens while the guard is held.
+    pub go_history: Mutex<GoHistory>,
     pub monitor: Mutex<MonitorState>,
     pub floating: Mutex<FloatRuntime>,
     pub updater: Mutex<UpdateState>,
@@ -216,6 +225,7 @@ impl AppState {
             usage: Mutex::new(UsageState::default()),
             token_usage: Mutex::new(TokenUsageState::default()),
             go_overview: Mutex::new(GoOverviewState::default()),
+            go_history: Mutex::new(GoHistory::default()),
             monitor: Mutex::new(MonitorState::default()),
             floating: Mutex::new(FloatRuntime::default()),
             updater: Mutex::new(UpdateState::default()),
@@ -407,11 +417,16 @@ pub struct TokenUsageDto {
 /// On-demand Go overview snapshot returned by `get_go_overview` and emitted on
 /// `go://overview`. Each data source has its own error so the page can render
 /// a partial result (for example, status + activity without billing credit).
+///
+/// `history` is the locally accumulated daily usage that backs the year
+/// heatmap. It is not an error source: it is read from the persisted store and
+/// covers at most `HISTORY_DAYS` days, newest last.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GoOverviewDto {
     pub status: Option<GoStatusReport>,
     pub activity: Option<GoActivityReport>,
+    pub history: Vec<GoActivityDay>,
     pub billing: Option<BillingReport>,
     pub status_error: Option<AppError>,
     pub activity_error: Option<AppError>,
@@ -510,18 +525,72 @@ impl AppState {
     }
 
     /// Builds the current Go overview snapshot for IPC/events.
+    ///
+    /// The `go_overview` and `go_history` guards are taken in separate
+    /// statements so the two mutexes are never held together (lock ordering).
     pub fn go_overview_dto(&self) -> GoOverviewDto {
-        let go = self.go_overview.lock().expect("go overview mutex");
+        let (
+            status,
+            activity,
+            billing,
+            status_error,
+            activity_error,
+            billing_error,
+            loading,
+            last_success_ms,
+        ) = {
+            let go = self.go_overview.lock().expect("go overview mutex");
+            (
+                go.status.clone(),
+                go.activity.clone(),
+                go.billing.clone(),
+                go.status_error.clone(),
+                go.activity_error.clone(),
+                go.billing_error.clone(),
+                go.loading,
+                go.last_success_ms,
+            )
+        };
+        let history = self.go_history.lock().expect("go history mutex").entries();
         GoOverviewDto {
-            status: go.status.clone(),
-            activity: go.activity.clone(),
-            billing: go.billing.clone(),
-            status_error: go.status_error.clone(),
-            activity_error: go.activity_error.clone(),
-            billing_error: go.billing_error.clone(),
-            loading: go.loading,
-            last_success_ms: go.last_success_ms,
+            status,
+            activity,
+            history,
+            billing,
+            status_error,
+            activity_error,
+            billing_error,
+            loading,
+            last_success_ms,
         }
+    }
+
+    /// Loads the persisted Go history once during startup.
+    ///
+    /// Runs before any Go fetch, so it can replace the detached default store
+    /// without losing recorded days. The file is read *before* the mutex is
+    /// taken: `go_history` is a leaf resource and no IO happens while locked.
+    pub fn load_go_history(&self) {
+        let loaded = GoHistory::load_default();
+        let mut history = self.go_history.lock().expect("go history mutex");
+        *history = loaded;
+    }
+
+    /// Merges daily rows into the persisted history and rewrites it.
+    ///
+    /// The guard is dropped before the file write: the store clones its small
+    /// snapshot and saves it on the caller's thread. A write failure is logged
+    /// inside the store and retried on the next successful activity fetch.
+    pub fn record_go_history(&self, days: &[GoActivityDay]) {
+        if days.is_empty() {
+            return;
+        }
+        let snapshot = {
+            let mut history = self.go_history.lock().expect("go history mutex");
+            history.record(days, chrono::Utc::now().date_naive());
+            history.clone()
+        };
+        snapshot.save();
     }
 
     /// Clears the Go overview state and invalidates any in-flight response.

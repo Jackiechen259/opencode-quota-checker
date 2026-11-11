@@ -155,6 +155,7 @@ export function useTokenUsage() {
 const EMPTY_GO_OVERVIEW: GoOverviewDto = {
   status: null,
   activity: null,
+  history: [],
   billing: null,
   statusError: null,
   activityError: null,

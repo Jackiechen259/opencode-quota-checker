@@ -1876,6 +1876,152 @@
   opacity: 0.7;
 }
 
+/* Year activity calendar (GitHub-style) ---------------------------------------- */
+
+.go-calendar-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+}
+
+.go-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-base);
+  /* Matches the grid's 28px gutter + 53 × 14px columns + 53 × 3px gaps, so
+     the stats, legend and record note line up with the grid's right edge. */
+  max-width: 929px;
+}
+
+/* One grid for captions and cells so the month row, the weekday gutter and the
+   53 week columns share the same tracks and always line up. */
+.go-calendar-grid {
+  display: grid;
+  grid-template-columns: 28px repeat(53, minmax(0, 1fr));
+  grid-template-rows: 14px repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+}
+
+.go-calendar-month {
+  align-self: start;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.go-calendar-weekday {
+  align-self: center;
+  justify-self: end;
+  padding-right: 2px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-tertiary);
+}
+
+.go-calendar-cell {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 2.5px;
+  background: var(--heat-0);
+  transition: background var(--transition-fast);
+}
+
+.go-calendar-cell[data-level="1"],
+.go-calendar-swatch[data-level="1"] {
+  background: var(--heat-1);
+}
+
+.go-calendar-cell[data-level="2"],
+.go-calendar-swatch[data-level="2"] {
+  background: var(--heat-2);
+}
+
+.go-calendar-cell[data-level="3"],
+.go-calendar-swatch[data-level="3"] {
+  background: var(--heat-3);
+}
+
+.go-calendar-cell[data-level="4"],
+.go-calendar-swatch[data-level="4"] {
+  background: var(--heat-4);
+}
+
+/* Days after today are grid placeholders, not empty days. */
+.go-calendar-cell[data-future="true"] {
+  background: transparent;
+}
+
+.go-calendar-cell:not([data-future="true"]):hover {
+  outline: 1px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.go-calendar-skeleton {
+  padding: var(--space-sm) 0;
+}
+
+.go-calendar-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.go-calendar-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.go-calendar-stats span {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+}
+
+.go-calendar-stats strong {
+  font-size: var(--text-metric-value);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.go-calendar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.go-calendar-detail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  min-height: 16px;
+}
+
+.go-calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
+}
+
+.go-calendar-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--heat-0);
+}
+
 .go-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2093,6 +2239,10 @@
 
   .go-summary {
     flex-direction: column;
+  }
+
+  .go-calendar-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -23,6 +23,7 @@ vi.mock("../hooks/useApp", async (importOriginal) => {
         ({
           status: null,
           activity: null,
+          history: [],
           billing: null,
           statusError: null,
           activityError: null,
@@ -162,6 +163,20 @@ const fullOverview: GoOverviewDto = {
     total_tokens: 4_000,
     fetched_at: NOW,
   },
+  history: [
+    {
+      date: "2026-10-26",
+      cost_microcents: 50,
+      requests: 60,
+      tokens: 2_000,
+    },
+    {
+      date: "2026-10-27",
+      cost_microcents: 50,
+      requests: 40,
+      tokens: 1_500,
+    },
+  ],
   billing: {
     available_microcents: 0,
     balance_microcents: 0,
@@ -178,6 +193,7 @@ const fullOverview: GoOverviewDto = {
 const emptyOverview: GoOverviewDto = {
   status: null,
   activity: null,
+  history: [],
   billing: null,
   statusError: null,
   activityError: null,
@@ -224,6 +240,8 @@ describe("GoUsagePage", () => {
     expect(screen.getByText("已关闭 · 达到限额后暂停请求")).toBeInTheDocument();
     expect(screen.getByText("$0.00")).toBeInTheDocument();
     expect(screen.getByText("在 Console 打开")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "活跃度" })).toBeInTheDocument();
+    expect(screen.getByText("3,500")).toBeInTheDocument();
   });
 
   it("marks an exhausted month as critical", () => {

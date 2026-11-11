@@ -159,6 +159,14 @@ export interface BillingReport {
 export interface GoOverviewDto {
   status: GoStatusReport | null;
   activity: GoActivityReport | null;
+  /**
+   * Locally accumulated daily usage for the year heatmap.
+   *
+   * The Console only reports the current paid period, so the backend persists
+   * every day it has seen and returns up to 400 of them, oldest first. This is
+   * never an error source: an empty array is a normal first run.
+   */
+  history: GoActivityDay[];
   billing: BillingReport | null;
   statusError: AppError | null;
   activityError: AppError | null;
