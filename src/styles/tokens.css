@@ -53,6 +53,7 @@
   --accent-hover: #2563eb;
   --accent-pressed: #1d4ed8;
   --accent-soft: #eff6ff;
+  --accent-soft-hover: #dbeafe;
   --accent-softer: #f5f9ff;
   --accent-border: rgba(59, 130, 246, 0.24);
 
@@ -146,6 +147,11 @@
   --header-height: 48px;
   --footer-height: 30px;
   --main-frame-radius: var(--radius-frame);
+
+  /* Controls and settings shell */
+  --control-height: 34px;
+  --settings-nav-width: 224px;
+  --settings-panel-max-width: 880px;
 
   /* ------------------------------------------------------------------ */
   /* Legacy aliases (archived Iced theme names).                         */

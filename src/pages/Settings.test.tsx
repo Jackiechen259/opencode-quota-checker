@@ -153,6 +153,12 @@ function renderSettings(options: {
   return { onConfigSaved, onRefreshStatus, onClose };
 }
 
+/** Switches the left-rail navigation to the panel under test. */
+function gotoSettingsSection(label: string) {
+  const nav = screen.getByRole("navigation", { name: "设置分区" });
+  fireEvent.click(within(nav).getByRole("button", { name: label }));
+}
+
 beforeEach(() => {
   tauri.reset();
   installRouter();
@@ -166,6 +172,7 @@ describe("Settings monitor buttons", () => {
   it("starts monitoring with one save_config call and no redundant set_monitor", async () => {
     installRouter({ config: configFixture({ monitor_enabled: false }) });
     const { onConfigSaved } = renderSettings({ config: storedConfig });
+    gotoSettingsSection("额度监控");
 
     fireEvent.click(screen.getByRole("button", { name: "启动监控" }));
 
@@ -188,6 +195,7 @@ describe("Settings monitor buttons", () => {
       config: configFixture({ monitor_enabled: true, monitor_interval_secs: 300 }),
     });
     renderSettings({ config: storedConfig });
+    gotoSettingsSection("额度监控");
 
     const saveButton = screen.getByRole("button", { name: "保存更改" });
     expect(saveButton).toBeDisabled();
@@ -211,6 +219,7 @@ describe("Settings monitor buttons", () => {
       config: configFixture({ monitor_enabled: true, monitor_interval_secs: 300 }),
     });
     renderSettings({ config: storedConfig });
+    gotoSettingsSection("额度监控");
 
     fireEvent.change(screen.getByLabelText("检查间隔（秒）"), {
       target: { value: "5" },
@@ -287,6 +296,7 @@ describe("Settings connection buttons", () => {
 
     // The component still holds the old config snapshot (null workspace), but
     // the next save must start from the backend's latest config.
+    gotoSettingsSection("应用更新");
     fireEvent.click(screen.getByRole("switch", { name: "自动下载更新" }));
     await waitFor(() => expect(saveConfigCalls).toHaveLength(1));
     expect(saveConfigCalls[0].opencode_workspace_id).toBe("ws_live");
@@ -332,10 +342,15 @@ describe("Settings connection buttons", () => {
       }),
     });
 
+    gotoSettingsSection("额度监控");
     expect(screen.getByRole("button", { name: "启动监控" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "测试连接" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "清除凭证" })).toBeDisabled();
     expect(screen.getByText("保存 API Key 后才能启动监控")).toBeInTheDocument();
+
+    gotoSettingsSection("账户连接");
+    expect(screen.getByRole("button", { name: "测试连接" })).toBeDisabled();
+
+    gotoSettingsSection("危险操作");
+    expect(screen.getByRole("button", { name: "清除凭证" })).toBeDisabled();
   });
 
   it("clears credentials only after confirmation and adopts the cleared config", async () => {
@@ -343,6 +358,7 @@ describe("Settings connection buttons", () => {
       config: configFixture({ monitor_enabled: true, opencode_workspace_id: "ws_old" }),
     });
     const { onConfigSaved, onRefreshStatus } = renderSettings({ config: storedConfig });
+    gotoSettingsSection("危险操作");
 
     fireEvent.click(screen.getByRole("button", { name: "清除凭证" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -368,6 +384,7 @@ describe("Settings close behavior", () => {
   it("saves the chosen close behavior through one canonical config write", async () => {
     installRouter({ config: configFixture({ close_behavior: "minimize_to_tray" }) });
     const { onConfigSaved } = renderSettings({ config: storedConfig });
+    gotoSettingsSection("窗口行为");
 
     expect(screen.getByRole("radio", { name: "隐藏到系统托盘" })).toBeChecked();
 
@@ -388,6 +405,7 @@ describe("Settings close behavior", () => {
   it("keeps the tray option available while the tray works", () => {
     installRouter({ config: configFixture() });
     renderSettings({ config: storedConfig });
+    gotoSettingsSection("窗口行为");
 
     expect(screen.getByRole("radio", { name: "隐藏到系统托盘" })).toBeEnabled();
     expect(screen.getByRole("radio", { name: "退出应用" })).toBeEnabled();
@@ -407,6 +425,7 @@ describe("Settings close behavior", () => {
 
     // Hiding without a tray icon would strand the process, so the option is
     // blocked and the fallback (exit) is explained in the field hint.
+    gotoSettingsSection("窗口行为");
     expect(screen.getByRole("radio", { name: "隐藏到系统托盘" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "最小化到任务栏" })).toBeEnabled();
     expect(
@@ -432,6 +451,8 @@ describe("Settings update buttons", () => {
         },
       }),
     });
+
+    gotoSettingsSection("应用更新");
 
     expect(screen.getByText("有可用更新")).toBeInTheDocument();
     expect(screen.queryByText("未检查")).not.toBeInTheDocument();
@@ -463,6 +484,7 @@ describe("Settings update buttons", () => {
       },
     });
     renderSettings({ config: storedConfig });
+    gotoSettingsSection("应用更新");
 
     fireEvent.click(screen.getByRole("button", { name: "检查更新" }));
 
@@ -477,6 +499,7 @@ describe("Settings update buttons", () => {
       config: storedConfig,
       update: updateFixture({ status: "ready_to_install", downloadedVersion: "0.3.0" }),
     });
+    gotoSettingsSection("应用更新");
 
     fireEvent.click(screen.getByRole("button", { name: "安装并重启" }));
     const dialog = screen.getByRole("dialog");
@@ -486,5 +509,80 @@ describe("Settings update buttons", () => {
 
     await waitFor(() => expect(commandCalls).toContain("install_update"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("Settings section navigation", () => {
+  it("renders only the active section and marks it current", () => {
+    renderSettings({ config: storedConfig });
+
+    expect(screen.getByRole("region", { name: "账户连接" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("检查间隔（秒）")).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "自动下载更新" })).not.toBeInTheDocument();
+
+    const nav = screen.getByRole("navigation", { name: "设置分区" });
+    expect(within(nav).getByRole("button", { name: "账户连接" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(nav).getByRole("button", { name: "额度监控" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("switches panels and moves aria-current", () => {
+    renderSettings({ config: storedConfig });
+    gotoSettingsSection("额度监控");
+
+    expect(screen.getByRole("region", { name: "额度监控" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Workspace ID")).not.toBeInTheDocument();
+
+    const nav = screen.getByRole("navigation", { name: "设置分区" });
+    expect(within(nav).getByRole("button", { name: "额度监控" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("keeps draft values when switching sections", () => {
+    renderSettings({ config: storedConfig });
+    gotoSettingsSection("额度监控");
+
+    fireEvent.change(screen.getByLabelText("检查间隔（秒）"), {
+      target: { value: "600" },
+    });
+    gotoSettingsSection("应用更新");
+    gotoSettingsSection("额度监控");
+
+    expect((screen.getByLabelText("检查间隔（秒）") as HTMLInputElement).value).toBe("600");
+    expect(screen.getByRole("button", { name: "保存更改" })).toBeEnabled();
+  });
+
+  it("keeps action notices visible across sections", async () => {
+    installRouter({ config: configFixture({ monitor_enabled: true }) });
+    renderSettings({ config: storedConfig });
+    gotoSettingsSection("额度监控");
+
+    fireEvent.change(screen.getByLabelText("检查间隔（秒）"), {
+      target: { value: "5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存更改" }));
+
+    expect(
+      await screen.findByText("检查间隔必须是 30–3600 之间的整数。"),
+    ).toBeInTheDocument();
+
+    gotoSettingsSection("应用更新");
+    expect(
+      screen.getByText("检查间隔必须是 30–3600 之间的整数。"),
+    ).toBeInTheDocument();
+  });
+
+  it("exposes the danger section as a labelled region", () => {
+    renderSettings({ config: storedConfig });
+    gotoSettingsSection("危险操作");
+
+    expect(screen.getByRole("region", { name: "危险操作" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "清除凭证" })).toBeInTheDocument();
   });
 });

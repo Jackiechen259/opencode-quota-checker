@@ -100,16 +100,22 @@ button:focus:not(:focus-visible) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: var(--radius-lg);
+  min-height: var(--control-height);
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   font-size: var(--text-body);
   font-weight: 500;
-  padding: 8px 16px;
   transition:
     background var(--transition-fast),
     color var(--transition-fast),
     border-color var(--transition-fast),
     box-shadow var(--transition-fast);
   white-space: nowrap;
+}
+
+.btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .btn:disabled {
@@ -133,7 +139,7 @@ button:focus:not(:focus-visible) {
 .btn-secondary {
   background: var(--bg-surface);
   color: var(--text-secondary);
-  border: 1px solid var(--card-border);
+  border-color: var(--card-border);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -151,30 +157,39 @@ button:focus:not(:focus-visible) {
 }
 
 .btn-soft:hover:not(:disabled) {
-  background: var(--accent-pressed);
-  color: #fff;
+  background: var(--accent-soft-hover);
+  color: var(--accent);
+}
+
+.btn-soft:active:not(:disabled) {
+  background: var(--accent-soft-hover);
 }
 
 .btn-danger-outline {
   background: var(--bg-surface);
   color: var(--danger-text);
-  border: 1px solid var(--danger-border);
+  border-color: var(--danger-border);
 }
 
 .btn-danger-outline:hover:not(:disabled) {
   background: var(--danger-soft);
 }
 
+.btn-danger-outline:focus-visible {
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
 /* Shared form styles ------------------------------------------------------- */
 
 .text-input {
   width: 100%;
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-lg);
+  height: var(--control-height);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text-primary);
   font-size: var(--text-body);
-  padding: 10px 12px;
+  padding: 0 10px;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
@@ -200,6 +215,64 @@ button:focus:not(:focus-visible) {
 
 .text-input:disabled:hover {
   border-color: var(--card-border);
+}
+
+/* Toggle switch ------------------------------------------------------------ */
+
+.toggle {
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-track);
+  position: relative;
+  transition: background var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.toggle:hover {
+  background: var(--border-strong);
+}
+
+.toggle:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline-offset: 2px;
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle:disabled:hover {
+  background: var(--bg-track);
+}
+
+.toggle-on {
+  background: var(--accent);
+}
+
+.toggle-on:hover {
+  background: var(--accent-hover);
+}
+
+.toggle-on:disabled:hover {
+  background: var(--accent);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.22);
+  transition: transform var(--transition-normal);
+}
+
+.toggle-on .toggle-knob {
+  transform: translateX(18px);
 }
 
 /* Status badges ------------------------------------------------------------ */

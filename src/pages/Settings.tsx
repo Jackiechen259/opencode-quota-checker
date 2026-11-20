@@ -57,6 +57,23 @@ type PendingKey =
 
 type MonitorAction = "apply" | "start" | "stop";
 
+type SettingsSectionId = "connection" | "monitor" | "updates" | "window" | "danger";
+
+/** Left-rail entries. Order here is the navigation order; the danger entry is
+ * visually separated and tinted by its trailing position in the rail. */
+const SETTINGS_SECTIONS: ReadonlyArray<{
+  id: SettingsSectionId;
+  label: string;
+  icon: ReactNode;
+  danger?: boolean;
+}> = [
+  { id: "connection", label: "账户连接", icon: <Icons.Globe size={16} /> },
+  { id: "monitor", label: "额度监控", icon: <Icons.Activity size={16} /> },
+  { id: "updates", label: "应用更新", icon: <Icons.Refresh size={16} /> },
+  { id: "window", label: "窗口行为", icon: <Icons.Window size={16} /> },
+  { id: "danger", label: "危险操作", icon: <Icons.Alert size={16} />, danger: true },
+];
+
 function usePendingActions() {
   const [pending, setPending] = useState<ReadonlySet<PendingKey>>(() => new Set());
   const active = useRef(new Set<PendingKey>());
@@ -101,31 +118,109 @@ function toAppError(caught: unknown): AppError {
   };
 }
 
-function SettingsCard({
+function SettingsNav({
+  active,
+  monitorEnabled,
+  updateAvailable,
+  version,
+  onSelect,
+}: {
+  active: SettingsSectionId;
+  monitorEnabled: boolean;
+  updateAvailable: boolean;
+  version?: string;
+  onSelect: (id: SettingsSectionId) => void;
+}) {
+  return (
+    <nav className="settings-nav" aria-label="设置分区">
+      {SETTINGS_SECTIONS.map((section) => {
+        const isActive = active === section.id;
+        const showDot =
+          (section.id === "monitor" && monitorEnabled) ||
+          (section.id === "updates" && updateAvailable);
+        return (
+          <button
+            key={section.id}
+            type="button"
+            className={[
+              "settings-nav-item",
+              section.danger ? "settings-nav-item-danger" : "",
+              isActive ? "settings-nav-item-active" : "",
+              section.danger ? "settings-nav-item-last" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            aria-current={isActive ? "page" : undefined}
+            onClick={() => onSelect(section.id)}
+          >
+            <span className="settings-nav-icon" aria-hidden="true">
+              {section.icon}
+            </span>
+            <span className="settings-nav-label">{section.label}</span>
+            {showDot ? <span className="settings-nav-dot" aria-hidden="true" /> : null}
+          </button>
+        );
+      })}
+      {version ? <div className="settings-nav-footer">v{version}</div> : null}
+    </nav>
+  );
+}
+
+function SettingsSection({
+  id,
   icon,
   title,
   subtitle,
   trailing,
+  danger,
   children,
 }: {
+  id: SettingsSectionId;
   icon: ReactNode;
   title: string;
   subtitle: string;
   trailing?: ReactNode;
+  danger?: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className="settings-card">
-      <div className="settings-card-header">
-        <span className="settings-card-icon">{icon}</span>
-        <div>
-          <div className="settings-card-title">{title}</div>
-          <div className="settings-card-subtitle">{subtitle}</div>
+    <section
+      className={`settings-panel ${danger ? "settings-panel-danger" : ""}`}
+      role="region"
+      aria-labelledby={`settings-${id}-title`}
+    >
+      <header className="settings-panel-header">
+        <span className="settings-panel-icon" aria-hidden="true">
+          {icon}
+        </span>
+        <div className="settings-panel-heading">
+          <h2 id={`settings-${id}-title`} className="settings-panel-title">
+            {title}
+          </h2>
+          <p className="settings-panel-subtitle">{subtitle}</p>
         </div>
-        {trailing ? <div className="settings-card-trailing">{trailing}</div> : null}
-      </div>
-      {children}
+        {trailing ? <div className="settings-panel-trailing">{trailing}</div> : null}
+      </header>
+      <div className="settings-panel-body">{children}</div>
     </section>
+  );
+}
+
+function SettingsCard({ danger, children }: { danger?: boolean; children: ReactNode }) {
+  return (
+    <div className={`settings-card ${danger ? "settings-card-danger" : ""}`.trim()}>
+      {children}
+    </div>
+  );
+}
+
+/** Read-only "label left, value right" row, Windows-Settings style. */
+function ValueRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="settings-value-row">
+      <span className="settings-value-label">{label}</span>
+      <span className="settings-value">{children}</span>
+    </div>
   );
 }
 
@@ -454,6 +549,14 @@ export function Settings({
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmInstall, setConfirmInstall] = useState(false);
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>("connection");
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  // Panels mount one at a time; reset only the panel scroller so a section
+  // never opens halfway down. Assigning scrollTop works in jsdom and WebView2.
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activeSection]);
 
   const { begin, end, has: isPending } = usePendingActions();
 
@@ -812,37 +915,56 @@ export function Settings({
       ? "请先保存 API Key 后才能测试连接"
       : undefined;
 
+  const hasNotices = Boolean(error || notice || status?.configError);
+
   return (
     <div className="settings-page">
-      <div className="settings-header">
+      <header className="settings-header">
         <div>
-          <div className="settings-title">设置</div>
-          <div className="settings-subtitle">管理 OpenCode 连接、额度监控与窗口行为</div>
+          <h1 className="settings-title">设置</h1>
+          <p className="settings-subtitle">管理 OpenCode 连接、额度监控与窗口行为</p>
         </div>
         <span style={{ flex: 1 }} />
         <button type="button" className="icon-button" title="关闭" aria-label="关闭" onClick={onClose}>
           <Icons.Close size={16} />
         </button>
-      </div>
+      </header>
 
-      {error ? <Notice kind="error">{error.user}</Notice> : null}
-      {notice ? <Notice kind="success">{notice}</Notice> : null}
-      {status?.configError ? (
-        <Notice kind="warning">配置文件读取失败，已使用默认配置：{status.configError.user}</Notice>
+      {hasNotices ? (
+        <div className="settings-notices">
+          {error ? <Notice kind="error">{error.user}</Notice> : null}
+          {notice ? <Notice kind="success">{notice}</Notice> : null}
+          {status?.configError ? (
+            <Notice kind="warning">配置文件读取失败，已使用默认配置：{status.configError.user}</Notice>
+          ) : null}
+        </div>
       ) : null}
 
-      <SettingsCard
-        icon={<Icons.Globe size={16} />}
-        title="OpenCode Go"
-        subtitle="OpenCode 账户连接"
-        trailing={
-          credentials ? (
-            <StatusBadge tone={credentials.available ? "success" : "neutral"}>
-              {credentials.available ? "已连接" : "未配置"}
-            </StatusBadge>
-          ) : undefined
-        }
-      >
+      <div className="settings-layout">
+        <SettingsNav
+          active={activeSection}
+          monitorEnabled={monitorEnabled}
+          updateAvailable={updateView?.status === "available"}
+          version={status?.version}
+          onSelect={setActiveSection}
+        />
+
+        <div className="settings-content" ref={contentRef}>
+          {activeSection === "connection" ? (
+            <SettingsSection
+              id="connection"
+              icon={<Icons.Globe size={18} />}
+              title="账户连接"
+              subtitle="OpenCode Go 账户连接"
+              trailing={
+                credentials ? (
+                  <StatusBadge tone={credentials.available ? "success" : "neutral"}>
+                    {credentials.available ? "已连接" : "未配置"}
+                  </StatusBadge>
+                ) : undefined
+              }
+            >
+              <SettingsCard>
         <FormField
           label="Workspace ID"
           hint="可选。API Key 已绑定创建工作区，仅在需要覆盖时才填写。"
@@ -908,18 +1030,23 @@ export function Settings({
           </button>
         </div>
       </SettingsCard>
+            </SettingsSection>
+          ) : null}
 
-      <SettingsCard
-        icon={<Icons.Activity size={16} />}
-        title="额度监控"
-        subtitle="配置自动检查频率和通知阈值"
-        trailing={
-          <span className="settings-monitor-badge">
-            <Dot color={monitorEnabled ? "var(--color-success)" : "var(--color-text-muted)"} />
-            {monitorEnabled ? "运行中" : "已停止"}
-          </span>
-        }
-      >
+          {activeSection === "monitor" ? (
+            <SettingsSection
+              id="monitor"
+              icon={<Icons.Activity size={18} />}
+              title="额度监控"
+              subtitle="配置自动检查频率和通知阈值"
+              trailing={
+                <span className="settings-monitor-badge">
+                  <Dot color={monitorEnabled ? "var(--color-success)" : "var(--color-text-muted)"} />
+                  {monitorEnabled ? "运行中" : "已停止"}
+                </span>
+              }
+            >
+              <SettingsCard>
         <FormField label="检查间隔" hint="允许范围 30–3600 秒">
           <div className="settings-interval-row">
             <span>每</span>
@@ -943,14 +1070,19 @@ export function Settings({
             ].map((item) => (
               <div className="settings-threshold" key={item.key}>
                 <span className="settings-threshold-label">{item.label}</span>
-                <input
-                  className="text-input settings-threshold-input"
-                  aria-label={`${item.label}阈值`}
-                  value={item.value}
-                  disabled={monitorBusy}
-                  onChange={(event) => item.set(event.target.value)}
-                  inputMode="decimal"
-                />
+                <div className="settings-threshold-control">
+                  <input
+                    className="text-input settings-threshold-input"
+                    aria-label={`${item.label}阈值`}
+                    value={item.value}
+                    disabled={monitorBusy}
+                    onChange={(event) => item.set(event.target.value)}
+                    inputMode="decimal"
+                  />
+                  <span className="settings-threshold-suffix" aria-hidden="true">
+                    %
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -994,42 +1126,49 @@ export function Settings({
           )}
         </div>
       </SettingsCard>
+            </SettingsSection>
+          ) : null}
 
-      <SettingsCard
-        icon={<Icons.Refresh size={16} />}
-        title="应用更新"
-        subtitle="从 GitHub Releases 自动发现并安装新版本"
-        trailing={<StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
-      >
-        <FormField label="当前版本">
+          {activeSection === "updates" ? (
+            <SettingsSection
+              id="updates"
+              icon={<Icons.Refresh size={18} />}
+              title="应用更新"
+              subtitle="从 GitHub Releases 自动发现并安装新版本"
+              trailing={<StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
+            >
+              <SettingsCard>
+        <ValueRow label="当前版本">
           <span className="settings-version">
             {status?.version ? `v${status.version}` : "未知"}
           </span>
-        </FormField>
-        <ToggleRow
-          label="自动检查更新"
-          checked={config.update_checks_enabled}
-          disabled={updateToggleBusy}
-          busy={isPending("toggle-update-checks")}
-          onChange={(enabled) => void toggleUpdateChecks(enabled)}
-        />
-        <ToggleRow
-          label="自动下载更新"
-          hint={
-            config.auto_download_updates
-              ? "手动检查发现新版本时也会自动下载"
-              : undefined
-          }
-          checked={config.auto_download_updates}
-          disabled={updateToggleBusy}
-          busy={isPending("toggle-auto-download")}
-          onChange={(enabled) => void toggleAutoDownload(enabled)}
-        />
-        <FormField label="上次检查">
+        </ValueRow>
+        <div className="settings-toggle-group">
+          <ToggleRow
+            label="自动检查更新"
+            checked={config.update_checks_enabled}
+            disabled={updateToggleBusy}
+            busy={isPending("toggle-update-checks")}
+            onChange={(enabled) => void toggleUpdateChecks(enabled)}
+          />
+          <ToggleRow
+            label="自动下载更新"
+            hint={
+              config.auto_download_updates
+                ? "手动检查发现新版本时也会自动下载"
+                : undefined
+            }
+            checked={config.auto_download_updates}
+            disabled={updateToggleBusy}
+            busy={isPending("toggle-auto-download")}
+            onChange={(enabled) => void toggleAutoDownload(enabled)}
+          />
+        </div>
+        <ValueRow label="上次检查">
           <span className="settings-last-checked">
             {lastCheckedText(updateView?.lastCheckedMs ?? null)}
           </span>
-        </FormField>
+        </ValueRow>
         <div className="settings-row-right">
           <button
             type="button"
@@ -1063,15 +1202,22 @@ export function Settings({
           />
         ) : null}
       </SettingsCard>
+            </SettingsSection>
+          ) : null}
 
-      <SettingsCard
-        icon={<Icons.Window size={16} />}
-        title="窗口行为"
-        subtitle="关闭主窗口后如何继续运行"
-        trailing={
-          trayAvailable ? undefined : <StatusBadge tone="warning">托盘不可用</StatusBadge>
-        }
-      >
+          {activeSection === "window" ? (
+            <SettingsSection
+              id="window"
+              icon={<Icons.Window size={18} />}
+              title="窗口行为"
+              subtitle="关闭主窗口后如何继续运行"
+              trailing={
+                trayAvailable ? undefined : (
+                  <StatusBadge tone="warning">托盘不可用</StatusBadge>
+                )
+              }
+            >
+              <SettingsCard>
         <FormField
           label="关闭主窗口时"
           hint={
@@ -1098,37 +1244,52 @@ export function Settings({
           </div>
         </FormField>
       </SettingsCard>
+            </SettingsSection>
+          ) : null}
 
-      <section className="settings-card settings-danger-zone">
-        <div className="settings-danger-title">危险操作</div>
-        <div className="settings-danger-row">
-          <div>
-            <div className="settings-danger-label">清除所有连接凭证</div>
-            <div className="settings-danger-hint">删除钥匙串中的 API Key 并停止监控。</div>
-          </div>
-          <span style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="btn btn-danger-outline"
-            disabled={!canClearCredentials}
-            title={
-              credentialsMissing
-                ? "当前没有已保存的凭证"
-                : credentials === undefined || credentials.phase === "checking"
-                  ? "正在检查已保存的凭证"
-                  : connectionBusy
-                    ? "连接操作进行中，请稍候"
-                    : undefined
-            }
-            onClick={() => {
-              setConfirmInstall(false);
-              setConfirmClear(true);
-            }}
-          >
-            {isPending("clear-credentials") ? "清除中…" : "清除凭证"}
-          </button>
+          {activeSection === "danger" ? (
+            <SettingsSection
+              id="danger"
+              icon={<Icons.Alert size={18} />}
+              title="危险操作"
+              subtitle="这些操作会影响账户连接与后台监控"
+              danger
+            >
+              <SettingsCard danger>
+                <div className="settings-danger-row">
+                  <div>
+                    <div className="settings-danger-label">清除所有连接凭证</div>
+                    <div className="settings-danger-hint">
+                      删除钥匙串中的 API Key 并停止监控。
+                    </div>
+                  </div>
+                  <span style={{ flex: 1 }} />
+                  <button
+                    type="button"
+                    className="btn btn-danger-outline"
+                    disabled={!canClearCredentials}
+                    title={
+                      credentialsMissing
+                        ? "当前没有已保存的凭证"
+                        : credentials === undefined || credentials.phase === "checking"
+                          ? "正在检查已保存的凭证"
+                          : connectionBusy
+                            ? "连接操作进行中，请稍候"
+                            : undefined
+                    }
+                    onClick={() => {
+                      setConfirmInstall(false);
+                      setConfirmClear(true);
+                    }}
+                  >
+                    {isPending("clear-credentials") ? "清除中…" : "清除凭证"}
+                  </button>
+                </div>
+              </SettingsCard>
+            </SettingsSection>
+          ) : null}
         </div>
-      </section>
+      </div>
 
       {confirmClear ? (
         <ConfirmDialog
