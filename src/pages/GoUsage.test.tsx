@@ -220,7 +220,7 @@ describe("GoUsagePage", () => {
     mockState.data = fullOverview;
   });
 
-  it("renders the monthly summary, forecast, limits, models, and extra usage", () => {
+  it("renders the monthly summary, forecast, models, and extra usage", () => {
     renderPage();
 
     expect(
@@ -230,8 +230,6 @@ describe("GoUsagePage", () => {
     expect(screen.getByText(/11 月 26 日 续订/)).toBeInTheDocument();
     expect(screen.getByText(/预计 96%/)).toBeInTheDocument();
     expect(screen.getByText("平均每天 3.1%")).toBeInTheDocument();
-    expect(screen.getByText("4% 已用")).toBeInTheDocument();
-    expect(screen.getByText("7% 已用")).toBeInTheDocument();
     expect(screen.getByText("DeepSeek V4.1 Flash")).toBeInTheDocument();
     expect(screen.getByText("99%")).toBeInTheDocument();
     expect(screen.getByText("Requests")).toBeInTheDocument();
@@ -287,7 +285,6 @@ describe("GoUsagePage", () => {
     expect(screen.getByText(/Go 明细暂不可用/)).toBeInTheDocument();
     expect(screen.getByText(/请求\/Token 回退为近 30 天/)).toBeInTheDocument();
     expect(screen.getByText("8,300")).toBeInTheDocument();
-    expect(screen.getByText("4% 已用")).toBeInTheDocument();
   });
 
   it("shows a skeleton while the first overview request is in flight", () => {

@@ -1,19 +1,18 @@
-// Separate Go usage page: monthly summary, cumulative/forecast chart, limits,
+// Separate Go usage page: monthly summary, cumulative/forecast chart,
 // model mix, and the Extra usage card.
 //
 // The page prefers the Console Go status/activity endpoints. If those are
-// unavailable it still renders the summary and limits from the existing Go
-// quota report, approximating the chart from the current percentage. Billing
-// credit is optional and never blocks the page.
+// unavailable it still renders the summary from the existing Go quota report,
+// approximating the chart from the current percentage. Billing credit is
+// optional and never blocks the page.
 
 import { useMemo } from "react";
 import { useGoOverview } from "../hooks/useApp";
-import { compact, countdown, number, usdFromMicrocents } from "../lib/format";
+import { compact, number, usdFromMicrocents } from "../lib/format";
 import { buildGoSeries, formatGoDate, modelDisplayName, modelShare } from "../lib/goUsage";
 import type {
   AppError,
   GoActivityReport,
-  GoMeter,
   GoOverviewDto,
   GoStatusReport,
   TokenUsageDto,
@@ -36,15 +35,6 @@ interface Props {
   onRefresh: () => void;
 }
 
-interface LimitRow {
-  key: string;
-  label: string;
-  percent: number;
-  resetAt: number;
-  limited: boolean;
-  estimated: boolean;
-}
-
 function productLabel(product: string | undefined): string {
   switch (product) {
     case "go-plus":
@@ -60,103 +50,8 @@ function quotaWindow(report: UsageReport | null, key: string): WindowReport | un
   return report?.windows.find((window) => window.key === key);
 }
 
-function meterRow(
-  key: string,
-  label: string,
-  meter: GoMeter | null | undefined,
-): LimitRow | null {
-  if (!meter) return null;
-  return {
-    key,
-    label,
-    percent: meter.percent,
-    resetAt: meter.resets_at,
-    limited: meter.limited,
-    estimated: false,
-  };
-}
-
-function quotaRow(
-  key: string,
-  label: string,
-  window: WindowReport | undefined,
-): LimitRow | null {
-  if (!window) return null;
-  return {
-    key,
-    label,
-    percent: window.percent,
-    resetAt: window.reset_time,
-    limited: window.limited ?? false,
-    estimated: true,
-  };
-}
-
-function limitRows(
-  report: UsageReport | null,
-  status: GoStatusReport | null,
-): LimitRow[] {
-  const access = status?.access ?? null;
-  const rows = [
-    meterRow("rolling-5h", "滚动 5 小时", access?.five_hour) ??
-      quotaRow("rolling-5h", "滚动 5 小时", quotaWindow(report, "rolling-5h")),
-    meterRow("weekly", "每周", access?.week) ??
-      quotaRow("weekly", "每周", quotaWindow(report, "weekly")),
-    meterRow("monthly", "每月", access?.month) ??
-      quotaRow("monthly", "每月", quotaWindow(report, "monthly")),
-  ];
-  return rows.filter((row): row is LimitRow => row !== null);
-}
-
-function limitTone(row: LimitRow): string {
-  if (row.limited || row.percent >= 90) return "is-critical";
-  if (row.percent >= 70) return "is-warning";
-  return "is-healthy";
-}
-
 function errorText(error: AppError | null): string {
   return error?.user ?? "未知错误";
-}
-
-function GoLimitsCard({ rows, nowMs }: { rows: LimitRow[]; nowMs: number }) {
-  return (
-    <Card className="go-card">
-      <div className="go-card-heading">
-        <h2>限额</h2>
-        <p>各窗口的重置时间</p>
-      </div>
-      <div className="go-limits">
-        {rows.length === 0 ? (
-          <p className="go-muted">暂无配额窗口数据。</p>
-        ) : (
-          rows.map((row) => {
-            const seconds = Math.max(0, Math.floor((row.resetAt - nowMs) / 1_000));
-            return (
-              <div className="go-limit" key={row.key}>
-                <div className="go-limit-head">
-                  <span className="go-limit-label">{row.label}</span>
-                  <span className="go-limit-reset">
-                    {seconds <= 0 ? "即将重置" : `${countdown(seconds)}后重置`}
-                  </span>
-                </div>
-                <div className="go-limit-bar">
-                  <i
-                    className={limitTone(row)}
-                    style={{ width: `${Math.min(100, Math.max(0, row.percent))}%` }}
-                  />
-                </div>
-                <div className="go-limit-meta">
-                  <span>{Math.round(row.percent)}% 已用</span>
-                  {row.limited ? <span className="go-badge-danger">已达上限</span> : null}
-                  {row.estimated ? <span className="go-muted">配额接口</span> : null}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </Card>
-  );
 }
 
 function GoModelsCard({
@@ -317,7 +212,6 @@ export function GoUsagePage({ report, loading, token, nowMs, onRefresh }: Props)
     explicitStart !== undefined && explicitStart < end ? explicitStart : approximateStart;
   const limited = monthlyMeter?.limited || monthlyWindow?.limited || percent >= 100;
   const series = buildGoSeries(activity?.daily ?? [], percent, start, end, nowMs);
-  const rows = useMemo(() => limitRows(report, status), [report, status]);
   const product = productLabel(status?.product);
   const reachesLimitBeforeRenewal =
     series.runsOut !== null && series.runsOut < end - DAY_MS;
@@ -427,7 +321,6 @@ export function GoUsagePage({ report, loading, token, nowMs, onRefresh }: Props)
       </Card>
 
       <div className="go-grid">
-        <GoLimitsCard rows={rows} nowMs={nowMs} />
         {chartLoading ? (
           <Card className="go-card" aria-busy="true" aria-label="正在加载模型明细">
             <span className="sk sk-line" style={{ width: 100 }} />

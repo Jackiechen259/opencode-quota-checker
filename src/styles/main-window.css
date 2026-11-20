@@ -2195,7 +2195,7 @@
 
 .go-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--card-gap);
 }
 
@@ -2228,77 +2228,6 @@
   font-size: var(--text-caption);
   color: var(--text-tertiary);
   line-height: 1.5;
-}
-
-.go-limits {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-base);
-}
-
-.go-limit {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.go-limit-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
-
-.go-limit-label {
-  font-size: var(--text-body);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.go-limit-reset {
-  font-size: var(--text-caption);
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.go-limit-bar {
-  height: 6px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-track);
-  overflow: hidden;
-}
-
-.go-limit-bar i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-success);
-  transition: width var(--transition-normal);
-}
-
-.go-limit-bar i.is-warning {
-  background: var(--color-warning);
-}
-
-.go-limit-bar i.is-critical {
-  background: var(--color-danger);
-}
-
-.go-limit-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  font-size: var(--text-caption);
-  color: var(--text-tertiary);
-}
-
-.go-badge-danger {
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--danger-soft);
-  color: var(--danger-text);
-  font-size: var(--text-caption);
-  font-weight: 600;
 }
 
 .go-models {
@@ -2395,12 +2324,6 @@
   font-weight: 650;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 1199px) {
-  .go-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 899px) {
